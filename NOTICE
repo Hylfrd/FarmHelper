@@ -1,0 +1,30 @@
+FarmHelper Fabric Migration
+Attribution Notice
+
+This repository is a modified migration of, and is behaviorally based on,
+FarmHelper by JellyLabScripts and its contributors:
+
+    https://github.com/JellyLabScripts/FarmHelper
+
+The fixed upstream reference used for the migration plan is FarmHelper 2.10.0
+at commit:
+
+    eacb323fbde3eff94d4f2ee7baacb059d84b8e3a
+
+Upstream material is licensed under the Creative Commons
+Attribution-NonCommercial-ShareAlike 4.0 International license
+(CC BY-NC-SA 4.0). The license text is included in LICENSE, and the canonical
+license URL is:
+
+    https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+This repository contains substantial changes for Minecraft 26.1.2 and Fabric,
+including a new package namespace, platform adapters, configuration system,
+commands, native settings UI, tests, and migration documentation. The Git
+history records these modifications. Copyright remains with the respective
+upstream and downstream contributors.
+
+Use is limited to noncommercial purposes under CC BY-NC-SA 4.0. Adaptations
+must preserve attribution, indicate changes, and be shared under the same or a
+compatible BY-NC-SA license. This project is not endorsed by JellyLabScripts or
+the upstream contributors.

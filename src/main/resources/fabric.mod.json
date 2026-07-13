@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "farmhelper",
+  "version": "${version}",
+  "name": "FarmHelper",
+  "description": "A modern Fabric rewrite focused on core farming macro behavior.",
+  "authors": [
+    "JellyLabScripts/FarmHelper contributors",
+    "Hylfrd"
+  ],
+  "contact": {
+    "sources": "https://github.com/Hylfrd/FarmHelper"
+  },
+  "license": "CC-BY-NC-SA-4.0",
+  "environment": "client",
+  "entrypoints": {
+    "main": [
+      "dev.hylfrd.farmhelper.platform.FarmHelper"
+    ],
+    "client": [
+      "dev.hylfrd.farmhelper.client.FarmHelperClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.1.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
