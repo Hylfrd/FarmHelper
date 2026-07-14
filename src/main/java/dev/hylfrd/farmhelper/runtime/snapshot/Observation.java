@@ -2,7 +2,6 @@ package dev.hylfrd.farmhelper.runtime.snapshot;
 
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.Function;
 
 /** A value whose absence is distinct from a value that has not been observed. */
@@ -59,10 +58,6 @@ public final class Observation<T> {
             throw new NoSuchElementException("Observation is " + state);
         }
         return value;
-    }
-
-    public Optional<T> toOptional() {
-        return isPresent() ? Optional.of(value) : Optional.empty();
     }
 
     public <R> Observation<R> map(Function<? super T, ? extends R> mapper) {

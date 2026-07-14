@@ -41,4 +41,48 @@ public record PlayerSnapshot(
     public boolean present() {
         return state == Observation.State.PRESENT;
     }
+
+    public PlayerSnapshot requirePresent() {
+        if (!present()) {
+            throw new IllegalStateException("Player snapshot is " + state);
+        }
+        return this;
+    }
+
+    public double x() {
+        requirePresent();
+        return x;
+    }
+
+    public double y() {
+        requirePresent();
+        return y;
+    }
+
+    public double z() {
+        requirePresent();
+        return z;
+    }
+
+    public float yaw() {
+        requirePresent();
+        return yaw;
+    }
+
+    public float pitch() {
+        requirePresent();
+        return pitch;
+    }
+
+    public String rotationDiagnostic() {
+        return switch (state) {
+            case PRESENT -> "Player yaw: " + round(yaw) + ", pitch: " + round(pitch);
+            case ABSENT -> "Player rotation: absent";
+            case UNKNOWN -> "Player rotation: unknown";
+        };
+    }
+
+    private static float round(float value) {
+        return Math.round(value * 10.0F) / 10.0F;
+    }
 }

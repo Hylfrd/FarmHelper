@@ -125,7 +125,7 @@ public final class ClientFarmHelperCommandService implements FarmHelperCommandSe
         if (!load.diagnostic().isBlank()) {
             lines.add("Config diagnostic: " + load.diagnostic());
         }
-        lines.add("Player yaw: " + round(player.yaw()) + ", pitch: " + round(player.pitch()));
+        lines.add(player.rotationDiagnostic());
         lines.add("Rotation active: " + runtime.rotation().rotating()
                 + ", paused: " + runtime.rotation().paused());
         lines.add("Held input: " + runtime.input().heldKeysText());
@@ -136,7 +136,4 @@ public final class ClientFarmHelperCommandService implements FarmHelperCommandSe
         return value.name().toLowerCase();
     }
 
-    private static float round(float value) {
-        return Math.round(value * 10.0F) / 10.0F;
-    }
 }
