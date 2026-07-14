@@ -1,5 +1,7 @@
 package dev.hylfrd.farmhelper.macro;
 
+import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
+import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -14,6 +16,9 @@ class MacroManagerTest {
 
         assertFalse(manager.enabled());
         assertEquals(MacroState.STOPPED, manager.state());
+        assertEquals(Observation.State.PRESENT, snapshot.state());
+        assertEquals(Observation.State.UNKNOWN, manager.playerSnapshot().state());
+        assertEquals(ClientSnapshot.unknown(), manager.clientSnapshot());
 
         manager.start();
         manager.tick(new MacroContext(true, false, PauseReason.NONE, WorldMode.SINGLEPLAYER, snapshot));
@@ -23,11 +28,12 @@ class MacroManagerTest {
         assertEquals(1L, manager.runningTicks());
         assertEquals(snapshot, manager.playerSnapshot());
 
-        manager.tick(new MacroContext(false, false, PauseReason.NO_PLAYER, WorldMode.NONE, PlayerSnapshot.empty()));
+        manager.tick(new MacroContext(false, false, PauseReason.NO_PLAYER, WorldMode.NONE, PlayerSnapshot.absent()));
 
         assertEquals(MacroState.PAUSED, manager.state());
         assertEquals(PauseReason.NO_PLAYER, manager.pauseReason());
         assertEquals(1L, manager.runningTicks());
+        assertEquals(Observation.State.ABSENT, manager.playerSnapshot().state());
 
         manager.tick(new MacroContext(true, false, PauseReason.NONE, WorldMode.MULTIPLAYER, snapshot));
 
@@ -53,5 +59,28 @@ class MacroManagerTest {
 
         assertFalse(manager.toggle());
         assertEquals(MacroState.STOPPED, manager.state());
+    }
+
+    @Test
+    void acceptsTheNewClientSnapshotWithoutChangingTheExistingLifecycle() {
+        MacroManager manager = new MacroManager();
+        ClientSnapshot observed = new ClientSnapshot(
+                Observation.absent(),
+                Observation.absent(),
+                Observation.absent(),
+                Observation.absent());
+
+        manager.start();
+        manager.tick(observed, new MacroContext(
+                false,
+                false,
+                PauseReason.NO_WORLD,
+                WorldMode.NONE,
+                PlayerSnapshot.absent()));
+
+        assertEquals(observed, manager.clientSnapshot());
+        assertEquals(MacroState.PAUSED, manager.state());
+        assertEquals(PauseReason.NO_WORLD, manager.pauseReason());
+        assertEquals(0L, manager.runningTicks());
     }
 }
