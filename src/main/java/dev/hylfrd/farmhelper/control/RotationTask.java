@@ -57,13 +57,16 @@ public final class RotationTask {
     /** Samples this trajectory by elapsed monotonic time, never by wall-clock time. */
     public RotationFrame sample(long elapsedNanos) {
         long safeElapsed = Math.max(0L, elapsedNanos);
-        float progress = durationNanos == 0L
+        boolean complete = durationNanos == 0L || safeElapsed >= durationNanos;
+        float progress = complete
                 ? 1.0F
-                : clamp((double) safeElapsed / durationNanos, 0.0F, 1.0F);
-        float eased = easeOutQuart(progress);
+                : clamp((double) safeElapsed / durationNanos, 0.0F, Math.nextDown(1.0F));
+        float eased = complete
+                ? 1.0F
+                : Math.min(easeOutQuart(progress), Math.nextDown(1.0F));
         float yaw = normalizeYaw(startYaw + shortestYawDelta(startYaw, targetYaw) * eased);
         float pitch = clampPitch(startPitch + (targetPitch - startPitch) * eased);
-        if (progress == 1.0F) {
+        if (complete) {
             yaw = targetYaw;
             pitch = targetPitch;
         }

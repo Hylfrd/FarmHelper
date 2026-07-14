@@ -4,6 +4,8 @@ import dev.hylfrd.farmhelper.control.rotation.RotationFrame;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -103,5 +105,40 @@ class RotationTaskTest {
         assertEquals(100.0F, end.yaw(), EPSILON);
         assertEquals(80.0F, end.pitch(), EPSILON);
         assertTrue(end.complete());
+    }
+
+    @Test
+    void completionUsesIntegerElapsedTimeAtFloatRoundingBoundaries() {
+        RotationTask hundredMilliseconds = new RotationTask(0.0F, 0.0F, 100.0F, 80.0F, 100L);
+        RotationTask oneSecond = new RotationTask(0.0F, 0.0F, 100.0F, 80.0F, 1_000L);
+        RotationTask maximum = new RotationTask(0.0F, 0.0F, 100.0F, 80.0F, Long.MAX_VALUE);
+
+        RotationFrame hundredMillisecondsEarly = hundredMilliseconds.sample(99_999_999L);
+        RotationFrame oneSecondEarly = oneSecond.sample(999_999_971L);
+        RotationFrame maximumEarly = maximum.sample(Long.MAX_VALUE - 200_000_000_000L);
+
+        assertIncompleteFiniteProgress(hundredMillisecondsEarly);
+        assertIncompleteFiniteProgress(oneSecondEarly);
+        assertIncompleteFiniteProgress(maximumEarly);
+        assertNotEquals(100.0F, hundredMillisecondsEarly.yaw());
+        assertNotEquals(80.0F, hundredMillisecondsEarly.pitch());
+        assertNotEquals(100.0F, oneSecondEarly.yaw());
+        assertNotEquals(80.0F, oneSecondEarly.pitch());
+        assertNotEquals(100.0F, maximumEarly.yaw());
+        assertNotEquals(80.0F, maximumEarly.pitch());
+        assertEquals(Long.MAX_VALUE, maximum.durationNanos());
+
+        RotationFrame maximumComplete = maximum.sample(Long.MAX_VALUE);
+        assertTrue(maximumComplete.complete());
+        assertEquals(1.0F, maximumComplete.progress());
+        assertEquals(100.0F, maximumComplete.yaw());
+        assertEquals(80.0F, maximumComplete.pitch());
+    }
+
+    private static void assertIncompleteFiniteProgress(RotationFrame frame) {
+        assertFalse(frame.complete());
+        assertTrue(Float.isFinite(frame.progress()));
+        assertTrue(frame.progress() >= 0.0F);
+        assertTrue(frame.progress() < 1.0F);
     }
 }

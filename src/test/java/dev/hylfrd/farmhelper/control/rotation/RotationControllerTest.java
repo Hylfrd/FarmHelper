@@ -9,6 +9,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -288,6 +289,60 @@ class RotationControllerTest {
         assertEquals(RotationTerminalReason.OWNER_CANCELLED,
                 terminal.terminalReason().orElseThrow());
         assertTrue(terminal.revision() > active.revision());
+    }
+
+    @Test
+    void completionWaitsForExactElapsedDurationAtFloatRoundingBoundaries() {
+        assertCompletesOnlyAtExactDuration(100L, 99_999_999L, 100_000_000L);
+        assertCompletesOnlyAtExactDuration(1_000L, 999_999_971L, 1_000_000_000L);
+        assertCompletesOnlyAtExactDuration(
+                Long.MAX_VALUE,
+                Long.MAX_VALUE - 200_000_000_000L,
+                Long.MAX_VALUE);
+    }
+
+    private static void assertCompletesOnlyAtExactDuration(
+            long durationMs,
+            long earlyElapsedNanos,
+            long exactElapsedNanos) {
+        MutableClock clock = new MutableClock();
+        RotationController controller = new RotationController(clock);
+        List<RotationFrame> frames = new ArrayList<>();
+        List<RotationResult> results = new ArrayList<>();
+        RotationHandle handle = controller.start(
+                OWNER, 0.0F, 0.0F, 100.0F, 80.0F, durationMs, results::add);
+
+        clock.setNanos(earlyElapsedNanos);
+        assertTrue(controller.tick(frames::add));
+
+        assertEquals(1, frames.size());
+        assertFalse(frames.getFirst().complete());
+        assertTrue(frames.getFirst().progress() < 1.0F);
+        assertNotEquals(100.0F, frames.getFirst().yaw());
+        assertNotEquals(80.0F, frames.getFirst().pitch());
+        assertTrue(controller.rotating());
+        assertTrue(controller.movementBlocked());
+        assertEquals(OWNER, controller.snapshot().owner().orElseThrow());
+        assertTrue(results.isEmpty());
+        assertThrows(
+                RotationConflictException.class,
+                () -> controller.start(OTHER_OWNER, 0.0F, 0.0F, 10.0F, 0.0F, 1L));
+
+        clock.setNanos(exactElapsedNanos);
+        assertTrue(controller.tick(frames::add));
+
+        assertEquals(2, frames.size());
+        RotationFrame finalFrame = frames.get(1);
+        assertTrue(finalFrame.complete());
+        assertEquals(new RotationFrame(100.0F, 80.0F, 1.0F), finalFrame);
+        assertFalse(controller.rotating());
+        assertFalse(controller.movementBlocked());
+        assertFalse(handle.cancel());
+        assertEquals(1, results.size());
+        assertTrue(results.getFirst().completed());
+        assertEquals(1.0F, results.getFirst().progress());
+        assertEquals(RotationTerminalReason.COMPLETED,
+                controller.snapshot().terminalReason().orElseThrow());
     }
 
     private static final class MutableClock implements MonotonicClock {
