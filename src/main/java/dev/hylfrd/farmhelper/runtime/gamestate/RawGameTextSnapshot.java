@@ -43,44 +43,45 @@ public final class RawGameTextSnapshot {
         }
         this.generation = generation;
 
-        int scoreboardSize = observedSize(scoreboardLines);
-        int tabSize = observedSize(tabLines);
-        int footerSize = observedSize(tabFooter);
-        int loreSize = observedSize(vacuumLore);
-        int chatSize = observedSize(chatBatch);
+        // Exact-size staging stores references only after these public caps succeed. Its static
+        // maximum is 128 + 256 + 128 + 64 + 256 = 832 references across all five collections.
+        int scoreboardSize = boundedObservedSize(
+                scoreboardLines, GameTextInputBudget.MAX_SCOREBOARD_LINES);
+        int tabSize = boundedObservedSize(tabLines, GameTextInputBudget.MAX_TAB_LINES);
+        int footerSize = boundedObservedSize(
+                tabFooter, GameTextInputBudget.MAX_TAB_FOOTER_LINES);
+        int loreSize = boundedObservedSize(
+                vacuumLore, GameTextInputBudget.MAX_VACUUM_LORE_LINES);
+        int chatSize = boundedObservedSize(chatBatch, GameTextInputBudget.MAX_CHAT_MESSAGES);
 
         long total = 0L;
         long titleCharacters = preflightTitleCharacters(scoreboardTitle);
-        long scoreboardCharacters = -1L;
-        long tabCharacters = -1L;
-        long footerCharacters = -1L;
-        long loreCharacters = -1L;
-        long chatCharacters = -1L;
+        StringPreflight scoreboardPreflight = StringPreflight.invalid();
+        StringPreflight tabPreflight = StringPreflight.invalid();
+        StringPreflight footerPreflight = StringPreflight.invalid();
+        StringPreflight lorePreflight = StringPreflight.invalid();
+        ChatPreflight chatPreflight = ChatPreflight.invalid();
 
         total = addPreflightCharacters(total, titleCharacters);
         if (total <= GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
-            scoreboardCharacters = preflightStringCharacters(
-                    scoreboardLines, GameTextInputBudget.MAX_SCOREBOARD_LINES, scoreboardSize);
-            total = addPreflightCharacters(total, scoreboardCharacters);
+            scoreboardPreflight = preflightStrings(scoreboardLines, scoreboardSize);
+            total = addPreflightCharacters(total, scoreboardPreflight.characters());
         }
         if (total <= GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
-            tabCharacters = preflightStringCharacters(
-                    tabLines, GameTextInputBudget.MAX_TAB_LINES, tabSize);
-            total = addPreflightCharacters(total, tabCharacters);
+            tabPreflight = preflightStrings(tabLines, tabSize);
+            total = addPreflightCharacters(total, tabPreflight.characters());
         }
         if (total <= GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
-            footerCharacters = preflightStringCharacters(
-                    tabFooter, GameTextInputBudget.MAX_TAB_FOOTER_LINES, footerSize);
-            total = addPreflightCharacters(total, footerCharacters);
+            footerPreflight = preflightStrings(tabFooter, footerSize);
+            total = addPreflightCharacters(total, footerPreflight.characters());
         }
         if (total <= GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
-            loreCharacters = preflightStringCharacters(
-                    vacuumLore, GameTextInputBudget.MAX_VACUUM_LORE_LINES, loreSize);
-            total = addPreflightCharacters(total, loreCharacters);
+            lorePreflight = preflightStrings(vacuumLore, loreSize);
+            total = addPreflightCharacters(total, lorePreflight.characters());
         }
         if (total <= GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
-            chatCharacters = preflightChatCharacters(chatBatch, chatSize);
-            total = addPreflightCharacters(total, chatCharacters);
+            chatPreflight = preflightChat(chatBatch, chatSize);
+            total = addPreflightCharacters(total, chatPreflight.characters());
         }
         if (total > GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
             this.scoreboardTitle = unknownIfPresent(scoreboardTitle);
@@ -98,18 +99,18 @@ public final class RawGameTextSnapshot {
         Checked<String> checkedTitle = checkTitle(scoreboardTitle, diagnostics);
         Checked<List<String>> checkedScoreboard = checkStrings(
                 scoreboardLines, GameTextInputBudget.MAX_SCOREBOARD_LINES,
-                scoreboardSize, scoreboardCharacters, "input.scoreboard.lines", diagnostics);
+                scoreboardPreflight, "input.scoreboard.lines", diagnostics);
         Checked<List<String>> checkedTab = checkStrings(
                 tabLines, GameTextInputBudget.MAX_TAB_LINES,
-                tabSize, tabCharacters, "input.tab.lines", diagnostics);
+                tabPreflight, "input.tab.lines", diagnostics);
         Checked<List<String>> checkedFooter = checkStrings(
                 tabFooter, GameTextInputBudget.MAX_TAB_FOOTER_LINES,
-                footerSize, footerCharacters, "input.tab.footer", diagnostics);
+                footerPreflight, "input.tab.footer", diagnostics);
         Checked<List<String>> checkedLore = checkStrings(
                 vacuumLore, GameTextInputBudget.MAX_VACUUM_LORE_LINES,
-                loreSize, loreCharacters, "input.vacuum.lore", diagnostics);
+                lorePreflight, "input.vacuum.lore", diagnostics);
         Checked<List<RawChatMessage>> checkedChat = checkChat(
-                chatBatch, chatSize, chatCharacters, diagnostics);
+                chatBatch, chatPreflight, diagnostics);
 
         this.scoreboardTitle = checkedTitle.value();
         this.scoreboardLines = checkedScoreboard.value();
@@ -120,12 +121,18 @@ public final class RawGameTextSnapshot {
         this.inputDiagnostics = List.copyOf(diagnostics);
     }
 
-    private static int observedSize(Observation<? extends List<?>> source) {
+    private static int boundedObservedSize(
+            Observation<? extends List<?>> source,
+            int maximumSize
+    ) {
         if (!source.isPresent()) {
             return -1;
         }
         ExternalCall<Integer> size = externalSize(source.get());
-        return size.succeeded() ? size.value() : -1;
+        if (!size.succeeded() || size.value() < 0 || size.value() > maximumSize) {
+            return -1;
+        }
+        return size.value();
     }
 
     private static long preflightTitleCharacters(Observation<String> source) {
@@ -136,61 +143,58 @@ public final class RawGameTextSnapshot {
         return title.length() <= GameTextInputBudget.MAX_LINE_CHARACTERS ? title.length() : -1L;
     }
 
-    private static long preflightStringCharacters(
+    private static StringPreflight preflightStrings(
             Observation<List<String>> source,
-            int maximumLines,
             int expectedSize
     ) {
         if (!source.isPresent()) {
-            return 0L;
+            return StringPreflight.notPresent();
         }
-        if (expectedSize < 0 || expectedSize > maximumLines) {
-            return -1L;
+        if (expectedSize < 0) {
+            return StringPreflight.invalid();
         }
         List<String> lines = source.get();
+        String[] stagedValues = new String[expectedSize];
         long characters = 0L;
         for (int index = 0; index < expectedSize; index++) {
-            if (!hasExpectedSize(lines, expectedSize)) {
-                return -1L;
-            }
             ExternalCall<String> lineCall = externalGet(lines, index);
             String line = lineCall.value();
             if (!lineCall.succeeded() || line == null
                     || line.length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
-                return -1L;
+                return StringPreflight.invalid();
             }
+            stagedValues[index] = line;
             characters = Math.addExact(characters, (long) line.length());
         }
-        return hasExpectedSize(lines, expectedSize) ? characters : -1L;
+        return new StringPreflight(expectedSize, characters, stagedValues);
     }
 
-    private static long preflightChatCharacters(
+    private static ChatPreflight preflightChat(
             Observation<List<RawChatMessage>> source,
             int expectedSize
     ) {
         if (!source.isPresent()) {
-            return 0L;
+            return ChatPreflight.notPresent();
         }
-        if (expectedSize < 0 || expectedSize > GameTextInputBudget.MAX_CHAT_MESSAGES) {
-            return -1L;
+        if (expectedSize < 0) {
+            return ChatPreflight.invalid();
         }
         List<RawChatMessage> messages = source.get();
+        RawChatMessage[] stagedValues = new RawChatMessage[expectedSize];
         long characters = 0L;
         for (int index = 0; index < expectedSize; index++) {
-            if (!hasExpectedSize(messages, expectedSize)) {
-                return -1L;
-            }
             ExternalCall<RawChatMessage> messageCall = externalGet(messages, index);
             RawChatMessage message = messageCall.value();
             if (!messageCall.succeeded() || message == null
                     || message.channel().length() > GameTextInputBudget.MAX_LINE_CHARACTERS
                     || message.text().length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
-                return -1L;
+                return ChatPreflight.invalid();
             }
+            stagedValues[index] = message;
             characters = Math.addExact(characters, (long) message.channel().length());
             characters = Math.addExact(characters, (long) message.text().length());
         }
-        return hasExpectedSize(messages, expectedSize) ? characters : -1L;
+        return new ChatPreflight(expectedSize, characters, stagedValues);
     }
 
     private static long addPreflightCharacters(long total, long characters) {
@@ -205,101 +209,80 @@ public final class RawGameTextSnapshot {
             List<ParseDiagnostic> diagnostics
     ) {
         if (!source.isPresent()) {
-            return new Checked<>(source, 0L);
+            return new Checked<>(source);
         }
         String title = Objects.requireNonNull(source.get(), "scoreboardTitle value");
         if (title.length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
             diagnostics.add(new ParseDiagnostic("input.scoreboard.title", ParseDiagnosticCode.INPUT_LIMIT));
-            return new Checked<>(Observation.unknown(), 0L);
+            return new Checked<>(Observation.unknown());
         }
-        return new Checked<>(source, title.length());
+        return new Checked<>(source);
     }
 
     private static Checked<List<String>> checkStrings(
             Observation<List<String>> source,
             int maximumLines,
-            int expectedSize,
-            long expectedCharacters,
+            StringPreflight preflight,
             String field,
             List<ParseDiagnostic> diagnostics
     ) {
         if (!source.isPresent()) {
-            return new Checked<>(source, 0L);
+            return new Checked<>(source);
         }
         List<String> lines = source.get();
+        int expectedSize = preflight.expectedSize();
         ExternalCall<Integer> initialSize = externalSize(lines);
-        if (expectedSize < 0 || expectedSize > maximumLines || expectedCharacters < 0L
+        if (!preflight.valid() || expectedSize < 0 || expectedSize > maximumLines
                 || !initialSize.succeeded() || initialSize.value() != expectedSize) {
             diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
-            return new Checked<>(Observation.unknown(), 0L);
+            return new Checked<>(Observation.unknown());
         }
-        List<String> copy = new ArrayList<>(expectedSize);
-        long characters = 0L;
         for (int index = 0; index < expectedSize; index++) {
-            if (!hasExpectedSize(lines, expectedSize)) {
-                diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
-                return new Checked<>(Observation.unknown(), 0L);
-            }
             ExternalCall<String> lineCall = externalGet(lines, index);
-            String line = lineCall.value();
-            if (!lineCall.succeeded() || line == null
-                    || line.length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
+            if (!lineCall.succeeded()
+                    || !Objects.equals(preflight.values()[index], lineCall.value())) {
                 diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
-                return new Checked<>(Observation.unknown(), 0L);
+                return new Checked<>(Observation.unknown());
             }
-            characters = Math.addExact(characters, (long) line.length());
-            copy.add(line);
         }
-        if (!hasExpectedSize(lines, expectedSize) || characters != expectedCharacters) {
+        if (!hasExpectedSize(lines, expectedSize)) {
             diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
-            return new Checked<>(Observation.unknown(), 0L);
+            return new Checked<>(Observation.unknown());
         }
-        return new Checked<>(Observation.present(List.copyOf(copy)), characters);
+        return new Checked<>(Observation.present(List.of(preflight.values())));
     }
 
     private static Checked<List<RawChatMessage>> checkChat(
             Observation<List<RawChatMessage>> source,
-            int expectedSize,
-            long expectedCharacters,
+            ChatPreflight preflight,
             List<ParseDiagnostic> diagnostics
     ) {
         if (!source.isPresent()) {
-            return new Checked<>(source, 0L);
+            return new Checked<>(source);
         }
         List<RawChatMessage> messages = source.get();
+        int expectedSize = preflight.expectedSize();
         ExternalCall<Integer> initialSize = externalSize(messages);
-        if (expectedSize < 0 || expectedSize > GameTextInputBudget.MAX_CHAT_MESSAGES
-                || expectedCharacters < 0L || !initialSize.succeeded()
+        if (!preflight.valid() || expectedSize < 0
+                || expectedSize > GameTextInputBudget.MAX_CHAT_MESSAGES || !initialSize.succeeded()
                 || initialSize.value() != expectedSize) {
             diagnostics.add(new ParseDiagnostic("input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
-            return new Checked<>(Observation.unknown(), 0L);
+            return new Checked<>(Observation.unknown());
         }
-        List<RawChatMessage> copy = new ArrayList<>(expectedSize);
-        long characters = 0L;
         for (int index = 0; index < expectedSize; index++) {
-            if (!hasExpectedSize(messages, expectedSize)) {
-                diagnostics.add(new ParseDiagnostic(
-                        "input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
-                return new Checked<>(Observation.unknown(), 0L);
-            }
             ExternalCall<RawChatMessage> messageCall = externalGet(messages, index);
-            RawChatMessage message = messageCall.value();
-            if (!messageCall.succeeded() || message == null
-                    || message.channel().length() > GameTextInputBudget.MAX_LINE_CHARACTERS
-                    || message.text().length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
+            if (!messageCall.succeeded()
+                    || !Objects.equals(preflight.values()[index], messageCall.value())) {
                 diagnostics.add(new ParseDiagnostic(
                         "input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
-                return new Checked<>(Observation.unknown(), 0L);
+                return new Checked<>(Observation.unknown());
             }
-            characters = Math.addExact(characters, (long) message.channel().length());
-            characters = Math.addExact(characters, (long) message.text().length());
-            copy.add(message);
         }
-        if (!hasExpectedSize(messages, expectedSize) || characters != expectedCharacters) {
+        if (!hasExpectedSize(messages, expectedSize)) {
             diagnostics.add(new ParseDiagnostic("input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
-            return new Checked<>(Observation.unknown(), 0L);
+            return new Checked<>(Observation.unknown());
         }
-        return new Checked<>(Observation.present(List.copyOf(copy)), characters);
+        return new Checked<>(Observation.present(List.of(preflight.values())));
     }
 
     private static boolean hasExpectedSize(List<?> source, int expectedSize) {
@@ -386,7 +369,39 @@ public final class RawGameTextSnapshot {
                 PlayerFacts.unknown(), Observation.unknown(), generation);
     }
 
-    private record Checked<T>(Observation<T> value, long characters) {
+    private record Checked<T>(Observation<T> value) {
+    }
+
+    private record StringPreflight(int expectedSize, long characters, String[] values) {
+        private static StringPreflight notPresent() {
+            return new StringPreflight(-1, 0L, null);
+        }
+
+        private static StringPreflight invalid() {
+            return new StringPreflight(-1, -1L, null);
+        }
+
+        private boolean valid() {
+            return values != null;
+        }
+    }
+
+    private record ChatPreflight(
+            int expectedSize,
+            long characters,
+            RawChatMessage[] values
+    ) {
+        private static ChatPreflight notPresent() {
+            return new ChatPreflight(-1, 0L, null);
+        }
+
+        private static ChatPreflight invalid() {
+            return new ChatPreflight(-1, -1L, null);
+        }
+
+        private boolean valid() {
+            return values != null;
+        }
     }
 
     private record ExternalCall<T>(boolean succeeded, T value) {

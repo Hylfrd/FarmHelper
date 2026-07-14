@@ -153,6 +153,84 @@ class RawGameTextSnapshotTest {
     }
 
     @Test
+    void rejectsSameLengthStringReplacementAndReorderingBetweenPhases() {
+        PhaseChangingList<String> replacement = new PhaseChangingList<>(
+                List.of("safe"), List.of("evil"), List.of("later"));
+        PhaseChangingList<String> reordered = new PhaseChangingList<>(
+                List.of("aa", "bb"), List.of("bb", "aa"), List.of("cc", "dd"));
+
+        RawGameTextSnapshot replaced = snapshotWithScoreboard(replacement);
+        RawGameTextSnapshot swapped = snapshotWithTab(reordered);
+
+        assertTrue(replaced.scoreboardLines().isUnknown());
+        assertEquals(List.of(new ParseDiagnostic(
+                "input.scoreboard.lines", ParseDiagnosticCode.INPUT_LIMIT)),
+                replaced.inputDiagnostics());
+        assertTrue(swapped.tabLines().isUnknown());
+        assertEquals(List.of(new ParseDiagnostic(
+                "input.tab.lines", ParseDiagnosticCode.INPUT_LIMIT)), swapped.inputDiagnostics());
+        assertBoundedTwoPhaseTraversal(replacement, 1);
+        assertBoundedTwoPhaseTraversal(reordered, 2);
+    }
+
+    @Test
+    void rejectsSameSequenceSameLengthChatReplacementAndReorderingBetweenPhases() {
+        RawChatMessage first = new RawChatMessage(7, "a", "bc");
+        RawChatMessage second = new RawChatMessage(7, "b", "ac");
+        RawChatMessage changed = new RawChatMessage(7, "c", "ab");
+        PhaseChangingList<RawChatMessage> replacement = new PhaseChangingList<>(
+                List.of(first), List.of(changed), List.of(second));
+        PhaseChangingList<RawChatMessage> reordered = new PhaseChangingList<>(
+                List.of(first, second), List.of(second, first), List.of(changed, changed));
+
+        RawGameTextSnapshot replaced = snapshotWithChat(replacement);
+        RawGameTextSnapshot swapped = snapshotWithChat(reordered);
+
+        assertTrue(replaced.chatBatch().isUnknown());
+        assertTrue(swapped.chatBatch().isUnknown());
+        assertEquals(List.of(new ParseDiagnostic(
+                "input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT)), replaced.inputDiagnostics());
+        assertEquals(List.of(new ParseDiagnostic(
+                "input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT)), swapped.inputDiagnostics());
+        assertBoundedTwoPhaseTraversal(replacement, 1);
+        assertBoundedTwoPhaseTraversal(reordered, 2);
+    }
+
+    @Test
+    void sealsTheVerifiedValuesWithoutAThirdExternalTraversal() {
+        PhaseChangingList<String> strings = new PhaseChangingList<>(
+                List.of("one", "two"), List.of("one", "two"), List.of("bad", "bad"));
+        RawChatMessage chat = new RawChatMessage(9, "system", "safe");
+        RawChatMessage later = new RawChatMessage(9, "system", "evil");
+        PhaseChangingList<RawChatMessage> messages = new PhaseChangingList<>(
+                List.of(chat), List.of(chat), List.of(later));
+
+        RawGameTextSnapshot snapshot = snapshot(
+                Observation.absent(), strings, List.of(), List.of(), List.of(), messages);
+
+        assertEquals(List.of("one", "two"), snapshot.scoreboardLines().get());
+        assertEquals(List.of(chat), snapshot.chatBatch().get());
+        assertEquals("bad", strings.get(0));
+        assertEquals(later, messages.get(0));
+        assertEquals(List.of("one", "two"), snapshot.scoreboardLines().get());
+        assertEquals(List.of(chat), snapshot.chatBatch().get());
+        assertThrows(UnsupportedOperationException.class,
+                () -> snapshot.scoreboardLines().get().add("mutate"));
+    }
+
+    @Test
+    void containsSecondPhaseSizeFailuresAndNullValues() {
+        ThrowingLaterSizeList<String> throwingSize = new ThrowingLaterSizeList<>(List.of("safe"));
+        PhaseChangingList<String> nullReplacement = new PhaseChangingList<>(
+                List.of("safe"), Collections.singletonList(null), List.of("later"));
+
+        assertRejectedScoreboard(throwingSize);
+        assertRejectedScoreboard(nullReplacement);
+        assertTrue(throwingSize.getCalls <= 1);
+        assertBoundedTwoPhaseTraversal(nullReplacement, 1);
+    }
+
+    @Test
     void observesExactAndOverTotalAcrossEveryCollectionUsingUtf16Characters() {
         String maximum = "x".repeat(GameTextInputBudget.MAX_LINE_CHARACTERS);
         ProbeList<String> exactScoreboard = new ProbeList<>(Collections.nCopies(8, maximum));
@@ -203,7 +281,7 @@ class RawGameTextSnapshotTest {
 
     @Test
     void rejectsAListWhoseSizeChangesBeforeAnyIndexedRead() {
-        ChangingSizeList<String> changing = new ChangingSizeList<>(1, 0);
+        ChangingSizeList<String> changing = new ChangingSizeList<>(1, 0, "safe");
 
         RawGameTextSnapshot snapshot = snapshotWithScoreboard(changing);
 
@@ -211,8 +289,8 @@ class RawGameTextSnapshotTest {
         assertEquals(List.of(new ParseDiagnostic(
                 "input.scoreboard.lines", ParseDiagnosticCode.INPUT_LIMIT)),
                 snapshot.inputDiagnostics());
-        assertEquals(0, changing.getCalls);
-        assertEquals(-1, changing.highestIndex);
+        assertTrue(changing.getCalls <= 1);
+        assertTrue(changing.highestIndex <= 0);
     }
 
     @Test
@@ -257,7 +335,8 @@ class RawGameTextSnapshotTest {
         List<RawChatMessage> nullChat = new ArrayList<>();
         nullChat.add(null);
         assertRejectedChat(nullChat);
-        assertRejectedChat(new ChangingSizeList<>(1, 0));
+        assertRejectedChat(new ChangingSizeList<>(
+                1, 0, new RawChatMessage(0, "safe")));
     }
 
     @Test
@@ -364,6 +443,17 @@ class RawGameTextSnapshotTest {
                 () -> "out-of-bounds legal index: " + probe.highestIndex);
     }
 
+    private static void assertBoundedTwoPhaseTraversal(
+            PhaseChangingList<?> probe,
+            int elementCount
+    ) {
+        assertTrue(probe.getCalls > 0);
+        assertTrue(probe.getCalls <= elementCount * 2,
+                () -> "two-phase validation read too many elements: " + probe.getCalls);
+        assertTrue(probe.highestIndex < elementCount,
+                () -> "out-of-bounds two-phase index: " + probe.highestIndex);
+    }
+
     private static final class ProbeList<T> extends AbstractList<T> {
         private final List<T> values;
         private int getCalls;
@@ -396,25 +486,91 @@ class RawGameTextSnapshotTest {
     private static final class ChangingSizeList<T> extends AbstractList<T> {
         private final int firstSize;
         private final int laterSize;
+        private final T value;
         private int sizeCalls;
         private int getCalls;
         private int highestIndex = -1;
 
-        private ChangingSizeList(int firstSize, int laterSize) {
+        private ChangingSizeList(int firstSize, int laterSize, T value) {
             this.firstSize = firstSize;
             this.laterSize = laterSize;
+            this.value = value;
         }
 
         @Override
         public T get(int index) {
             getCalls++;
             highestIndex = Math.max(highestIndex, index);
-            throw new AssertionError("size change must be detected before indexed access");
+            return value;
         }
 
         @Override
         public int size() {
             return sizeCalls++ == 0 ? firstSize : laterSize;
+        }
+    }
+
+    private static final class PhaseChangingList<T> extends AbstractList<T> {
+        private final List<T> preflightValues;
+        private final List<T> verificationValues;
+        private final List<T> laterValues;
+        private int getCalls;
+        private int highestIndex = -1;
+
+        private PhaseChangingList(
+                List<T> preflightValues,
+                List<T> verificationValues,
+                List<T> laterValues
+        ) {
+            assertEquals(preflightValues.size(), verificationValues.size());
+            assertEquals(preflightValues.size(), laterValues.size());
+            this.preflightValues = preflightValues;
+            this.verificationValues = verificationValues;
+            this.laterValues = laterValues;
+        }
+
+        @Override
+        public T get(int index) {
+            highestIndex = Math.max(highestIndex, index);
+            List<T> values;
+            if (getCalls < preflightValues.size()) {
+                values = preflightValues;
+            } else if (getCalls < preflightValues.size() * 2) {
+                values = verificationValues;
+            } else {
+                values = laterValues;
+            }
+            getCalls++;
+            return values.get(index);
+        }
+
+        @Override
+        public int size() {
+            return preflightValues.size();
+        }
+    }
+
+    private static final class ThrowingLaterSizeList<T> extends AbstractList<T> {
+        private final List<T> values;
+        private int sizeCalls;
+        private int getCalls;
+
+        private ThrowingLaterSizeList(List<T> values) {
+            this.values = values;
+        }
+
+        @Override
+        public T get(int index) {
+            getCalls++;
+            return values.get(index);
+        }
+
+        @Override
+        public int size() {
+            if (sizeCalls++ > 0) {
+                throw new AssertionError("private second-phase size detail");
+            }
+            return values.size();
         }
     }
 
