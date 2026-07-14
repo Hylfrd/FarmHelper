@@ -64,11 +64,25 @@ public final class RotationTask {
         float eased = complete
                 ? 1.0F
                 : Math.min(easeOutQuart(progress), Math.nextDown(1.0F));
-        float yaw = normalizeYaw(startYaw + shortestYawDelta(startYaw, targetYaw) * eased);
-        float pitch = clampPitch(startPitch + (targetPitch - startPitch) * eased);
+        float yawDelta = shortestYawDelta(startYaw, targetYaw);
+        float pitchDelta = targetPitch - startPitch;
+        float yaw = normalizeYaw(startYaw + yawDelta * eased);
+        float pitch = clampPitch(startPitch + pitchDelta * eased);
         if (complete) {
             yaw = targetYaw;
             pitch = targetPitch;
+        } else {
+            if (yawDelta != 0.0F && sameBits(yaw, targetYaw)) {
+                float direction = yawDelta > 0.0F
+                        ? Float.NEGATIVE_INFINITY
+                        : Float.POSITIVE_INFINITY;
+                yaw = normalizeYaw(Math.nextAfter(targetYaw, direction));
+            }
+            if (pitchDelta != 0.0F && sameBits(pitch, targetPitch)) {
+                pitch = pitchDelta > 0.0F
+                        ? Math.nextDown(targetPitch)
+                        : Math.nextUp(targetPitch);
+            }
         }
         return new RotationFrame(yaw, pitch, progress);
     }
@@ -101,6 +115,10 @@ public final class RotationTask {
 
     private static float clamp(double value, float min, float max) {
         return (float) Math.max(min, Math.min(max, value));
+    }
+
+    private static boolean sameBits(float first, float second) {
+        return Float.floatToRawIntBits(first) == Float.floatToRawIntBits(second);
     }
 
     private static void requireFinite(float value, String name) {

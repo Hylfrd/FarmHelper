@@ -135,10 +135,104 @@ class RotationTaskTest {
         assertEquals(80.0F, maximumComplete.pitch());
     }
 
+    @Test
+    void incompleteSamplesStayBitwiseBeforeTargetsAtReviewRoundingBoundary() {
+        RotationTask task = new RotationTask(100.0F, 40.0F, 101.0F, 41.0F, 100L);
+
+        RotationFrame atNinetyNineMilliseconds = task.sample(99_000_000L);
+        RotationFrame oneNanosecondEarly = task.sample(99_999_999L);
+
+        assertIncompleteFiniteProgress(atNinetyNineMilliseconds);
+        assertIncompleteFiniteProgress(oneNanosecondEarly);
+        assertSameBits(Math.nextDown(101.0F), atNinetyNineMilliseconds.yaw());
+        assertSameBits(Math.nextDown(41.0F), atNinetyNineMilliseconds.pitch());
+        assertDifferentBits(101.0F, atNinetyNineMilliseconds.yaw());
+        assertDifferentBits(41.0F, atNinetyNineMilliseconds.pitch());
+        assertDifferentBits(101.0F, oneNanosecondEarly.yaw());
+        assertDifferentBits(41.0F, oneNanosecondEarly.pitch());
+
+        RotationFrame complete = task.sample(100_000_000L);
+        assertTrue(complete.complete());
+        assertSameBits(101.0F, complete.yaw());
+        assertSameBits(41.0F, complete.pitch());
+        assertEquals(1.0F, complete.progress());
+    }
+
+    @Test
+    void incompleteYawUsesDirectionalPredecessorAcrossWrapAndNegativeHalfTurn() {
+        assertIncompleteYawBeforeTarget(179.0F, -179.0F, Math.nextDown(-179.0F));
+        assertIncompleteYawBeforeTarget(-179.0F, 179.0F, Math.nextUp(179.0F));
+        assertIncompleteYawBeforeTarget(
+                179.0F,
+                -180.0F,
+                RotationTask.normalizeYaw(Math.nextDown(-180.0F)));
+        assertIncompleteYawBeforeTarget(-179.0F, -180.0F, Math.nextUp(-180.0F));
+        assertIncompleteYawBeforeTarget(0.0F, 180.0F, Math.nextUp(-180.0F));
+        assertIncompleteYawBeforeTarget(0.0F, -180.0F, Math.nextUp(-180.0F));
+    }
+
+    @Test
+    void incompleteYawHandlesAdjacentFloatTargetsWithoutCrossingOrJitter() {
+        float nextYaw = Math.nextUp(100.0F);
+        float beforePositiveBoundary = Math.nextDown(180.0F);
+
+        assertIncompleteYawBeforeTarget(100.0F, nextYaw, 100.0F);
+        assertIncompleteYawBeforeTarget(nextYaw, 100.0F, nextYaw);
+        assertIncompleteYawBeforeTarget(beforePositiveBoundary, -180.0F, beforePositiveBoundary);
+        assertIncompleteYawBeforeTarget(-180.0F, beforePositiveBoundary, -180.0F);
+
+        RotationFrame unchanged = new RotationTask(100.0F, 40.0F, 100.0F, 40.0F, 100L)
+                .sample(99_999_999L);
+        assertSameBits(100.0F, unchanged.yaw());
+        assertSameBits(40.0F, unchanged.pitch());
+    }
+
+    @Test
+    void incompletePitchUsesDirectionalPredecessorAtAdjacentFloatsAndEndpoints() {
+        assertIncompletePitchBeforeTarget(40.0F, 41.0F, Math.nextDown(41.0F));
+        assertIncompletePitchBeforeTarget(41.0F, 40.0F, Math.nextUp(40.0F));
+        assertIncompletePitchBeforeTarget(80.0F, 90.0F, Math.nextDown(90.0F));
+        assertIncompletePitchBeforeTarget(-80.0F, -90.0F, Math.nextUp(-90.0F));
+
+        float nextPitch = Math.nextUp(40.0F);
+        assertIncompletePitchBeforeTarget(40.0F, nextPitch, 40.0F);
+        assertIncompletePitchBeforeTarget(nextPitch, 40.0F, nextPitch);
+    }
+
     private static void assertIncompleteFiniteProgress(RotationFrame frame) {
         assertFalse(frame.complete());
         assertTrue(Float.isFinite(frame.progress()));
         assertTrue(frame.progress() >= 0.0F);
         assertTrue(frame.progress() < 1.0F);
+    }
+
+    private static void assertIncompleteYawBeforeTarget(float start, float target, float expected) {
+        RotationTask task = new RotationTask(start, 0.0F, target, 0.0F, 100L);
+        RotationFrame frame = task.sample(99_999_999L);
+
+        assertIncompleteFiniteProgress(frame);
+        assertSameBits(expected, frame.yaw());
+        assertDifferentBits(task.targetYaw(), frame.yaw());
+        assertTrue(frame.yaw() >= -180.0F);
+        assertTrue(frame.yaw() < 180.0F);
+    }
+
+    private static void assertIncompletePitchBeforeTarget(float start, float target, float expected) {
+        RotationTask task = new RotationTask(0.0F, start, 0.0F, target, 100L);
+        RotationFrame frame = task.sample(99_999_999L);
+
+        assertIncompleteFiniteProgress(frame);
+        assertSameBits(expected, frame.pitch());
+        assertDifferentBits(task.targetPitch(), frame.pitch());
+        assertTrue(frame.pitch() >= -90.0F);
+        assertTrue(frame.pitch() <= 90.0F);
+    }
+
+    private static void assertSameBits(float expected, float actual) {
+        assertEquals(Float.floatToRawIntBits(expected), Float.floatToRawIntBits(actual));
+    }
+
+    private static void assertDifferentBits(float unexpected, float actual) {
+        assertNotEquals(Float.floatToRawIntBits(unexpected), Float.floatToRawIntBits(actual));
     }
 }

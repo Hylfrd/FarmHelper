@@ -301,6 +301,38 @@ class RotationControllerTest {
                 Long.MAX_VALUE);
     }
 
+    @Test
+    void reviewRoundingBoundaryDoesNotApplyFinalTargetBeforeExactDuration() {
+        MutableClock clock = new MutableClock();
+        RotationController controller = new RotationController(clock);
+        List<RotationFrame> frames = new ArrayList<>();
+        List<RotationResult> results = new ArrayList<>();
+        controller.start(OWNER, 100.0F, 40.0F, 101.0F, 41.0F, 100L, results::add);
+
+        clock.setNanos(99_000_000L);
+        assertTrue(controller.tick(frames::add));
+
+        RotationFrame earlyFrame = frames.getFirst();
+        assertFalse(earlyFrame.complete());
+        assertDifferentBits(101.0F, earlyFrame.yaw());
+        assertDifferentBits(41.0F, earlyFrame.pitch());
+        assertTrue(controller.rotating());
+        assertTrue(controller.movementBlocked());
+        assertTrue(results.isEmpty());
+
+        clock.setNanos(100_000_000L);
+        assertTrue(controller.tick(frames::add));
+
+        RotationFrame finalFrame = frames.get(1);
+        assertTrue(finalFrame.complete());
+        assertSameBits(101.0F, finalFrame.yaw());
+        assertSameBits(41.0F, finalFrame.pitch());
+        assertFalse(controller.rotating());
+        assertFalse(controller.movementBlocked());
+        assertEquals(1, results.size());
+        assertTrue(results.getFirst().completed());
+    }
+
     private static void assertCompletesOnlyAtExactDuration(
             long durationMs,
             long earlyElapsedNanos,
@@ -360,5 +392,13 @@ class RotationControllerTest {
         private void advanceNanos(long deltaNanos) {
             nowNanos += deltaNanos;
         }
+    }
+
+    private static void assertSameBits(float expected, float actual) {
+        assertEquals(Float.floatToRawIntBits(expected), Float.floatToRawIntBits(actual));
+    }
+
+    private static void assertDifferentBits(float unexpected, float actual) {
+        assertNotEquals(Float.floatToRawIntBits(unexpected), Float.floatToRawIntBits(actual));
     }
 }
