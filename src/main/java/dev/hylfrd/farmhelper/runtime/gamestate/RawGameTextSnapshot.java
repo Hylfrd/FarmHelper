@@ -43,53 +43,168 @@ public final class RawGameTextSnapshot {
         }
         this.generation = generation;
 
-        List<ParseDiagnostic> diagnostics = new ArrayList<>();
-        Checked<String> checkedTitle = checkTitle(scoreboardTitle, diagnostics);
-        Checked<List<String>> checkedScoreboard = checkStrings(
-                scoreboardLines, GameTextInputBudget.MAX_SCOREBOARD_LINES,
-                "input.scoreboard.lines", diagnostics);
-        Checked<List<String>> checkedTab = checkStrings(
-                tabLines, GameTextInputBudget.MAX_TAB_LINES, "input.tab.lines", diagnostics);
-        Checked<List<String>> checkedFooter = checkStrings(
-                tabFooter, GameTextInputBudget.MAX_TAB_FOOTER_LINES,
-                "input.tab.footer", diagnostics);
-        Checked<List<String>> checkedLore = checkStrings(
-                vacuumLore, GameTextInputBudget.MAX_VACUUM_LORE_LINES,
-                "input.vacuum.lore", diagnostics);
-        Checked<List<RawChatMessage>> checkedChat = checkChat(chatBatch, diagnostics);
+        int scoreboardSize = observedSize(scoreboardLines, "scoreboardLines value");
+        int tabSize = observedSize(tabLines, "tabLines value");
+        int footerSize = observedSize(tabFooter, "tabFooter value");
+        int loreSize = observedSize(vacuumLore, "vacuumLore value");
+        int chatSize = observedSize(chatBatch, "chatBatch value");
 
         long total = 0L;
-        boolean totalExceeded = false;
-        for (Checked<?> checked : List.of(
-                checkedTitle, checkedScoreboard, checkedTab, checkedFooter, checkedLore, checkedChat)) {
-            try {
-                total = Math.addExact(total, checked.characters());
-            } catch (ArithmeticException exception) {
-                totalExceeded = true;
-                break;
-            }
-            if (total > GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
-                totalExceeded = true;
-                break;
-            }
+        long titleCharacters = preflightTitleCharacters(scoreboardTitle);
+        long scoreboardCharacters = -1L;
+        long tabCharacters = -1L;
+        long footerCharacters = -1L;
+        long loreCharacters = -1L;
+        long chatCharacters = -1L;
+
+        total = addPreflightCharacters(total, titleCharacters);
+        if (total <= GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
+            scoreboardCharacters = preflightStringCharacters(
+                    scoreboardLines, GameTextInputBudget.MAX_SCOREBOARD_LINES, scoreboardSize);
+            total = addPreflightCharacters(total, scoreboardCharacters);
         }
-        if (totalExceeded) {
-            diagnostics.add(new ParseDiagnostic("input.total", ParseDiagnosticCode.INPUT_LIMIT));
+        if (total <= GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
+            tabCharacters = preflightStringCharacters(
+                    tabLines, GameTextInputBudget.MAX_TAB_LINES, tabSize);
+            total = addPreflightCharacters(total, tabCharacters);
+        }
+        if (total <= GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
+            footerCharacters = preflightStringCharacters(
+                    tabFooter, GameTextInputBudget.MAX_TAB_FOOTER_LINES, footerSize);
+            total = addPreflightCharacters(total, footerCharacters);
+        }
+        if (total <= GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
+            loreCharacters = preflightStringCharacters(
+                    vacuumLore, GameTextInputBudget.MAX_VACUUM_LORE_LINES, loreSize);
+            total = addPreflightCharacters(total, loreCharacters);
+        }
+        if (total <= GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
+            chatCharacters = preflightChatCharacters(chatBatch, chatSize);
+            total = addPreflightCharacters(total, chatCharacters);
+        }
+        if (total > GameTextInputBudget.MAX_TOTAL_CHARACTERS) {
             this.scoreboardTitle = unknownIfPresent(scoreboardTitle);
             this.scoreboardLines = unknownIfPresent(scoreboardLines);
             this.tabLines = unknownIfPresent(tabLines);
             this.tabFooter = unknownIfPresent(tabFooter);
             this.vacuumLore = unknownIfPresent(vacuumLore);
             this.chatBatch = unknownIfPresent(chatBatch);
-        } else {
-            this.scoreboardTitle = checkedTitle.value();
-            this.scoreboardLines = checkedScoreboard.value();
-            this.tabLines = checkedTab.value();
-            this.tabFooter = checkedFooter.value();
-            this.vacuumLore = checkedLore.value();
-            this.chatBatch = checkedChat.value();
+            this.inputDiagnostics = List.of(
+                    new ParseDiagnostic("input.total", ParseDiagnosticCode.INPUT_LIMIT));
+            return;
         }
+
+        List<ParseDiagnostic> diagnostics = new ArrayList<>();
+        Checked<String> checkedTitle = checkTitle(scoreboardTitle, diagnostics);
+        Checked<List<String>> checkedScoreboard = checkStrings(
+                scoreboardLines, GameTextInputBudget.MAX_SCOREBOARD_LINES,
+                scoreboardSize, scoreboardCharacters, "input.scoreboard.lines", diagnostics);
+        Checked<List<String>> checkedTab = checkStrings(
+                tabLines, GameTextInputBudget.MAX_TAB_LINES,
+                tabSize, tabCharacters, "input.tab.lines", diagnostics);
+        Checked<List<String>> checkedFooter = checkStrings(
+                tabFooter, GameTextInputBudget.MAX_TAB_FOOTER_LINES,
+                footerSize, footerCharacters, "input.tab.footer", diagnostics);
+        Checked<List<String>> checkedLore = checkStrings(
+                vacuumLore, GameTextInputBudget.MAX_VACUUM_LORE_LINES,
+                loreSize, loreCharacters, "input.vacuum.lore", diagnostics);
+        Checked<List<RawChatMessage>> checkedChat = checkChat(
+                chatBatch, chatSize, chatCharacters, diagnostics);
+
+        this.scoreboardTitle = checkedTitle.value();
+        this.scoreboardLines = checkedScoreboard.value();
+        this.tabLines = checkedTab.value();
+        this.tabFooter = checkedFooter.value();
+        this.vacuumLore = checkedLore.value();
+        this.chatBatch = checkedChat.value();
         this.inputDiagnostics = List.copyOf(diagnostics);
+    }
+
+    private static int observedSize(Observation<? extends List<?>> source, String valueName) {
+        if (!source.isPresent()) {
+            return -1;
+        }
+        return Objects.requireNonNull(source.get(), valueName).size();
+    }
+
+    private static long preflightTitleCharacters(Observation<String> source) {
+        if (!source.isPresent()) {
+            return 0L;
+        }
+        String title = Objects.requireNonNull(source.get(), "scoreboardTitle value");
+        return title.length() <= GameTextInputBudget.MAX_LINE_CHARACTERS ? title.length() : -1L;
+    }
+
+    private static long preflightStringCharacters(
+            Observation<List<String>> source,
+            int maximumLines,
+            int expectedSize
+    ) {
+        if (!source.isPresent()) {
+            return 0L;
+        }
+        if (expectedSize < 0 || expectedSize > maximumLines) {
+            return -1L;
+        }
+        List<String> lines = Objects.requireNonNull(source.get(), "lines");
+        long characters = 0L;
+        try {
+            for (int index = 0; index < expectedSize; index++) {
+                if (lines.size() != expectedSize) {
+                    return -1L;
+                }
+                String line = Objects.requireNonNull(lines.get(index), "line");
+                if (line.length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
+                    return -1L;
+                }
+                characters = Math.addExact(characters, (long) line.length());
+            }
+            return lines.size() == expectedSize ? characters : -1L;
+        } catch (IndexOutOfBoundsException exception) {
+            return -1L;
+        }
+    }
+
+    private static long preflightChatCharacters(
+            Observation<List<RawChatMessage>> source,
+            int expectedSize
+    ) {
+        if (!source.isPresent()) {
+            return 0L;
+        }
+        if (expectedSize < 0 || expectedSize > GameTextInputBudget.MAX_CHAT_MESSAGES) {
+            return -1L;
+        }
+        List<RawChatMessage> messages = Objects.requireNonNull(source.get(), "chatBatch value");
+        long characters = 0L;
+        try {
+            for (int index = 0; index < expectedSize; index++) {
+                if (messages.size() != expectedSize) {
+                    return -1L;
+                }
+                RawChatMessage message = Objects.requireNonNull(messages.get(index), "message");
+                if (message.channel().length() > GameTextInputBudget.MAX_LINE_CHARACTERS
+                        || message.text().length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
+                    return -1L;
+                }
+                characters = Math.addExact(characters, (long) message.channel().length());
+                characters = Math.addExact(characters, (long) message.text().length());
+            }
+            return messages.size() == expectedSize ? characters : -1L;
+        } catch (IndexOutOfBoundsException exception) {
+            return -1L;
+        }
+    }
+
+    private static long addPreflightCharacters(long total, long characters) {
+        if (characters < 0L) {
+            return total;
+        }
+        try {
+            return Math.addExact(total, characters);
+        } catch (ArithmeticException exception) {
+            return Long.MAX_VALUE;
+        }
     }
 
     private static Checked<String> checkTitle(
@@ -110,6 +225,8 @@ public final class RawGameTextSnapshot {
     private static Checked<List<String>> checkStrings(
             Observation<List<String>> source,
             int maximumLines,
+            int expectedSize,
+            long expectedCharacters,
             String field,
             List<ParseDiagnostic> diagnostics
     ) {
@@ -118,30 +235,42 @@ public final class RawGameTextSnapshot {
         }
         List<String> lines = Objects.requireNonNull(source.get(), "lines");
         int initialSize = lines.size();
-        if (initialSize > maximumLines) {
+        if (expectedSize < 0 || expectedSize > maximumLines || expectedCharacters < 0L
+                || initialSize != expectedSize) {
             diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
             return new Checked<>(Observation.unknown(), 0L);
         }
         List<String> copy = new ArrayList<>(initialSize);
         long characters = 0L;
-        for (String line : lines) {
-            if (copy.size() == maximumLines) {
-                diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
-                return new Checked<>(Observation.unknown(), 0L);
+        try {
+            for (int index = 0; index < expectedSize; index++) {
+                if (lines.size() != expectedSize) {
+                    diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
+                    return new Checked<>(Observation.unknown(), 0L);
+                }
+                String line = Objects.requireNonNull(lines.get(index), "line");
+                if (line.length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
+                    diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
+                    return new Checked<>(Observation.unknown(), 0L);
+                }
+                characters = Math.addExact(characters, (long) line.length());
+                copy.add(line);
             }
-            Objects.requireNonNull(line, "line");
-            if (line.length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
-                diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
-                return new Checked<>(Observation.unknown(), 0L);
-            }
-            characters = Math.addExact(characters, (long) line.length());
-            copy.add(line);
+        } catch (IndexOutOfBoundsException exception) {
+            diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
+            return new Checked<>(Observation.unknown(), 0L);
+        }
+        if (lines.size() != expectedSize || characters != expectedCharacters) {
+            diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
+            return new Checked<>(Observation.unknown(), 0L);
         }
         return new Checked<>(Observation.present(List.copyOf(copy)), characters);
     }
 
     private static Checked<List<RawChatMessage>> checkChat(
             Observation<List<RawChatMessage>> source,
+            int expectedSize,
+            long expectedCharacters,
             List<ParseDiagnostic> diagnostics
     ) {
         if (!source.isPresent()) {
@@ -149,26 +278,38 @@ public final class RawGameTextSnapshot {
         }
         List<RawChatMessage> messages = Objects.requireNonNull(source.get(), "chatBatch value");
         int initialSize = messages.size();
-        if (initialSize > GameTextInputBudget.MAX_CHAT_MESSAGES) {
+        if (expectedSize < 0 || expectedSize > GameTextInputBudget.MAX_CHAT_MESSAGES
+                || expectedCharacters < 0L || initialSize != expectedSize) {
             diagnostics.add(new ParseDiagnostic("input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
             return new Checked<>(Observation.unknown(), 0L);
         }
         List<RawChatMessage> copy = new ArrayList<>(initialSize);
         long characters = 0L;
-        for (RawChatMessage message : messages) {
-            if (copy.size() == GameTextInputBudget.MAX_CHAT_MESSAGES) {
-                diagnostics.add(new ParseDiagnostic("input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
-                return new Checked<>(Observation.unknown(), 0L);
+        try {
+            for (int index = 0; index < expectedSize; index++) {
+                if (messages.size() != expectedSize) {
+                    diagnostics.add(new ParseDiagnostic(
+                            "input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
+                    return new Checked<>(Observation.unknown(), 0L);
+                }
+                RawChatMessage message = Objects.requireNonNull(messages.get(index), "message");
+                if (message.channel().length() > GameTextInputBudget.MAX_LINE_CHARACTERS
+                        || message.text().length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
+                    diagnostics.add(new ParseDiagnostic(
+                            "input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
+                    return new Checked<>(Observation.unknown(), 0L);
+                }
+                characters = Math.addExact(characters, (long) message.channel().length());
+                characters = Math.addExact(characters, (long) message.text().length());
+                copy.add(message);
             }
-            Objects.requireNonNull(message, "message");
-            if (message.channel().length() > GameTextInputBudget.MAX_LINE_CHARACTERS
-                    || message.text().length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
-                diagnostics.add(new ParseDiagnostic("input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
-                return new Checked<>(Observation.unknown(), 0L);
-            }
-            characters = Math.addExact(characters, (long) message.channel().length());
-            characters = Math.addExact(characters, (long) message.text().length());
-            copy.add(message);
+        } catch (IndexOutOfBoundsException exception) {
+            diagnostics.add(new ParseDiagnostic("input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
+            return new Checked<>(Observation.unknown(), 0L);
+        }
+        if (messages.size() != expectedSize || characters != expectedCharacters) {
+            diagnostics.add(new ParseDiagnostic("input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
+            return new Checked<>(Observation.unknown(), 0L);
         }
         return new Checked<>(Observation.present(List.copyOf(copy)), characters);
     }
