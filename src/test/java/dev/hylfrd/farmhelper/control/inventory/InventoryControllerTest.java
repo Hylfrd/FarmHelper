@@ -129,6 +129,25 @@ class InventoryControllerTest {
     }
 
     @Test
+    void atomicGuardRejectsIsomorphicWrongContainerIdentityBeforeClick() {
+        InventoryScreenSnapshot expected = baseSnapshot();
+        InventoryScreenSnapshot wrongIdentity = snapshot(
+                expected.identity().epoch() + 1,
+                expected.identity().containerId(),
+                expected.revision().menuStateId(),
+                expected.revision().localContentRevision(),
+                expected.slots(),
+                expected.cursor(),
+                expected.screen().title().get());
+
+        assertEquals(expected.screen(), wrongIdentity.screen());
+        assertEquals(expected.slots(), wrongIdentity.slots());
+        assertEquals(expected.cursor(), wrongIdentity.cursor());
+        assertEquals(expected.revision(), wrongIdentity.revision());
+        assertAtomicMutationRejected(wrongIdentity, InventoryCancelReason.SCREEN_CHANGED);
+    }
+
+    @Test
     void atomicGuardRejectsRevisionOutOfBoundsInactiveAndPickupDenied() {
         assertAtomicMutationRejected(snapshotWithItem(WHEAT, Observation.absent(), 1, 0),
                 InventoryCancelReason.REVISION_CHANGED);

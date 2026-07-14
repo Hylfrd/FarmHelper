@@ -28,6 +28,10 @@ public record InventoryOperation(
             throw new IllegalArgumentException(
                     "click operations require one screen expectation and hotbar-only operations require none");
         }
+        if (!steps.isEmpty() && screenExpectation.orElseThrow().exactIdentity().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "click operations require an exact screen identity");
+        }
         if (timeoutNanos < 0L) {
             throw new IllegalArgumentException("timeoutNanos must not be negative");
         }

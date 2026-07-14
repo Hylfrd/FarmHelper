@@ -60,23 +60,32 @@ class InventorySafetyTest {
     @Test
     void initialScreenExpectationRejectsWrongIdentityTypeTitleSizeAndSentinelWithoutClick() {
         InventoryScreenSnapshot expected = base();
+        InventoryScreenSnapshot wrongType = new InventoryScreenSnapshot(
+                expected.identity(),
+                expected.revision(),
+                new ScreenSnapshot(
+                        Observation.present("minecraft:hopper"),
+                        expected.screen().title()),
+                expected.slots(),
+                expected.cursor(),
+                expected.selectedHotbar());
         assertInitialRejection(snapshot(2, 2, expected.identity().type(), "Chest",
                         List.of(slot(0, WHEAT))), expectation(expected),
                 InventoryCancelReason.SCREEN_IDENTITY_MISMATCH);
-        assertInitialRejection(snapshot(1, 2, "minecraft:hopper", "Chest",
-                        List.of(slot(0, WHEAT))), new ScreenExpectation(
-                        Optional.empty(), expected.identity().type(), "Chest", 1, List.of()),
+        assertInitialRejection(wrongType, new ScreenExpectation(
+                        Optional.of(expected.identity()), expected.identity().type(), "Chest", 1, List.of()),
                 InventoryCancelReason.SCREEN_TYPE_MISMATCH);
         assertInitialRejection(snapshot(1, 2, expected.identity().type(), "Other",
                         List.of(slot(0, WHEAT))), new ScreenExpectation(
-                        Optional.empty(), expected.identity().type(), "Chest", 1, List.of()),
+                        Optional.of(expected.identity()), expected.identity().type(), "Chest", 1, List.of()),
                 InventoryCancelReason.SCREEN_TITLE_MISMATCH);
         assertInitialRejection(snapshot(1, 2, expected.identity().type(), "Chest", List.of()),
-                new ScreenExpectation(Optional.empty(), expected.identity().type(), "Chest", 1, List.of()),
+                new ScreenExpectation(Optional.of(expected.identity()),
+                        expected.identity().type(), "Chest", 1, List.of()),
                 InventoryCancelReason.SCREEN_SLOT_COUNT_MISMATCH);
         assertInitialRejection(snapshot(1, 2, expected.identity().type(), "Chest",
                         List.of(slot(0, item("minecraft:stone", 1, "Stone")))),
-                new ScreenExpectation(Optional.empty(), expected.identity().type(), "Chest", 1,
+                new ScreenExpectation(Optional.of(expected.identity()), expected.identity().type(), "Chest", 1,
                         List.of(InventoryQuery.slot(0).withIdentifier("minecraft:wheat"))),
                 InventoryCancelReason.SCREEN_SENTINEL_MISSING);
     }
@@ -91,6 +100,34 @@ class InventorySafetyTest {
         assertThrows(IllegalArgumentException.class, () -> new InventoryOperation(
                 OWNER, Optional.of(new HotbarSelection(0)), Optional.of(expectation(base())),
                 List.of(), 10));
+
+        ScreenExpectation unbound = new ScreenExpectation(
+                Optional.empty(), base().identity().type(), "Chest", 1, List.of());
+        assertThrows(IllegalArgumentException.class, () -> InventoryOperation.clicks(
+                OWNER, unbound, List.of(step), 10));
+
+        InventoryOperation hotbarOnly = InventoryOperation.hotbar(
+                OWNER, new HotbarSelection(0), 10);
+        assertTrue(hotbarOnly.screenExpectation().isEmpty());
+        assertTrue(hotbarOnly.steps().isEmpty());
+    }
+
+    @Test
+    void isomorphicWrongContainerIdentityIsRejectedAtControllerGate() {
+        InventoryScreenSnapshot expected = base();
+        InventoryScreenSnapshot wrongIdentity = snapshot(
+                expected.identity().epoch() + 1,
+                expected.identity().containerId(),
+                expected.identity().type(),
+                expected.screen().title().get(),
+                expected.slots());
+
+        assertEquals(expected.revision(), wrongIdentity.revision());
+        assertEquals(expected.screen(), wrongIdentity.screen());
+        assertEquals(expected.slots(), wrongIdentity.slots());
+        assertEquals(expected.cursor(), wrongIdentity.cursor());
+        assertInitialRejection(
+                wrongIdentity, expectation(expected), InventoryCancelReason.SCREEN_IDENTITY_MISMATCH);
     }
 
     @Test
