@@ -10,6 +10,7 @@ public final class RotationTask {
     private final float startPitch;
     private final float targetYaw;
     private final float targetPitch;
+    private final double yawDelta;
     private final long durationMs;
     private final long durationNanos;
 
@@ -26,6 +27,7 @@ public final class RotationTask {
         this.startPitch = clampPitch(startPitch);
         this.targetYaw = normalizeYaw(targetYaw);
         this.targetPitch = clampPitch(targetPitch);
+        yawDelta = shortestYawDelta(this.startYaw, this.targetYaw);
         this.durationMs = durationMs;
         durationNanos = TimeUnit.MILLISECONDS.toNanos(durationMs);
     }
@@ -64,16 +66,15 @@ public final class RotationTask {
         float eased = complete
                 ? 1.0F
                 : Math.min(easeOutQuart(progress), Math.nextDown(1.0F));
-        float yawDelta = shortestYawDelta(startYaw, targetYaw);
         float pitchDelta = targetPitch - startPitch;
-        float yaw = normalizeYaw(startYaw + yawDelta * eased);
+        float yaw = narrowYaw((double) startYaw + yawDelta * eased);
         float pitch = clampPitch(startPitch + pitchDelta * eased);
         if (complete) {
             yaw = targetYaw;
             pitch = targetPitch;
         } else {
-            if (yawDelta != 0.0F && sameBits(yaw, targetYaw)) {
-                float direction = yawDelta > 0.0F
+            if (yawDelta != 0.0D && sameBits(yaw, targetYaw)) {
+                double direction = yawDelta > 0.0D
                         ? Float.NEGATIVE_INFINITY
                         : Float.POSITIVE_INFINITY;
                 yaw = normalizeYaw(Math.nextAfter(targetYaw, direction));
@@ -90,18 +91,30 @@ public final class RotationTask {
     /** Normalizes yaw to {@code [-180, 180)}; exact 180-degree ties rotate negatively. */
     public static float normalizeYaw(float value) {
         requireFinite(value, "yaw");
-        float wrapped = value % 360.0F;
-        if (wrapped >= 180.0F) {
-            wrapped -= 360.0F;
-        }
-        if (wrapped < -180.0F) {
-            wrapped += 360.0F;
-        }
-        return wrapped == 0.0F ? 0.0F : wrapped;
+        return narrowYaw(value);
     }
 
-    private static float shortestYawDelta(float current, float target) {
-        return normalizeYaw(target - current);
+    private static float narrowYaw(double value) {
+        float narrowed = (float) normalizeYaw(value);
+        if (narrowed >= 180.0F) {
+            narrowed -= 360.0F;
+        }
+        return narrowed == 0.0F ? 0.0F : narrowed;
+    }
+
+    private static double normalizeYaw(double value) {
+        double wrapped = value % 360.0D;
+        if (wrapped >= 180.0D) {
+            wrapped -= 360.0D;
+        }
+        if (wrapped < -180.0D) {
+            wrapped += 360.0D;
+        }
+        return wrapped == 0.0D ? 0.0D : wrapped;
+    }
+
+    private static double shortestYawDelta(float current, float target) {
+        return normalizeYaw((double) target - current);
     }
 
     private static float easeOutQuart(float value) {

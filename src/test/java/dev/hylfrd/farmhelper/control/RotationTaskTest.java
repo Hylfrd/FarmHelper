@@ -35,6 +35,35 @@ class RotationTaskTest {
     }
 
     @Test
+    void floatUlpsOnBothSidesOfHalfTurnChooseTheTrueShortestDirection() {
+        RotationTask positiveBelowTie =
+                new RotationTask(-100.0F, 0.0F, Math.nextDown(80.0F), 0.0F, 100L);
+        RotationTask positiveAboveTie =
+                new RotationTask(-100.0F, 0.0F, Math.nextUp(80.0F), 0.0F, 100L);
+        RotationTask negativeBelowTie =
+                new RotationTask(100.0F, 0.0F, Math.nextUp(-80.0F), 0.0F, 100L);
+        RotationTask negativeAboveTie =
+                new RotationTask(100.0F, 0.0F, Math.nextDown(-80.0F), 0.0F, 100L);
+
+        assertEquals(68.75F, positiveBelowTie.sample(50_000_000L).yaw(), EPSILON);
+        assertEquals(91.25F, positiveAboveTie.sample(50_000_000L).yaw(), EPSILON);
+        assertEquals(-68.75F, negativeBelowTie.sample(50_000_000L).yaw(), EPSILON);
+        assertEquals(-91.25F, negativeAboveTie.sample(50_000_000L).yaw(), EPSILON);
+    }
+
+    @Test
+    void nearHalfTurnKeepsDirectionalPredecessorUntilExactFinalFrame() {
+        assertIncompleteAndFinalYaw(
+                -100.0F, Math.nextDown(80.0F), Math.nextDown(Math.nextDown(80.0F)));
+        assertIncompleteAndFinalYaw(
+                -100.0F, Math.nextUp(80.0F), Math.nextUp(Math.nextUp(80.0F)));
+        assertIncompleteAndFinalYaw(
+                100.0F, Math.nextUp(-80.0F), Math.nextUp(Math.nextUp(-80.0F)));
+        assertIncompleteAndFinalYaw(
+                100.0F, Math.nextDown(-80.0F), Math.nextDown(Math.nextDown(-80.0F)));
+    }
+
+    @Test
     void normalizesOutOfRangeYawAndCanonicalizesZero() {
         assertEquals(-180.0F, RotationTask.normalizeYaw(540.0F));
         assertEquals(-180.0F, RotationTask.normalizeYaw(-540.0F));
@@ -215,6 +244,18 @@ class RotationTaskTest {
         assertDifferentBits(task.targetYaw(), frame.yaw());
         assertTrue(frame.yaw() >= -180.0F);
         assertTrue(frame.yaw() < 180.0F);
+    }
+
+    private static void assertIncompleteAndFinalYaw(float start, float target, float expectedEarly) {
+        RotationTask task = new RotationTask(start, 0.0F, target, 0.0F, 100L);
+        RotationFrame early = task.sample(99_999_999L);
+        RotationFrame complete = task.sample(100_000_000L);
+
+        assertIncompleteFiniteProgress(early);
+        assertSameBits(expectedEarly, early.yaw());
+        assertDifferentBits(task.targetYaw(), early.yaw());
+        assertTrue(complete.complete());
+        assertSameBits(task.targetYaw(), complete.yaw());
     }
 
     private static void assertIncompletePitchBeforeTarget(float start, float target, float expected) {
