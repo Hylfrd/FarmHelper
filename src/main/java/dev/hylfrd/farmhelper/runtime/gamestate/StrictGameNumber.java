@@ -8,6 +8,9 @@ final class StrictGameNumber {
     }
 
     static BigDecimal decimal(String token, boolean scaledThousands) throws NumericFailure {
+        if (token.length() > GameTextInputBudget.MAX_NUMERIC_TOKEN_CHARACTERS) {
+            throw new NumericFailure(ParseDiagnosticCode.INPUT_LIMIT);
+        }
         String value = token.trim();
         boolean thousands = false;
         if (value.endsWith("k") || value.endsWith("K")) {

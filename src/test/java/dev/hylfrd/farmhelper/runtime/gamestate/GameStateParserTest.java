@@ -220,7 +220,7 @@ class GameStateParserTest {
         assertTrue(result.snapshot().economy().copper().isUnknown());
         assertTrue(result.snapshot().garden().totalPests().isUnknown());
         assertTrue(result.snapshot().garden().vacuumPests().isUnknown());
-        assertTrue(result.snapshot().economy().speed().isUnknown());
+        assertEquals(100, result.snapshot().economy().speed().get());
         assertTrue(result.snapshot().buffs().cookie().isUnknown());
         assertEquals(2_500L, result.snapshot().garden().composterOrganicMatter().get());
         assertTrue(result.snapshot().garden().composterFuel().isAbsent());
@@ -273,7 +273,7 @@ class GameStateParserTest {
     }
 
     @Test
-    void deduplicatesSequencesAndDropsConflictingSequenceWithoutLeakingText() {
+    void conflictingSequenceMakesTheBatchUnknownWithoutLeakingText() {
         String sensitive = "[SkyBlock] HiddenIdentity is visiting Your Garden!";
         RawGameTextSnapshot raw = withChat(
                 minimalRaw(List.of("Area: Garden"), Observation.present(WorldTransition.STABLE)),
@@ -283,12 +283,108 @@ class GameStateParserTest {
                         new RawChatMessage(21, "You bought Pest Repellent")));
         GameStateParseResult result = parser.parse(multiplayer(), raw);
 
-        assertTrue(result.chatSignals().isPresent());
-        assertTrue(result.chatSignals().get().isEmpty());
-        assertEquals(List.of(new ParseDiagnostic("chat.sequence", ParseDiagnosticCode.DUPLICATE_SEQUENCE)),
+        assertTrue(result.chatSignals().isUnknown());
+        assertEquals(List.of(new ParseDiagnostic(
+                        "chat.sequence", ParseDiagnosticCode.CHAT_SEQUENCE_CONFLICT)),
                 result.diagnostics());
         assertFalse(result.diagnostics().toString().contains("HiddenIdentity"));
         assertFalse(result.diagnostics().toString().contains(sensitive));
+    }
+
+    @Test
+    void appliesUpstreamSpeedTruncationAndRejectsUnsafeValues() {
+        assertEquals(0, speed(0.0D).get());
+        assertEquals(100, speed(0.1005D).get());
+        assertEquals(251, speed(0.2519D).get());
+        double maximum = (double) Integer.MAX_VALUE / 1_000.0D;
+        assertEquals(Integer.MAX_VALUE, speed(maximum).get());
+        assertTrue(speed(-0.001D).isUnknown());
+        assertTrue(speed(Double.NaN).isUnknown());
+        assertTrue(speed(Double.POSITIVE_INFINITY).isUnknown());
+        assertTrue(speed(Math.nextUp(maximum)).isUnknown());
+    }
+
+    @Test
+    void ordersContinuousChatAndDiagnosesReorderWithoutChangingSignalOrder() {
+        GameStateParseResult result = chatResult(List.of(
+                new RawChatMessage(2, "§6Server is restarting! Evacuate!"),
+                new RawChatMessage(1, "§aYUCK! A pest appeared.")));
+
+        assertEquals(List.of(
+                new GameChatSignal(1, GameChatSignalType.PEST_SPAWNED),
+                new GameChatSignal(2, GameChatSignalType.EVACUATION_REQUIRED)),
+                result.chatSignals().get());
+        assertEquals(List.of(new ParseDiagnostic(
+                "chat.sequence", ParseDiagnosticCode.CHAT_SEQUENCE_REORDER)), result.diagnostics());
+    }
+
+    @Test
+    void rejectsSequenceGapsButAllowsArbitraryContinuousStartingPointsAndExactDuplicates() {
+        GameStateParseResult gap = chatResult(List.of(
+                new RawChatMessage(1, "YUCK!"),
+                new RawChatMessage(3, "Server is restarting! Evacuate!")));
+        assertTrue(gap.chatSignals().isUnknown());
+        assertEquals(List.of(new ParseDiagnostic(
+                "chat.sequence", ParseDiagnosticCode.CHAT_SEQUENCE_GAP)), gap.diagnostics());
+
+        GameStateParseResult continuous = chatResult(List.of(
+                new RawChatMessage(5, "YUCK!"),
+                new RawChatMessage(6, "Server is restarting! Evacuate!")));
+        assertEquals(List.of(
+                new GameChatSignal(5, GameChatSignalType.PEST_SPAWNED),
+                new GameChatSignal(6, GameChatSignalType.EVACUATION_REQUIRED)),
+                continuous.chatSignals().get());
+        assertTrue(continuous.diagnostics().isEmpty());
+
+        RawChatMessage duplicate = new RawChatMessage(42, "system", "YUCK!");
+        GameStateParseResult deduplicated = chatResult(List.of(duplicate, duplicate));
+        assertEquals(List.of(new GameChatSignal(42, GameChatSignalType.PEST_SPAWNED)),
+                deduplicated.chatSignals().get());
+        assertTrue(deduplicated.diagnostics().isEmpty());
+
+        GameStateParseResult boundary = chatResult(List.of(
+                new RawChatMessage(Long.MAX_VALUE - 1, "YUCK!"),
+                new RawChatMessage(Long.MAX_VALUE, "Server is restarting! Evacuate!")));
+        assertTrue(boundary.chatSignals().isPresent());
+        assertEquals(2, boundary.chatSignals().get().size());
+        assertTrue(boundary.diagnostics().isEmpty());
+    }
+
+    @Test
+    void treatsChannelDifferencesAsConflictingDuplicateContent() {
+        GameStateParseResult result = chatResult(List.of(
+                new RawChatMessage(7, "system", "YUCK!"),
+                new RawChatMessage(7, "game_info", "YUCK!")));
+
+        assertTrue(result.chatSignals().isUnknown());
+        assertEquals(List.of(new ParseDiagnostic(
+                "chat.sequence", ParseDiagnosticCode.CHAT_SEQUENCE_CONFLICT)), result.diagnostics());
+    }
+
+    @Test
+    void reportsInputLimitsWithoutRetainingRawTextOrParsingOversizedNumbers() {
+        String number = "9".repeat(GameTextInputBudget.MAX_NUMERIC_TOKEN_CHARACTERS + 1);
+        GameStateParseResult numeric = parser.parse(multiplayer(), raw(
+                "SKYBLOCK", List.of("Purse: " + number, "Bits: " + number),
+                List.of("Area: Garden"), List.of("Active Effects"), List.of(), List.of(),
+                PlayerFacts.unknown(), Observation.present(WorldTransition.STABLE)));
+        assertTrue(numeric.snapshot().economy().purse().isUnknown());
+        assertTrue(numeric.snapshot().economy().bits().isUnknown());
+        assertTrue(numeric.diagnostics().contains(
+                new ParseDiagnostic("economy.purse", ParseDiagnosticCode.INPUT_LIMIT)));
+        assertTrue(numeric.diagnostics().contains(
+                new ParseDiagnostic("economy.bits", ParseDiagnosticCode.INPUT_LIMIT)));
+        assertFalse(numeric.diagnostics().toString().contains(number));
+
+        String overLine = "x".repeat(GameTextInputBudget.MAX_LINE_CHARACTERS + 1);
+        GameStateParseResult line = parser.parse(multiplayer(), raw(
+                "SKYBLOCK", List.of(overLine), List.of("Area: Garden"),
+                List.of("Active Effects"), List.of(), List.of(), PlayerFacts.unknown(),
+                Observation.present(WorldTransition.STABLE)));
+        assertTrue(line.snapshot().economy().bits().isUnknown());
+        assertTrue(line.diagnostics().contains(new ParseDiagnostic(
+                "input.scoreboard.lines", ParseDiagnosticCode.INPUT_LIMIT)));
+        assertFalse(line.diagnostics().toString().contains(overLine));
     }
 
     @Test
@@ -297,6 +393,22 @@ class GameStateParserTest {
         assertEquals("§zkeep", GameStateParser.clean("§zkeep"));
         assertEquals("§xkeep", GameStateParser.clean("§xkeep"));
         assertEquals("RGB", GameStateParser.clean("§x§1§2§3§4§5§6RGB"));
+        assertEquals("§", GameStateParser.clean("§"));
+        assertEquals("§x", GameStateParser.clean("§x§1§2§3§4§5"));
+    }
+
+    private Observation<Integer> speed(double factor) {
+        RawGameTextSnapshot raw = raw(
+                "SKYBLOCK", List.of(), List.of("Area: Garden"), List.of("Active Effects"),
+                List.of(), List.of(),
+                new PlayerFacts(Observation.present(false), Observation.present(0), Observation.present(factor)),
+                Observation.present(WorldTransition.STABLE));
+        return parser.parse(multiplayer(), raw).snapshot().economy().speed();
+    }
+
+    private GameStateParseResult chatResult(List<RawChatMessage> chat) {
+        return parser.parse(multiplayer(), withChat(
+                minimalRaw(List.of("Area: Garden"), Observation.present(WorldTransition.STABLE)), chat));
     }
 
     private static RawGameTextSnapshot minimalRaw(

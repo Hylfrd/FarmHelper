@@ -8,13 +8,13 @@ import dev.hylfrd.farmhelper.runtime.snapshot.ResourceIdentifier;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -22,10 +22,8 @@ import java.util.regex.Pattern;
 /** Pure parser for immutable game-text inputs. */
 public final class GameStateParser {
     private static final long MAX_SECONDS = 2_147_483_647L;
-    private static final double MAX_SPEED = 2_147_483_647D;
+    private static final double MAX_SPEED = Integer.MAX_VALUE;
     private static final BigDecimal MAX_EXACT_CURRENCY = new BigDecimal("9223372036854775807");
-    private static final Pattern FORMAT_CODE = Pattern.compile(
-            "(?i)§x(?:§[0-9a-f]){6}|§[0-9a-fk-or]");
     private static final Pattern LABELED_NUMBER = Pattern.compile(
             "^([0-9][0-9 ,.]*)(?:\\s*\\(\\+\\s*([0-9][0-9 ,.]*?)\\s*\\))?$");
     private static final Pattern TIME = Pattern.compile("(?:^|\\s)(\\d{1,9})m\\s*(\\d{1,9})s(?:\\s|$)");
@@ -71,6 +69,9 @@ public final class GameStateParser {
         Objects.requireNonNull(client, "client");
         Objects.requireNonNull(raw, "raw");
         Context context = new Context();
+        for (ParseDiagnostic diagnostic : raw.inputDiagnostics()) {
+            context.add(diagnostic.field(), diagnostic.code());
+        }
         Observation<List<GameChatSignal>> signals = parseChat(raw.chatBatch(), context);
         Observation<SemanticLocation> location = parseLocation(client, raw, signals, context);
         Observation<Boolean> skyBlock = parseSkyBlock(raw.scoreboardTitle(), location);
@@ -98,14 +99,15 @@ public final class GameStateParser {
                 raw.generation(), location, skyBlock, inGarden,
                 parseServerClosing(raw.scoreboardLines(), context),
                 economy, jacob, buffs, garden);
-        for (ParseDiagnostic diagnostic : context.diagnostics) {
+        GameStateParseResult result = new GameStateParseResult(snapshot, signals, context.diagnostics);
+        for (ParseDiagnostic diagnostic : result.diagnostics()) {
             try {
                 diagnosticSink.accept(diagnostic);
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException | Error ignored) {
                 // Diagnostics must never change or prevent a parse result.
             }
         }
-        return new GameStateParseResult(snapshot, signals, context.diagnostics);
+        return result;
     }
 
     private static Observation<SemanticLocation> parseLocation(
@@ -206,24 +208,38 @@ public final class GameStateParser {
         if (!source.isPresent()) {
             return source.isAbsent() ? Observation.absent() : Observation.unknown();
         }
-        Map<Long, String> messages = new LinkedHashMap<>();
-        Set<Long> conflicts = new LinkedHashSet<>();
+        Map<Long, RawChatMessage> messages = new TreeMap<>();
+        boolean reordered = false;
+        long previousInputSequence = 0L;
+        boolean firstInput = true;
         for (RawChatMessage message : source.get()) {
-            String normalized = clean(message.text());
-            String previous = messages.putIfAbsent(message.sequence(), normalized);
-            if (previous != null && !previous.equals(normalized)) {
-                conflicts.add(message.sequence());
+            if (!firstInput && message.sequence() < previousInputSequence) {
+                reordered = true;
+            }
+            firstInput = false;
+            previousInputSequence = message.sequence();
+            RawChatMessage previous = messages.putIfAbsent(message.sequence(), message);
+            if (previous != null && !previous.equals(message)) {
+                context.add("chat.sequence", ParseDiagnosticCode.CHAT_SEQUENCE_CONFLICT);
+                return Observation.unknown();
             }
         }
-        if (!conflicts.isEmpty()) {
-            context.add("chat.sequence", ParseDiagnosticCode.DUPLICATE_SEQUENCE);
+        long previousSequence = 0L;
+        boolean firstSequence = true;
+        for (long sequence : messages.keySet()) {
+            if (!firstSequence && sequence - previousSequence != 1L) {
+                context.add("chat.sequence", ParseDiagnosticCode.CHAT_SEQUENCE_GAP);
+                return Observation.unknown();
+            }
+            firstSequence = false;
+            previousSequence = sequence;
+        }
+        if (reordered) {
+            context.add("chat.sequence", ParseDiagnosticCode.CHAT_SEQUENCE_REORDER);
         }
         List<GameChatSignal> signals = new ArrayList<>();
-        for (Map.Entry<Long, String> entry : messages.entrySet()) {
-            if (conflicts.contains(entry.getKey())) {
-                continue;
-            }
-            GameChatSignalType type = chatType(entry.getValue());
+        for (Map.Entry<Long, RawChatMessage> entry : messages.entrySet()) {
+            GameChatSignalType type = chatType(clean(entry.getValue().text()));
             if (type != null) {
                 signals.add(new GameChatSignal(entry.getKey(), type));
             }
@@ -294,6 +310,7 @@ public final class GameStateParser {
     }
 
     private static BigDecimal parseLabeledDecimal(String token) throws StrictGameNumber.NumericFailure {
+        requireBoundedNumericToken(token);
         Matcher matcher = LABELED_NUMBER.matcher(token);
         if (!matcher.matches()) {
             throw new StrictGameNumber.NumericFailure(ParseDiagnosticCode.MALFORMED);
@@ -315,6 +332,7 @@ public final class GameStateParser {
 
     private static long parseLabeledLong(String token, boolean scaledThousands)
             throws StrictGameNumber.NumericFailure {
+        requireBoundedNumericToken(token);
         Matcher matcher = LABELED_NUMBER.matcher(token);
         if (!matcher.matches()) {
             throw new StrictGameNumber.NumericFailure(ParseDiagnosticCode.MALFORMED);
@@ -332,9 +350,8 @@ public final class GameStateParser {
         }
         double factor = source.get();
         double scaled = factor * 1_000.0D;
-        if (!Double.isFinite(factor) || factor < 0 || scaled > MAX_SPEED
-                || scaled != Math.rint(scaled)) {
-            context.add("economy.speed", !Double.isFinite(scaled) || scaled > MAX_SPEED
+        if (!Double.isFinite(factor) || factor < 0 || !Double.isFinite(scaled) || scaled > MAX_SPEED) {
+            context.add("economy.speed", !Double.isFinite(factor) || !Double.isFinite(scaled) || scaled > MAX_SPEED
                     ? ParseDiagnosticCode.OVERFLOW : ParseDiagnosticCode.MALFORMED);
             return Observation.unknown();
         }
@@ -782,12 +799,78 @@ public final class GameStateParser {
     }
 
     static String clean(String raw) {
-        return FORMAT_CODE.matcher(raw)
-                .replaceAll("")
-                .replace('\u00a0', ' ')
-                .replace('\u202f', ' ')
-                .trim()
-                .replaceAll("[ \\t]+", " ");
+        Objects.requireNonNull(raw, "raw");
+        StringBuilder unformatted = new StringBuilder(raw.length());
+        for (int index = 0; index < raw.length(); index++) {
+            char current = raw.charAt(index);
+            int formatLength = formatCodeLength(raw, index);
+            if (formatLength > 0) {
+                index += formatLength - 1;
+                continue;
+            }
+            unformatted.append(current == '\u00a0' || current == '\u202f' ? ' ' : current);
+        }
+        int start = 0;
+        int end = unformatted.length();
+        while (start < end && unformatted.charAt(start) <= ' ') {
+            start++;
+        }
+        while (end > start && unformatted.charAt(end - 1) <= ' ') {
+            end--;
+        }
+        StringBuilder normalized = new StringBuilder(end - start);
+        boolean spacing = false;
+        for (int index = start; index < end; index++) {
+            char current = unformatted.charAt(index);
+            if (current == ' ' || current == '\t') {
+                spacing = true;
+            } else {
+                if (spacing && !normalized.isEmpty()) {
+                    normalized.append(' ');
+                }
+                normalized.append(current);
+                spacing = false;
+            }
+        }
+        return normalized.toString();
+    }
+
+    private static int formatCodeLength(String value, int index) {
+        if (value.charAt(index) != '§' || index + 1 >= value.length()) {
+            return 0;
+        }
+        char code = Character.toLowerCase(value.charAt(index + 1));
+        if (isSimpleFormatCode(code)) {
+            return 2;
+        }
+        if (code != 'x' || index + 13 >= value.length()) {
+            return 0;
+        }
+        for (int offset = 2; offset < 14; offset += 2) {
+            if (value.charAt(index + offset) != '§'
+                    || !isHexDigit(value.charAt(index + offset + 1))) {
+                return 0;
+            }
+        }
+        return 14;
+    }
+
+    private static boolean isSimpleFormatCode(char code) {
+        return code >= '0' && code <= '9'
+                || code >= 'a' && code <= 'f'
+                || code >= 'k' && code <= 'o'
+                || code == 'r';
+    }
+
+    private static boolean isHexDigit(char value) {
+        char normalized = Character.toLowerCase(value);
+        return normalized >= '0' && normalized <= '9' || normalized >= 'a' && normalized <= 'f';
+    }
+
+    private static void requireBoundedNumericToken(String token) throws StrictGameNumber.NumericFailure {
+        if (token.length() > GameTextInputBudget.MAX_NUMERIC_TOKEN_CHARACTERS) {
+            throw new StrictGameNumber.NumericFailure(ParseDiagnosticCode.INPUT_LIMIT);
+        }
     }
 
     private static String upper(String value) {

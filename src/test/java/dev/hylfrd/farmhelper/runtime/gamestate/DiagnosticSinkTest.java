@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -51,18 +52,42 @@ class DiagnosticSinkTest {
     }
 
     @Test
-    void sinkFailureCannotBreakOrAlterParseResult() {
+    void runtimeExceptionFromSinkCannotBreakOrAlterParseResult() {
+        AtomicInteger calls = new AtomicInteger();
         GameStateParser parser = new GameStateParser(diagnostic -> {
+            calls.incrementAndGet();
             throw new IllegalStateException("sink unavailable");
         });
+        GameStateParseResult result = parseMalformedBits(parser);
+
+        assertParseResultPreserved(result);
+        assertEquals(1, calls.get());
+    }
+
+    @Test
+    void assertionErrorFromSinkCannotBreakOrAlterParseResult() {
+        AtomicInteger calls = new AtomicInteger();
+        GameStateParser parser = new GameStateParser(diagnostic -> {
+            calls.incrementAndGet();
+            throw new AssertionError("sink unavailable");
+        });
+        GameStateParseResult result = parseMalformedBits(parser);
+
+        assertParseResultPreserved(result);
+        assertEquals(1, calls.get());
+    }
+
+    private static GameStateParseResult parseMalformedBits(GameStateParser parser) {
         RawGameTextSnapshot raw = new RawGameTextSnapshot(
                 Observation.present("SKYBLOCK"), Observation.present(List.of("Bits: broken")),
                 Observation.present(List.of("Area: Garden")), Observation.present(List.of("Active Effects")),
                 Observation.present(List.of()), Observation.present(List.of()), PlayerFacts.unknown(),
                 Observation.present(WorldTransition.STABLE), 8);
 
-        GameStateParseResult result = parser.parse(multiplayer(), raw);
+        return parser.parse(multiplayer(), raw);
+    }
 
+    private static void assertParseResultPreserved(GameStateParseResult result) {
         assertTrue(result.snapshot().economy().bits().isUnknown());
         assertEquals(List.of(new ParseDiagnostic("economy.bits", ParseDiagnosticCode.MALFORMED)),
                 result.diagnostics());
