@@ -1,5 +1,6 @@
 package dev.hylfrd.farmhelper.control.inventory;
 
+import dev.hylfrd.farmhelper.control.input.ControlOwner;
 import dev.hylfrd.farmhelper.control.input.HotbarSelection;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 
@@ -8,6 +9,9 @@ import java.util.Optional;
 
 /** Full precondition the client adapter must atomically re-read before its sole click write. */
 public record InventoryClickGuard(
+        InventoryOperationToken token,
+        ControlOwner owner,
+        InventoryOperationAuthority authority,
         ItemIdentity target,
         boolean slotActive,
         boolean mayPickup,
@@ -15,6 +19,9 @@ public record InventoryClickGuard(
         Observation<InventoryItem> cursor,
         InventoryClick click) {
     public InventoryClickGuard {
+        Objects.requireNonNull(token, "token");
+        Objects.requireNonNull(owner, "owner");
+        Objects.requireNonNull(authority, "authority");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(hotbarSelection, "hotbarSelection");
         Objects.requireNonNull(cursor, "cursor");

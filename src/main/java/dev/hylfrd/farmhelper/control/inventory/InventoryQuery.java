@@ -12,7 +12,6 @@ public record InventoryQuery(
         Optional<String> displayName,
         MatchMode nameMatch,
         Optional<String> loreContains,
-        Optional<String> customDataContains,
         boolean hotbarOnly,
         boolean caseSensitive) {
     public enum MatchMode {
@@ -26,7 +25,6 @@ public record InventoryQuery(
         displayName = normalized(displayName, "displayName");
         Objects.requireNonNull(nameMatch, "nameMatch");
         loreContains = normalized(loreContains, "loreContains");
-        customDataContains = normalized(customDataContains, "customDataContains");
         if (menuSlot.isPresent() && menuSlot.getAsInt() < 0) {
             throw new IllegalArgumentException("menuSlot must not be negative");
         }
@@ -34,7 +32,7 @@ public record InventoryQuery(
 
     public static InventoryQuery anyItem() {
         return new InventoryQuery(OptionalInt.empty(), Optional.empty(), Optional.empty(),
-                MatchMode.CONTAINS, Optional.empty(), Optional.empty(), false, false);
+                MatchMode.CONTAINS, Optional.empty(), false, false);
     }
 
     public static InventoryQuery slot(int menuSlot) {
@@ -43,37 +41,32 @@ public record InventoryQuery(
 
     public InventoryQuery atSlot(int slot) {
         return new InventoryQuery(OptionalInt.of(slot), itemIdentifier, displayName, nameMatch,
-                loreContains, customDataContains, hotbarOnly, caseSensitive);
+                loreContains, hotbarOnly, caseSensitive);
     }
 
     public InventoryQuery withIdentifier(String identifier) {
         return new InventoryQuery(menuSlot, Optional.of(identifier), displayName, nameMatch,
-                loreContains, customDataContains, hotbarOnly, caseSensitive);
+                loreContains, hotbarOnly, caseSensitive);
     }
 
     public InventoryQuery withDisplayName(String name, MatchMode match) {
         return new InventoryQuery(menuSlot, itemIdentifier, Optional.of(name), match,
-                loreContains, customDataContains, hotbarOnly, caseSensitive);
+                loreContains, hotbarOnly, caseSensitive);
     }
 
     public InventoryQuery withLoreContaining(String text) {
         return new InventoryQuery(menuSlot, itemIdentifier, displayName, nameMatch,
-                Optional.of(text), customDataContains, hotbarOnly, caseSensitive);
-    }
-
-    public InventoryQuery withCustomDataContaining(String text) {
-        return new InventoryQuery(menuSlot, itemIdentifier, displayName, nameMatch,
-                loreContains, Optional.of(text), hotbarOnly, caseSensitive);
+                Optional.of(text), hotbarOnly, caseSensitive);
     }
 
     public InventoryQuery inHotbar() {
         return new InventoryQuery(menuSlot, itemIdentifier, displayName, nameMatch,
-                loreContains, customDataContains, true, caseSensitive);
+                loreContains, true, caseSensitive);
     }
 
     public InventoryQuery respectingCase() {
         return new InventoryQuery(menuSlot, itemIdentifier, displayName, nameMatch,
-                loreContains, customDataContains, hotbarOnly, true);
+                loreContains, hotbarOnly, true);
     }
 
     public boolean matches(InventorySlot slot) {
@@ -102,10 +95,7 @@ public record InventoryQuery(
                 .noneMatch(line -> containsText(line, loreContains.orElseThrow()))) {
             return false;
         }
-        return customDataContains.isEmpty()
-                || item.components().customData()
-                        .filter(data -> containsText(data, customDataContains.orElseThrow()))
-                        .isPresent();
+        return true;
     }
 
     private boolean matchesText(String actual, String expected, MatchMode match) {

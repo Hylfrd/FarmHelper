@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,7 +35,7 @@ class InventoryControllerTest {
     void snapshotsAndComponentSummariesDefensivelyCopyCollections() {
         List<String> lore = new ArrayList<>(List.of("line one"));
         ItemComponentSummary components = new ItemComponentSummary(
-                Optional.of("Custom Wheat"), Optional.of("Wheat"), lore, Optional.of("{id:wheat}"));
+                Optional.of("Custom Wheat"), Optional.of("Wheat"), lore);
         lore.add("mutated");
         InventoryItem item = new InventoryItem(
                 new ItemSummary(ResourceIdentifier.parse("minecraft:wheat"), 2), components);
@@ -71,7 +72,7 @@ class InventoryControllerTest {
     }
 
     @Test
-    void queriesModernNamesLoreCustomDataAndHotbarWithoutMinecraftTypes() {
+    void queriesModernNamesLoreAndHotbarWithoutMinecraftTypes() {
         InventorySlot hotbar = new InventorySlot(
                 0,
                 Observation.present(WHEAT),
@@ -84,7 +85,6 @@ class InventoryControllerTest {
                 .withIdentifier("MINECRAFT:WHEAT")
                 .withDisplayName("whe", InventoryQuery.MatchMode.CONTAINS)
                 .withLoreContaining("crop")
-                .withCustomDataContaining("wheat")
                 .inHotbar();
 
         assertEquals(List.of(hotbar), snapshot.find(query));
@@ -138,6 +138,7 @@ class InventoryControllerTest {
         ItemIdentity missing = new ItemIdentity(before.identity(), before.revision(), 5, WHEAT);
         InventoryExecutionResult outOfBounds = port.executeWithCurrent(
                 before, new InventoryClickGuard(
+                        new InventoryOperationToken(1), OWNER, () -> true,
                         missing, true, true, Optional.empty(), before.cursor(), InventoryClick.quickMove()));
         assertEquals(InventoryCancelReason.SLOT_OUT_OF_BOUNDS, outOfBounds.rejection().orElseThrow());
 
@@ -148,15 +149,19 @@ class InventoryControllerTest {
     }
 
     @Test
-    void failedPostconditionCancelsAndMultiStepOperationRebasesEachStep() {
+    void unsatisfiedPostconditionWaitsUntilTimeoutAndMultiStepOperationRebasesEachStep() {
         Fixture failed = new Fixture();
         failed.port.current = Observation.present(baseSnapshot());
         failed.port.afterClicks.add(changedSnapshot(1, 1));
         List<InventoryOutcome> failedOutcome = new ArrayList<>();
-        failed.controller.start(oneStep(InventoryClick.quickMove(), (before, after, target) -> false, 100),
+        failed.controller.start(oneStep(
+                InventoryClick.quickMove(), (before, after, target, click) -> false, 100),
                 failedOutcome::add);
         advance(failed.queue, 2);
-        assertReason(failedOutcome, InventoryCancelReason.POSTCONDITION_FAILED);
+        assertTrue(failedOutcome.isEmpty());
+        failed.clock.advance(100);
+        failed.queue.advance();
+        assertReason(failedOutcome, InventoryCancelReason.TIMEOUT);
 
         Fixture multi = new Fixture();
         InventoryItem second = item("minecraft:carrot", 3, "Carrot", "crop");
@@ -172,7 +177,7 @@ class InventoryControllerTest {
         multi.port.current = Observation.present(initial);
         multi.port.afterClicks.add(afterFirst);
         multi.port.afterClicks.add(afterSecond);
-        InventoryOperation operation = InventoryOperation.clicks(OWNER, List.of(
+        InventoryOperation operation = InventoryOperation.clicks(OWNER, expectation(initial), List.of(
                 new InventoryStep(InventoryQuery.slot(0), InventoryClick.quickMove(),
                         InventoryPostcondition.TARGET_SLOT_EMPTY),
                 new InventoryStep(InventoryQuery.slot(1), InventoryClick.pickupPrimary(),
@@ -193,7 +198,8 @@ class InventoryControllerTest {
         fixture.port.current = Observation.present(baseSnapshot());
         fixture.port.afterClicks.add(changedSnapshot(1, 1));
         List<InventoryOutcome> outcomes = new ArrayList<>();
-        fixture.controller.start(oneStep(InventoryClick.quickMove(), InventoryPostcondition.REVISION_ADVANCED, 5),
+        fixture.controller.start(oneStep(
+                InventoryClick.quickMove(), InventoryPostcondition.TARGET_SLOT_EMPTY, 5),
                 outcomes::add);
         fixture.queue.advance();
 
@@ -216,8 +222,8 @@ class InventoryControllerTest {
         ControlOwner other = new ControlOwner("other");
         InputLease otherLease = input.selectHotbar(other, new HotbarSelection(8));
         List<InventoryOutcome> conflict = new ArrayList<>();
-        InventoryOperation selecting = new InventoryOperation(
-                OWNER, Optional.of(new HotbarSelection(2)), List.of(), 100);
+        InventoryOperation selecting = InventoryOperation.hotbar(
+                OWNER, new HotbarSelection(2), 100);
 
         controller.start(selecting, conflict::add);
 
@@ -237,8 +243,8 @@ class InventoryControllerTest {
     void staleTokenCannotCancelNewOperationAndScreenCloseIsIdentityGuarded() {
         Fixture fixture = new Fixture();
         fixture.port.current = Observation.present(baseSnapshot());
-        InventoryOperation selecting = new InventoryOperation(
-                OWNER, Optional.of(new HotbarSelection(1)), List.of(), 100);
+        InventoryOperation selecting = InventoryOperation.hotbar(
+                OWNER, new HotbarSelection(1), 100);
         InventoryOperationToken old = fixture.controller.start(selecting, ignored -> { });
         fixture.queue.advance();
         InventoryOperationToken current = fixture.controller.start(selecting, ignored -> { });
@@ -279,9 +285,11 @@ class InventoryControllerTest {
         IllegalStateException adapterFailure = new IllegalStateException("observe failed");
         adapter.port.observeFailure = adapterFailure;
         List<InventoryOutcome> adapterOutcome = new ArrayList<>();
-        adapter.controller.start(oneStep(InventoryClick.quickMove(), InventoryPostcondition.REVISION_ADVANCED, 100),
+        adapter.controller.start(oneStep(
+                InventoryClick.quickMove(), InventoryPostcondition.TARGET_SLOT_EMPTY, 100),
                 adapterOutcome::add);
-        adapter.queue.advance();
+        assertSame(adapterFailure,
+                assertThrows(IllegalStateException.class, adapter.queue::advance));
         assertReason(adapterOutcome, InventoryCancelReason.ADAPTER_EXCEPTION);
         assertTrue(adapter.controller.activeToken().isEmpty());
 
@@ -289,18 +297,19 @@ class InventoryControllerTest {
         verifier.port.current = Observation.present(baseSnapshot());
         verifier.port.afterClicks.add(changedSnapshot(1, 1));
         List<InventoryOutcome> verifierOutcome = new ArrayList<>();
-        verifier.controller.start(oneStep(InventoryClick.quickMove(), (before, after, target) -> {
+        verifier.controller.start(oneStep(InventoryClick.quickMove(), (before, after, target, click) -> {
             throw new IllegalArgumentException("verifier failed");
         }, 100), verifierOutcome::add);
-        advance(verifier.queue, 2);
+        verifier.queue.advance();
+        assertThrows(IllegalArgumentException.class, verifier.queue::advance);
         assertReason(verifierOutcome, InventoryCancelReason.VERIFIER_EXCEPTION);
 
         Fixture callback = new Fixture();
-        callback.controller.start(new InventoryOperation(
-                OWNER, Optional.of(new HotbarSelection(0)), List.of(), 100), outcome -> {
+        callback.controller.start(InventoryOperation.hotbar(
+                OWNER, new HotbarSelection(0), 100), outcome -> {
                     throw new IllegalStateException("callback failed");
                 });
-        callback.queue.advance();
+        assertThrows(IllegalStateException.class, callback.queue::advance);
         assertTrue(callback.controller.activeToken().isEmpty());
         assertTrue(callback.diagnostics.stream()
                 .anyMatch(diagnostic -> diagnostic.reason() == InventoryCancelReason.CALLBACK_EXCEPTION));
@@ -315,9 +324,10 @@ class InventoryControllerTest {
                 queue, new InputController()::selectHotbar, failingPort, diagnostic -> {
                     throw diagnosticFailure;
                 });
-        suppressed.start(oneStep(InventoryClick.quickMove(), InventoryPostcondition.REVISION_ADVANCED, 100),
+        suppressed.start(oneStep(
+                InventoryClick.quickMove(), InventoryPostcondition.TARGET_SLOT_EMPTY, 100),
                 ignored -> { });
-        queue.advance();
+        assertSame(primary, assertThrows(IllegalStateException.class, queue::advance));
         assertArrayEquals(new Throwable[]{diagnosticFailure}, primary.getSuppressed());
         assertTrue(suppressed.activeToken().isEmpty());
     }
@@ -328,7 +338,8 @@ class InventoryControllerTest {
         fixture.port.current = Observation.present(baseSnapshot());
         fixture.port.beforeClick = () -> fixture.port.current = Observation.present(changed);
         List<InventoryOutcome> outcomes = new ArrayList<>();
-        fixture.controller.start(oneStep(InventoryClick.quickMove(), InventoryPostcondition.REVISION_ADVANCED, 100),
+        fixture.controller.start(oneStep(
+                InventoryClick.quickMove(), InventoryPostcondition.TARGET_SLOT_EMPTY, 100),
                 outcomes::add);
 
         fixture.queue.advance();
@@ -342,7 +353,8 @@ class InventoryControllerTest {
         Fixture fixture = new Fixture();
         fixture.port.current = Observation.present(snapshot);
         List<InventoryOutcome> outcomes = new ArrayList<>();
-        fixture.controller.start(oneStep(InventoryClick.quickMove(), InventoryPostcondition.REVISION_ADVANCED, 100),
+        fixture.controller.start(oneStep(
+                InventoryClick.quickMove(), InventoryPostcondition.TARGET_SLOT_EMPTY, 100),
                 outcomes::add);
         fixture.queue.advance();
         assertReason(outcomes, expected);
@@ -351,8 +363,18 @@ class InventoryControllerTest {
 
     private static InventoryOperation oneStep(
             InventoryClick click, InventoryVerifier verifier, long timeoutNanos) {
-        return InventoryOperation.clicks(OWNER, List.of(
+        InventoryScreenSnapshot expected = baseSnapshot();
+        return InventoryOperation.clicks(OWNER, expectation(expected), List.of(
                 new InventoryStep(InventoryQuery.slot(0), click, verifier)), timeoutNanos);
+    }
+
+    private static ScreenExpectation expectation(InventoryScreenSnapshot snapshot) {
+        return ScreenExpectation.exact(
+                snapshot.identity(),
+                snapshot.screen().type().get(),
+                snapshot.screen().title().get(),
+                snapshot.slots().size(),
+                List.of(InventoryQuery.slot(0).withIdentifier("minecraft:wheat")));
     }
 
     private static void assertReason(List<InventoryOutcome> outcomes, InventoryCancelReason reason) {
@@ -412,7 +434,7 @@ class InventoryControllerTest {
         return new InventoryItem(
                 new ItemSummary(ResourceIdentifier.parse(id), count),
                 new ItemComponentSummary(Optional.of(name), Optional.of(name),
-                        lore.isEmpty() ? List.of() : List.of(lore), Optional.of("{id:" + id + "}")));
+                        lore.isEmpty() ? List.of() : List.of(lore)));
     }
 
     private static final class Fixture {
@@ -449,7 +471,8 @@ class InventoryControllerTest {
         private RuntimeException closeFailure;
 
         @Override
-        public Observation<InventoryScreenSnapshot> observe() {
+        public Observation<InventoryScreenSnapshot> observe(
+                InventoryOperationToken token, ControlOwner owner) {
             if (observeFailure != null) {
                 throw observeFailure;
             }
@@ -502,12 +525,19 @@ class InventoryControllerTest {
             if (!slot.mayPickup()) {
                 return InventoryExecutionResult.rejected(InventoryCancelReason.PICKUP_DENIED);
             }
+            if (!guard.authority().isActive()) {
+                return InventoryExecutionResult.rejected(InventoryCancelReason.STALE_TOKEN);
+            }
             clicks.add(guard.click());
             if (!afterClicks.isEmpty()) {
                 InventoryScreenSnapshot after = afterClicks.remove();
                 current = after == null ? Observation.absent() : Observation.present(after);
             }
             return InventoryExecutionResult.success();
+        }
+
+        @Override
+        public void releaseOperation(InventoryOperationToken token, ControlOwner owner) {
         }
 
         private InventoryExecutionResult executeWithCurrent(

@@ -1,14 +1,17 @@
 package dev.hylfrd.farmhelper.client.control.inventory;
 
 import dev.hylfrd.farmhelper.control.input.HotbarSelection;
+import dev.hylfrd.farmhelper.control.input.ControlOwner;
 import dev.hylfrd.farmhelper.control.inventory.InventoryCancelReason;
 import dev.hylfrd.farmhelper.control.inventory.InventoryClick;
 import dev.hylfrd.farmhelper.control.inventory.InventoryClickGuard;
 import dev.hylfrd.farmhelper.control.inventory.InventoryExecutionResult;
+import dev.hylfrd.farmhelper.control.inventory.InventoryGuardStore;
 import dev.hylfrd.farmhelper.control.inventory.InventoryItem;
 import dev.hylfrd.farmhelper.control.inventory.InventoryPort;
 import dev.hylfrd.farmhelper.control.inventory.InventoryScreenSnapshot;
 import dev.hylfrd.farmhelper.control.inventory.InventorySlot;
+import dev.hylfrd.farmhelper.control.inventory.InventoryOperationToken;
 import dev.hylfrd.farmhelper.control.inventory.ItemComponentSummary;
 import dev.hylfrd.farmhelper.control.inventory.ScreenIdentity;
 import dev.hylfrd.farmhelper.control.inventory.ScreenRevision;
@@ -27,11 +30,12 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemLore;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -50,7 +54,11 @@ public final class MinecraftInventoryPort implements InventoryPort {
     private long nextEpoch = 1L;
     private long epoch;
     private long localContentRevision;
-    private ContentFingerprint previousContent;
+    private final InventoryGuardStore<ItemStack> itemGuards =
+            new InventoryGuardStore<>(ItemStack::copy);
+    private final InventoryGuardStore<ItemStack> cursorGuards =
+            new InventoryGuardStore<>(ItemStack::copy);
+    private RawContentFingerprint previousContent;
 
     public MinecraftInventoryPort() {
         this(Minecraft.getInstance());
@@ -61,14 +69,35 @@ public final class MinecraftInventoryPort implements InventoryPort {
     }
 
     @Override
-    public Observation<InventoryScreenSnapshot> observe() {
-        return capture().map(Captured::snapshot);
+    public Observation<InventoryScreenSnapshot> observe(
+            InventoryOperationToken token, ControlOwner owner) {
+        Objects.requireNonNull(token, "token");
+        Objects.requireNonNull(owner, "owner");
+        return capture(true, token, owner).map(Captured::snapshot);
     }
 
     @Override
     public InventoryExecutionResult executeGuardedClick(InventoryClickGuard guard) {
         Objects.requireNonNull(guard, "guard");
-        Observation<Captured> observation = capture();
+        Optional<ItemStack> expectedGuard = itemGuards.claim(
+                guard.target().screen(),
+                guard.target().revision(),
+                guard.target().menuSlot(),
+                guard.token(),
+                guard.owner());
+        if (expectedGuard.isEmpty()) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.ITEM_CHANGED);
+        }
+        Optional<ItemStack> expectedCursorGuard = cursorGuards.claim(
+                guard.target().screen(),
+                guard.target().revision(),
+                0,
+                guard.token(),
+                guard.owner());
+        if (expectedCursorGuard.isEmpty()) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.CURSOR_CHANGED);
+        }
+        Observation<Captured> observation = capture(false, null, null);
         if (!observation.isPresent()) {
             return InventoryExecutionResult.rejected(InventoryCancelReason.SCREEN_CLOSED);
         }
@@ -85,19 +114,24 @@ public final class MinecraftInventoryPort implements InventoryPort {
         if (!slot.item().isPresent()) {
             return InventoryExecutionResult.rejected(InventoryCancelReason.ITEM_CHANGED);
         }
-        InventoryItem expectedItem = guard.target().item();
-        InventoryItem actualItem = slot.item().get();
-        if (!actualItem.summary().identifier().equals(expectedItem.summary().identifier())
-                || !actualItem.components().equals(expectedItem.components())) {
+        ItemStack currentStack = captured.menu().getSlot(slot.menuSlot()).getItem();
+        ItemStack expectedStack = expectedGuard.orElseThrow();
+        if (!ItemStack.isSameItemSameComponents(expectedStack, currentStack)) {
             return InventoryExecutionResult.rejected(InventoryCancelReason.ITEM_CHANGED);
         }
-        if (actualItem.count() != expectedItem.count()) {
+        if (currentStack.getCount() != expectedStack.getCount()) {
             return InventoryExecutionResult.rejected(InventoryCancelReason.COUNT_CHANGED);
         }
         if (!slot.hotbarSelection().equals(guard.hotbarSelection())) {
             return InventoryExecutionResult.rejected(InventoryCancelReason.SLOT_CHANGED);
         }
         if (!current.cursor().equals(guard.cursor())) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.CURSOR_CHANGED);
+        }
+        ItemStack currentCursor = captured.menu().getCarried();
+        ItemStack expectedCursor = expectedCursorGuard.orElseThrow();
+        if (!ItemStack.isSameItemSameComponents(expectedCursor, currentCursor)
+                || expectedCursor.getCount() != currentCursor.getCount()) {
             return InventoryExecutionResult.rejected(InventoryCancelReason.CURSOR_CHANGED);
         }
         if (!current.revision().equals(guard.target().revision())) {
@@ -111,6 +145,9 @@ public final class MinecraftInventoryPort implements InventoryPort {
         }
 
         ClickEncoding encoding = encode(guard.click());
+        if (!guard.authority().isActive()) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.STALE_TOKEN);
+        }
         client.gameMode.handleContainerInput(
                 captured.menu().containerId,
                 slot.menuSlot(),
@@ -121,9 +158,15 @@ public final class MinecraftInventoryPort implements InventoryPort {
     }
 
     @Override
+    public void releaseOperation(InventoryOperationToken token, ControlOwner owner) {
+        itemGuards.clearOperation(token, owner);
+        cursorGuards.clearOperation(token, owner);
+    }
+
+    @Override
     public Optional<InventoryCancelReason> closeScreen(ScreenIdentity expected) {
         Objects.requireNonNull(expected, "expected");
-        Observation<Captured> observation = capture();
+        Observation<Captured> observation = capture(false, null, null);
         if (!observation.isPresent()) {
             return Optional.of(InventoryCancelReason.SCREEN_CLOSED);
         }
@@ -135,7 +178,10 @@ public final class MinecraftInventoryPort implements InventoryPort {
         return Optional.empty();
     }
 
-    private Observation<Captured> capture() {
+    private Observation<Captured> capture(
+            boolean rememberItemGuards,
+            InventoryOperationToken token,
+            ControlOwner owner) {
         requireClientThread();
         if (!(client.screen instanceof AbstractContainerScreen<?> screen)
                 || client.player == null
@@ -156,11 +202,18 @@ public final class MinecraftInventoryPort implements InventoryPort {
         String type = menuType(menu, screen);
         ScreenIdentity identity = new ScreenIdentity(epoch, menu.containerId, type);
         List<InventorySlot> slots = new ArrayList<>(menu.slots.size());
+        Map<Integer, ItemStack> observedItemGuards = new LinkedHashMap<>();
+        List<ItemStack> rawSlots = new ArrayList<>(menu.slots.size());
         for (int index = 0; index < menu.slots.size(); index++) {
             Slot slot = menu.getSlot(index);
+            ItemStack stack = slot.getItem();
+            rawSlots.add(stack);
+            if (!stack.isEmpty()) {
+                observedItemGuards.put(index, stack);
+            }
             slots.add(new InventorySlot(
                     index,
-                    summarize(slot.getItem()),
+                    summarize(stack),
                     slot.isActive(),
                     slot.mayPickup(player),
                     hotbarSlot(slot, player)));
@@ -170,22 +223,33 @@ public final class MinecraftInventoryPort implements InventoryPort {
                 new HotbarSelection(player.getInventory().getSelectedSlot()));
         ScreenSnapshot screenSummary = new ScreenSnapshot(
                 Observation.present(type),
-                Observation.present(screen.getTitle().getString()));
-        ContentFingerprint content = new ContentFingerprint(screenSummary, slots, cursor, selected);
-        if (previousContent != null && !previousContent.equals(content)) {
+                Observation.present(ItemComponentSummary.sanitize(
+                        screen.getTitle().getString(), ItemComponentSummary.MAX_NAME_CODE_POINTS)));
+        RawContentFingerprint content = new RawContentFingerprint(
+                screenSummary, slots, rawSlots, menu.getCarried(), cursor, selected);
+        if (previousContent != null && !previousContent.sameAs(content)) {
             if (localContentRevision == Long.MAX_VALUE) {
                 throw new IllegalStateException("inventory local content revision exhausted");
             }
             localContentRevision++;
         }
         previousContent = content;
+        ScreenRevision revision = new ScreenRevision(menu.getStateId(), localContentRevision);
         InventoryScreenSnapshot snapshot = new InventoryScreenSnapshot(
                 identity,
-                new ScreenRevision(menu.getStateId(), localContentRevision),
+                revision,
                 screenSummary,
                 slots,
                 cursor,
                 selected);
+        if (rememberItemGuards) {
+            itemGuards.replaceObservation(identity, revision, token, owner, observedItemGuards);
+            cursorGuards.replaceObservation(
+                    identity, revision, token, owner, Map.of(0, menu.getCarried()));
+        } else {
+            itemGuards.retainOnly(identity, revision);
+            cursorGuards.retainOnly(identity, revision);
+        }
         return Observation.present(new Captured(snapshot, screen, menu, player));
     }
 
@@ -204,6 +268,8 @@ public final class MinecraftInventoryPort implements InventoryPort {
         lastMenu = menu;
         localContentRevision = 0L;
         previousContent = null;
+        itemGuards.clear();
+        cursorGuards.clear();
     }
 
     private void clearScreenLifetime() {
@@ -211,6 +277,8 @@ public final class MinecraftInventoryPort implements InventoryPort {
         lastMenu = null;
         previousContent = null;
         localContentRevision = 0L;
+        itemGuards.clear();
+        cursorGuards.clear();
     }
 
     private static String menuType(AbstractContainerMenu menu, AbstractContainerScreen<?> screen) {
@@ -237,8 +305,7 @@ public final class MinecraftInventoryPort implements InventoryPort {
         ItemComponentSummary components = new ItemComponentSummary(
                 componentText(stack.get(DataComponents.CUSTOM_NAME)),
                 componentText(stack.get(DataComponents.ITEM_NAME)),
-                lore(stack.get(DataComponents.LORE)),
-                customData(stack.get(DataComponents.CUSTOM_DATA)));
+                lore(stack.get(DataComponents.LORE)));
         return Observation.present(new InventoryItem(
                 new ItemSummary(ResourceIdentifier.parse(key.toString()), stack.getCount()),
                 components));
@@ -250,10 +317,6 @@ public final class MinecraftInventoryPort implements InventoryPort {
 
     private static List<String> lore(ItemLore lore) {
         return lore == null ? List.of() : lore.lines().stream().map(Component::getString).toList();
-    }
-
-    private static Optional<String> customData(CustomData data) {
-        return data == null || data.isEmpty() ? Optional.empty() : Optional.of(data.copyTag().toString());
     }
 
     private static ClickEncoding encode(InventoryClick click) {
@@ -275,13 +338,50 @@ public final class MinecraftInventoryPort implements InventoryPort {
             AbstractContainerMenu menu,
             LocalPlayer player) { }
 
-    private record ContentFingerprint(
-            ScreenSnapshot screen,
-            List<InventorySlot> slots,
-            Observation<InventoryItem> cursor,
-            Observation<HotbarSelection> selectedHotbar) {
-        private ContentFingerprint {
-            slots = List.copyOf(slots);
+    /** Client-private full component fingerprint; inherited Object.toString cannot expose stacks. */
+    private static final class RawContentFingerprint {
+        private final ScreenSnapshot screen;
+        private final List<InventorySlot> slots;
+        private final List<ItemStack> rawSlots;
+        private final ItemStack rawCursor;
+        private final Observation<InventoryItem> cursor;
+        private final Observation<HotbarSelection> selectedHotbar;
+
+        private RawContentFingerprint(
+                ScreenSnapshot screen,
+                List<InventorySlot> slots,
+                List<ItemStack> rawSlots,
+                ItemStack rawCursor,
+                Observation<InventoryItem> cursor,
+                Observation<HotbarSelection> selectedHotbar) {
+            this.screen = screen;
+            this.slots = List.copyOf(slots);
+            this.rawSlots = rawSlots.stream().map(ItemStack::copy).toList();
+            this.rawCursor = rawCursor.copy();
+            this.cursor = cursor;
+            this.selectedHotbar = selectedHotbar;
+        }
+
+        private boolean sameAs(RawContentFingerprint other) {
+            if (!screen.equals(other.screen)
+                    || !slots.equals(other.slots)
+                    || !cursor.equals(other.cursor)
+                    || !selectedHotbar.equals(other.selectedHotbar)
+                    || rawSlots.size() != other.rawSlots.size()
+                    || !sameStack(rawCursor, other.rawCursor)) {
+                return false;
+            }
+            for (int index = 0; index < rawSlots.size(); index++) {
+                if (!sameStack(rawSlots.get(index), other.rawSlots.get(index))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private static boolean sameStack(ItemStack first, ItemStack second) {
+            return first.getCount() == second.getCount()
+                    && ItemStack.isSameItemSameComponents(first, second);
         }
     }
 }

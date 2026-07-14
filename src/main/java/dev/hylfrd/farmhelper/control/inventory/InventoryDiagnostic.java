@@ -29,7 +29,7 @@ public record InventoryDiagnostic(
 
         public static Failure from(Throwable failure) {
             Objects.requireNonNull(failure, "failure");
-            return new Failure(failure.getClass().getName(), Optional.ofNullable(failure.getMessage()));
+            return new Failure(failure.getClass().getName(), Optional.empty());
         }
     }
 }
