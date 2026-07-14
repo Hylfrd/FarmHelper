@@ -15,9 +15,11 @@ import dev.hylfrd.farmhelper.runtime.time.TaskOwner;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.RecordComponent;
+import java.util.AbstractList;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -113,6 +116,85 @@ class InventorySafetyTest {
     }
 
     @Test
+    void operationConstructionSnapshotsMutableStepsRejectsNullAndExposesNoMutationSurface() {
+        InventoryStep first = step(0);
+        InventoryStep replacement = step(1);
+        List<InventoryStep> mutable = new ArrayList<>(List.of(first));
+
+        InventoryOperation operation = InventoryOperation.clicks(
+                OWNER, expectation(base()), mutable, 10);
+        mutable.clear();
+        mutable.add(replacement);
+
+        assertEquals(List.of(first), operation.steps());
+        assertThrows(UnsupportedOperationException.class,
+                () -> operation.steps().add(replacement));
+
+        List<InventoryStep> withNull = new ArrayList<>();
+        withNull.add(null);
+        assertThrows(NullPointerException.class, () -> InventoryOperation.clicks(
+                OWNER, expectation(base()), withNull, 10));
+    }
+
+    @Test
+    void hostileStepListsAreRejectedOrBecomeCompleteConsistentImmutableSnapshots() {
+        InventoryStep before = step(0);
+        InventoryStep after = step(1);
+        for (AccessStage stage : AccessStage.values()) {
+            HostileStepList changing = new HostileStepList(
+                    List.of(before), stage, HostileAction.REPLACE, List.of(after));
+            assertSafeSnapshot(changing, List.of(before), List.of(after));
+
+            HostileStepList returningNull = new HostileStepList(
+                    List.of(before), stage, HostileAction.RETURN_NULL, List.of());
+            assertSafeSnapshot(returningNull, List.of(before));
+
+            HostileStepList throwing = new HostileStepList(
+                    List.of(before), stage, HostileAction.THROW, List.of());
+            assertSafeSnapshot(throwing, List.of(before));
+        }
+    }
+
+    @Test
+    void changingEmptyListsCannotPassAsHotbarOnlyThenRevealHiddenClicks() {
+        InventoryStep hiddenClick = step(0);
+        for (AccessStage stage : AccessStage.values()) {
+            HostileStepList hostile = new HostileStepList(
+                    List.of(), stage, HostileAction.REPLACE, List.of(hiddenClick));
+            try {
+                InventoryOperation operation = new InventoryOperation(
+                        OWNER, Optional.of(new HotbarSelection(2)), Optional.empty(), hostile, 10);
+                hostile.replaceContents(List.of(hiddenClick));
+                assertTrue(operation.steps().isEmpty());
+                assertTrue(operation.screenExpectation().isEmpty());
+                assertThrows(UnsupportedOperationException.class,
+                        () -> operation.steps().add(hiddenClick));
+            } catch (RuntimeException safeRejection) {
+                // A construction-time mutation may instead expose the click and fail closed.
+            }
+        }
+    }
+
+    @Test
+    void mixedHotbarAndClickOperationsRequireExpectationAndExactIdentity() {
+        InventoryStep step = step(0);
+        HotbarSelection hotbar = new HotbarSelection(2);
+        assertThrows(IllegalArgumentException.class, () -> new InventoryOperation(
+                OWNER, Optional.of(hotbar), Optional.empty(), List.of(step), 10));
+
+        ScreenExpectation withoutIdentity = new ScreenExpectation(
+                Optional.empty(), base().identity().type(), "Chest", 1, List.of());
+        assertThrows(IllegalArgumentException.class, () -> new InventoryOperation(
+                OWNER, Optional.of(hotbar), Optional.of(withoutIdentity), List.of(step), 10));
+
+        InventoryOperation operation = new InventoryOperation(
+                OWNER, Optional.of(hotbar), Optional.of(expectation(base())), List.of(step), 10);
+        assertEquals(Optional.of(hotbar), operation.hotbarSelection());
+        assertTrue(operation.screenExpectation().orElseThrow().exactIdentity().isPresent());
+        assertEquals(List.of(step), operation.steps());
+    }
+
+    @Test
     void isomorphicWrongContainerIdentityIsRejectedAtControllerGate() {
         InventoryScreenSnapshot expected = base();
         InventoryScreenSnapshot wrongIdentity = snapshot(
@@ -128,6 +210,39 @@ class InventorySafetyTest {
         assertEquals(expected.cursor(), wrongIdentity.cursor());
         assertInitialRejection(
                 wrongIdentity, expectation(expected), InventoryCancelReason.SCREEN_IDENTITY_MISMATCH);
+    }
+
+    @Test
+    void equalButDistinctScreenIdentityUsesValueEqualityWhileDifferentEpochOrIdNeverClicks() {
+        InventoryScreenSnapshot expected = base();
+        InventoryScreenSnapshot equalButDistinct = snapshot(
+                expected.identity().epoch(), expected.identity().containerId(),
+                expected.identity().type(), expected.screen().title().get(), expected.slots());
+        assertNotSame(expected.identity(), equalButDistinct.identity());
+        assertEquals(expected.identity(), equalButDistinct.identity());
+
+        Fixture accepted = new Fixture();
+        accepted.port.scripted.add(Observation.present(equalButDistinct));
+        accepted.port.scripted.add(Observation.present(revised(
+                equalButDistinct, 1, 1, List.of(slot(0, null)))));
+        List<InventoryOutcome> outcomes = new ArrayList<>();
+        accepted.controller.start(clickOperation(
+                expectation(expected), InventoryPostcondition.TARGET_SLOT_EMPTY, 10), outcomes::add);
+        accepted.queue.advance();
+        accepted.queue.advance();
+        accepted.queue.advance();
+
+        assertEquals(1, accepted.port.clicks);
+        assertEquals(InventoryOutcome.Status.COMPLETED, outcomes.getFirst().status());
+
+        assertInitialRejection(snapshot(
+                        expected.identity().epoch() + 1, expected.identity().containerId(),
+                        expected.identity().type(), expected.screen().title().get(), expected.slots()),
+                expectation(expected), InventoryCancelReason.SCREEN_IDENTITY_MISMATCH);
+        assertInitialRejection(snapshot(
+                        expected.identity().epoch(), expected.identity().containerId() + 1,
+                        expected.identity().type(), expected.screen().title().get(), expected.slots()),
+                expectation(expected), InventoryCancelReason.SCREEN_IDENTITY_MISMATCH);
     }
 
     @Test
@@ -435,6 +550,31 @@ class InventorySafetyTest {
                         InventoryClick.quickMove(), verifier)), timeoutNanos);
     }
 
+    @SafeVarargs
+    private static void assertSafeSnapshot(
+            HostileStepList hostile, List<InventoryStep>... completeSnapshots) {
+        try {
+            InventoryOperation operation = InventoryOperation.clicks(
+                    OWNER, expectation(base()), hostile, 10);
+            assertTrue(java.util.Arrays.stream(completeSnapshots)
+                    .anyMatch(snapshot -> snapshot.equals(operation.steps())));
+            assertTrue(operation.steps().stream().allMatch(java.util.Objects::nonNull));
+            List<InventoryStep> captured = operation.steps();
+            hostile.replaceContents(List.of(step(2)));
+            assertEquals(captured, operation.steps());
+            assertThrows(UnsupportedOperationException.class,
+                    () -> operation.steps().add(step(3)));
+        } catch (RuntimeException safeRejection) {
+            assertTrue(hostile.triggered());
+        }
+    }
+
+    private static InventoryStep step(int slot) {
+        return new InventoryStep(
+                InventoryQuery.slot(slot), InventoryClick.quickMove(),
+                InventoryPostcondition.TARGET_SLOT_EMPTY);
+    }
+
     private static ScreenExpectation expectation(InventoryScreenSnapshot snapshot) {
         return ScreenExpectation.exact(
                 snapshot.identity(), snapshot.identity().type(), snapshot.screen().title().get(),
@@ -585,6 +725,102 @@ class InventorySafetyTest {
         public void cancel(TaskOwner owner) {
             cancelCalls++;
             pendingOwnTasks = 0;
+        }
+    }
+
+    private enum AccessStage {
+        SIZE,
+        GET,
+        TO_ARRAY,
+        ITERATOR
+    }
+
+    private enum HostileAction {
+        REPLACE,
+        RETURN_NULL,
+        THROW
+    }
+
+    private static final class HostileStepList extends AbstractList<InventoryStep> {
+        private final List<InventoryStep> values;
+        private final AccessStage stage;
+        private final HostileAction action;
+        private final List<InventoryStep> replacement;
+        private boolean triggered;
+
+        private HostileStepList(
+                List<InventoryStep> initial,
+                AccessStage stage,
+                HostileAction action,
+                List<InventoryStep> replacement) {
+            this.values = new ArrayList<>(initial);
+            this.stage = stage;
+            this.action = action;
+            this.replacement = replacement;
+        }
+
+        @Override
+        public InventoryStep get(int index) {
+            if (before(AccessStage.GET)) {
+                return null;
+            }
+            return values.get(index);
+        }
+
+        @Override
+        public int size() {
+            if (before(AccessStage.SIZE)) {
+                replaceContents(java.util.Collections.singletonList(null));
+            }
+            return values.size();
+        }
+
+        @Override
+        public Iterator<InventoryStep> iterator() {
+            if (before(AccessStage.ITERATOR)) {
+                return null;
+            }
+            return super.iterator();
+        }
+
+        @Override
+        public Object[] toArray() {
+            if (before(AccessStage.TO_ARRAY)) {
+                return null;
+            }
+            return super.toArray();
+        }
+
+        @Override
+        public <T> T[] toArray(T[] array) {
+            if (before(AccessStage.TO_ARRAY)) {
+                return null;
+            }
+            return super.toArray(array);
+        }
+
+        private boolean before(AccessStage observed) {
+            if (triggered || stage != observed) {
+                return false;
+            }
+            triggered = true;
+            switch (action) {
+                case REPLACE -> replaceContents(replacement);
+                case RETURN_NULL -> {
+                    return true;
+                }
+                case THROW -> throw new IllegalStateException("hostile list access");
+            }
+            return false;
+        }
+
+        private boolean triggered() {
+            return triggered;
+        }
+
+        private void replaceContents(List<InventoryStep> newValues) {
+            values.clear();
+            values.addAll(newValues);
         }
     }
 }
