@@ -82,6 +82,20 @@ public record PlayerSnapshot(
         };
     }
 
+    @Override
+    public String toString() {
+        if (!present()) {
+            return "PlayerSnapshot[state=" + state + "]";
+        }
+        return "PlayerSnapshot[state=" + state
+                + ", x=" + x
+                + ", y=" + y
+                + ", z=" + z
+                + ", yaw=" + yaw
+                + ", pitch=" + pitch
+                + "]";
+    }
+
     private static float round(float value) {
         return Math.round(value * 10.0F) / 10.0F;
     }
