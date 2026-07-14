@@ -127,6 +127,51 @@ class ClientTaskQueueTest {
     }
 
     @Test
+    void rejectsReentrantAdvanceAndLeavesCallbackSchedulingForNextAdvance() {
+        ManualClock clock = new ManualClock();
+        ClientTaskQueue queue = new ClientTaskQueue(clock);
+        TaskOwner owner = new TaskOwner("owner");
+        List<String> calls = new ArrayList<>();
+
+        queue.schedule(owner, 0L, () -> {
+            calls.add("outer");
+            queue.schedule(owner, 0L, () -> calls.add("deferred"));
+            IllegalStateException error = assertThrows(IllegalStateException.class, queue::advance);
+            assertEquals("advance already in progress", error.getMessage());
+            assertEquals(List.of("outer"), calls);
+        });
+
+        assertEquals(1, queue.advance());
+        assertEquals(List.of("outer"), calls);
+        assertEquals(1, queue.pendingTaskCount());
+
+        assertEquals(1, queue.advance());
+        assertEquals(List.of("outer", "deferred"), calls);
+        assertEquals(0, queue.pendingTaskCount());
+    }
+
+    @Test
+    void callbackFailureDoesNotPermanentlyBlockAdvance() {
+        ManualClock clock = new ManualClock();
+        ClientTaskQueue queue = new ClientTaskQueue(clock);
+        TaskOwner owner = new TaskOwner("owner");
+        List<String> calls = new ArrayList<>();
+
+        queue.schedule(owner, 0L, () -> {
+            throw new IllegalStateException("callback failed");
+        });
+        queue.schedule(owner, 0L, () -> calls.add("recovered"));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, queue::advance);
+        assertEquals("callback failed", error.getMessage());
+        assertEquals(1, queue.pendingTaskCount());
+
+        assertEquals(1, queue.advance());
+        assertEquals(List.of("recovered"), calls);
+        assertEquals(0, queue.pendingTaskCount());
+    }
+
+    @Test
     void validatesOwnersTasksAndForeignHandles() {
         ManualClock clock = new ManualClock();
         ClientTaskQueue queue = new ClientTaskQueue(clock);

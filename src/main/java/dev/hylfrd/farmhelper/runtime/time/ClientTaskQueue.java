@@ -24,6 +24,7 @@ public final class ClientTaskQueue {
     private long lastClockNanos;
     private BigInteger logicalNowNanos = BigInteger.ZERO;
     private long nextSequence;
+    private boolean advancing;
 
     public ClientTaskQueue(MonotonicClock clock) {
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -78,30 +79,38 @@ public final class ClientTaskQueue {
 
     /** Runs due callbacks and returns their count. This method never waits for time to pass. */
     public int advance() {
-        BigInteger cutoffNanos = observeClock();
-        long sequenceLimit = nextSequence;
-        int executed = 0;
-        while (true) {
-            discardCancelledHead();
-            Entry entry = entries.peek();
-            if (entry == null
-                    || entry.deadlineNanos().compareTo(cutoffNanos) > 0
-                    || entry.sequence() >= sequenceLimit) {
-                return executed;
+        if (advancing) {
+            throw new IllegalStateException("advance already in progress");
+        }
+        advancing = true;
+        try {
+            BigInteger cutoffNanos = observeClock();
+            long sequenceLimit = nextSequence;
+            int executed = 0;
+            while (true) {
+                discardCancelledHead();
+                Entry entry = entries.peek();
+                if (entry == null
+                        || entry.deadlineNanos().compareTo(cutoffNanos) > 0
+                        || entry.sequence() >= sequenceLimit) {
+                    return executed;
+                }
+                entries.remove();
+                TaskHandle handle = entry.handle();
+                if (handle.state() != TaskHandle.State.PENDING) {
+                    continue;
+                }
+                removeFromOwner(handle);
+                handle.state(TaskHandle.State.RUNNING);
+                try {
+                    entry.task().run();
+                    executed++;
+                } finally {
+                    handle.state(TaskHandle.State.COMPLETED);
+                }
             }
-            entries.remove();
-            TaskHandle handle = entry.handle();
-            if (handle.state() != TaskHandle.State.PENDING) {
-                continue;
-            }
-            removeFromOwner(handle);
-            handle.state(TaskHandle.State.RUNNING);
-            try {
-                entry.task().run();
-                executed++;
-            } finally {
-                handle.state(TaskHandle.State.COMPLETED);
-            }
+        } finally {
+            advancing = false;
         }
     }
 
