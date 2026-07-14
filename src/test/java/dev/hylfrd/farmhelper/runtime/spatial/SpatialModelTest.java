@@ -13,10 +13,23 @@ import java.util.Set;
 import static dev.hylfrd.farmhelper.runtime.spatial.SpatialTestFixtures.EPOCH;
 import static dev.hylfrd.farmhelper.runtime.spatial.SpatialTestFixtures.empty;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SpatialModelTest {
+    @Test
+    void intersectionRequiresPositiveVolumeOnBothSidesAndExcludesBoundaryContact() {
+        BoxSnapshot full = new BoxSnapshot(0, 0, 0, 1, 1, 1);
+        BoxSnapshot point = new BoxSnapshot(0.5, 0.5, 0.5, 0.5, 0.5, 0.5);
+        BoxSnapshot touching = new BoxSnapshot(1, 0, 0, 2, 1, 1);
+
+        assertFalse(point.intersects(full));
+        assertFalse(full.intersects(point));
+        assertFalse(full.intersects(touching));
+        assertFalse(touching.intersects(full));
+    }
+
     @Test
     void threeValuedAndAndAlternativeOrHaveFrozenTruthTables() {
         for (SpaceStatus left : SpaceStatus.values()) {
@@ -85,5 +98,47 @@ class SpatialModelTest {
                 new BoxSnapshot(0, 0, 0, 257, 1, 1), Set.of()));
         assertThrows(IllegalArgumentException.class, () -> new SpatialCaptureRequest(EPOCH,
                 new BoxSnapshot(0, 0, 0, 2, 2, 2), Set.of(new BlockPosition(3, 0, 0))));
+    }
+
+    @Test
+    void directSnapshotConstructionEnforcesBoundsCellBudgetAndCellConsistency() {
+        BoxSnapshot maximumBounds = new BoxSnapshot(0, 0, 0, 256, 256, 256);
+        SpatialSnapshot sparse = new SpatialSnapshot(EPOCH, maximumBounds, -64, 320,
+                new BoxSnapshot(0.2, 1, 0.2, 0.8, 2.8, 0.8), Map.of());
+        assertEquals(maximumBounds, sparse.bounds());
+
+        assertThrows(IllegalArgumentException.class, () -> new SpatialSnapshot(EPOCH,
+                new BoxSnapshot(0, 0, 0, 257, 1, 1), -64, 320,
+                new BoxSnapshot(0.2, 1, 0.2, 0.8, 2.8, 0.8), Map.of()));
+
+        Map<BlockPosition, Observation<BlockStateSnapshot>> cells = new HashMap<>();
+        for (int x = 0; x < 21 && cells.size() <= SpatialCaptureRequest.MAX_BLOCKS; x++) {
+            for (int y = 0; y < 21 && cells.size() <= SpatialCaptureRequest.MAX_BLOCKS; y++) {
+                for (int z = 0; z < 21 && cells.size() <= SpatialCaptureRequest.MAX_BLOCKS; z++) {
+                    cells.put(new BlockPosition(x, y, z), Observation.unknown());
+                }
+            }
+        }
+        assertEquals(SpatialCaptureRequest.MAX_BLOCKS + 1, cells.size());
+        assertThrows(IllegalArgumentException.class,
+                () -> SpatialTestFixtures.snapshot(new BoxSnapshot(0, 0, 0, 21, 21, 21), cells));
+        cells.remove(cells.keySet().iterator().next());
+        assertEquals(SpatialCaptureRequest.MAX_BLOCKS, cells.size());
+        SpatialTestFixtures.snapshot(new BoxSnapshot(0, 0, 0, 21, 21, 21), cells);
+
+        BlockPosition outside = new BlockPosition(2, 0, 0);
+        ChunkSnapshot inconsistent = new ChunkSnapshot(outside.chunk(), true,
+                Map.of(outside, Observation.unknown()));
+        assertThrows(IllegalArgumentException.class, () -> new SpatialSnapshot(EPOCH,
+                new BoxSnapshot(0, 0, 0, 1, 1, 1), -64, 320,
+                new BoxSnapshot(0.2, 1, 0.2, 0.8, 2.8, 0.8),
+                Map.of(outside.chunk(), inconsistent)));
+
+        ChunkPosition outsideChunk = new ChunkPosition(2, 0);
+        ChunkSnapshot emptyOutsideChunk = new ChunkSnapshot(outsideChunk, true, Map.of());
+        assertThrows(IllegalArgumentException.class, () -> new SpatialSnapshot(EPOCH,
+                new BoxSnapshot(0, 0, 0, 1, 1, 1), -64, 320,
+                new BoxSnapshot(0.2, 1, 0.2, 0.8, 2.8, 0.8),
+                Map.of(outsideChunk, emptyOutsideChunk)));
     }
 }

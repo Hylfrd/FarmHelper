@@ -4,6 +4,7 @@ import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.ResourceIdentifier;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,10 +15,13 @@ import static dev.hylfrd.farmhelper.runtime.spatial.SpatialTestFixtures.empty;
 import static dev.hylfrd.farmhelper.runtime.spatial.SpatialTestFixtures.full;
 import static dev.hylfrd.farmhelper.runtime.spatial.SpatialTestFixtures.snapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SpatialQueriesTest {
     private static final BoxSnapshot BLOCK_BOUNDS = new BoxSnapshot(0, 0, 0, 2, 2, 2);
+    private static final int GARDEN_VOID_OVER_BUDGET_Y =
+            SpatialQueries.GARDEN_VOID_MIN_Y + SpatialCaptureRequest.MAX_BLOCKS;
 
     @Test
     void emptyFullPartialAndMultiBoxCollisionUsePositiveVolumeIntersection() {
@@ -37,6 +41,20 @@ class SpatialQueriesTest {
                 new BoxSnapshot(0.4, 0.2, 0.2, 0.6, 0.8, 0.8)));
         assertEquals(SpaceStatus.BLOCKED, clearanceAt(multi,
                 new BoxSnapshot(0.85, 0.2, 0.2, 0.9, 0.8, 0.8)));
+    }
+
+    @Test
+    void degenerateCollisionBoxesAndQueriesNeverReportBlocked() {
+        BlockPosition origin = new BlockPosition(0, 0, 0);
+        BoxSnapshot fullQuery = new BoxSnapshot(0, 0, 0, 1, 1, 1);
+        BoxSnapshot pointQuery = new BoxSnapshot(0.5, 0.5, 0.5, 0.5, 0.5, 0.5);
+        CollisionShapeSnapshot pointShape = new CollisionShapeSnapshot(List.of(pointQuery));
+        CollisionShapeSnapshot fullShape = new CollisionShapeSnapshot(List.of(fullQuery));
+
+        assertEquals(SpaceStatus.PASSABLE, pointShape.clearance(origin, fullQuery));
+        assertEquals(SpaceStatus.PASSABLE, fullShape.clearance(origin, pointQuery));
+        assertEquals(SpaceStatus.UNKNOWN, SpatialQueries.clearance(
+                snapshot(BLOCK_BOUNDS, Map.of(origin, Observation.present(full()))), EPOCH, pointQuery));
     }
 
     @Test
@@ -105,6 +123,40 @@ class SpatialQueriesTest {
     }
 
     @Test
+    void scanBudgetAllows8192CellsAndRejectsLargerCubesBeforeIteration() {
+        SpatialSnapshot boundarySnapshot = snapshot(new BoxSnapshot(0, 0, 0, 32, 16, 16), Map.of());
+        SpatialScanResult boundary = assertTimeoutPreemptively(Duration.ofSeconds(2),
+                () -> SpatialQueries.nearbyObstacles(boundarySnapshot, EPOCH,
+                        new BoxSnapshot(0, 0, 0, 32, 16, 16)));
+        assertEquals(SpaceStatus.UNKNOWN, boundary.status());
+        assertEquals(SpatialCaptureRequest.MAX_BLOCKS, boundary.inspectedBlocks().size());
+
+        SpatialSnapshot cubeSnapshot = snapshot(new BoxSnapshot(0, 0, 0, 256, 256, 256), Map.of());
+        for (int side : List.of(21, 256)) {
+            SpatialScanResult rejected = assertTimeoutPreemptively(Duration.ofSeconds(1),
+                    () -> SpatialQueries.nearbyObstacles(cubeSnapshot, EPOCH,
+                            new BoxSnapshot(0, 0, 0, side, side, side)));
+            assertEquals(SpaceStatus.UNKNOWN, rejected.status());
+            assertTrue(rejected.inspectedBlocks().isEmpty());
+            assertTrue(rejected.blockedBlocks().isEmpty());
+        }
+    }
+
+    @Test
+    void clearanceSupportAndDropShareTheSamePreIterationBudgetGuard() {
+        BoxSnapshot bounds = new BoxSnapshot(0, 0, 0, 129, 3, 65);
+        SpatialSnapshot sparse = snapshot(bounds, Map.of());
+        BoxSnapshot oversizedBody = new BoxSnapshot(0, 1, 0, 129, 2, 65);
+
+        assertTimeoutPreemptively(Duration.ofSeconds(1), () -> {
+            assertEquals(SpaceStatus.UNKNOWN, SpatialQueries.clearance(sparse, EPOCH, oversizedBody));
+            assertEquals(SpaceStatus.UNKNOWN, SpatialQueries.support(sparse, EPOCH, oversizedBody));
+            assertEquals(SpaceStatus.UNKNOWN,
+                    SpatialQueries.drop(sparse, EPOCH, oversizedBody, oversizedBody));
+        });
+    }
+
+    @Test
     void walkabilityRequiresBothBodyClearanceAndKnownSupport() {
         BoxSnapshot body = new BoxSnapshot(0.2, 1, 0.2, 0.8, 2.8, 0.8);
         Map<BlockPosition, Observation<BlockStateSnapshot>> walkable = new LinkedHashMap<>();
@@ -144,6 +196,18 @@ class SpatialQueriesTest {
         incomplete.remove(new BlockPosition(0, 68, 0));
         assertEquals(SpaceStatus.UNKNOWN, SpatialQueries.gardenVoid(
                 snapshot(bounds, incomplete), EPOCH, new BlockPosition(0, 70, 0)));
+
+        SpatialSnapshot noData = snapshot(new BoxSnapshot(0, 64, 0, 1, 66, 1), Map.of());
+        assertEquals(SpaceStatus.UNKNOWN,
+                SpatialQueries.gardenVoid(noData, EPOCH, new BlockPosition(0, 64, 0)));
+        assertEquals(SpaceStatus.UNKNOWN,
+                SpatialQueries.gardenVoid(noData, EPOCH, new BlockPosition(0, 65, 0)));
+        assertEquals(SpaceStatus.UNKNOWN,
+                SpatialQueries.gardenVoid(snapshot(bounds, emptyColumn), EPOCH + 1,
+                        new BlockPosition(0, 70, 0)));
+        assertTimeoutPreemptively(Duration.ofSeconds(1), () -> assertEquals(SpaceStatus.UNKNOWN,
+                SpatialQueries.gardenVoid(noData, EPOCH,
+                        new BlockPosition(0, GARDEN_VOID_OVER_BUDGET_Y, 0))));
     }
 
     @Test

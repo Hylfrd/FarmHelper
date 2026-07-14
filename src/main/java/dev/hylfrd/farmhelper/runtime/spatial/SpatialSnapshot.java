@@ -21,15 +21,42 @@ public record SpatialSnapshot(
         if (!bounds.hasPositiveVolume()) {
             throw new IllegalArgumentException("bounds must have positive volume");
         }
+        if (bounds.width() > SpatialCaptureRequest.MAX_AXIS_SPAN
+                || bounds.height() > SpatialCaptureRequest.MAX_AXIS_SPAN
+                || bounds.depth() > SpatialCaptureRequest.MAX_AXIS_SPAN) {
+            throw new IllegalArgumentException("snapshot bounds exceed the per-axis limit");
+        }
         if (maxY <= minY) {
             throw new IllegalArgumentException("maxY must be greater than minY");
         }
-        chunks = Map.copyOf(chunks);
+        long cellCount = 0L;
         for (Map.Entry<ChunkPosition, ChunkSnapshot> entry : chunks.entrySet()) {
+            Objects.requireNonNull(entry.getKey(), "chunk key");
+            Objects.requireNonNull(entry.getValue(), "chunk snapshot");
             if (!entry.getKey().equals(entry.getValue().position())) {
                 throw new IllegalArgumentException("chunk key does not match snapshot position");
             }
+            double chunkMinX = (double) entry.getKey().x() * 16.0D;
+            double chunkMinZ = (double) entry.getKey().z() * 16.0D;
+            if (bounds.maxX() <= chunkMinX || bounds.minX() >= chunkMinX + 16.0D
+                    || bounds.maxZ() <= chunkMinZ || bounds.minZ() >= chunkMinZ + 16.0D) {
+                throw new IllegalArgumentException("snapshot chunk lies outside bounds: " + entry.getKey());
+            }
+            try {
+                cellCount = Math.addExact(cellCount, entry.getValue().blocks().size());
+            } catch (ArithmeticException exception) {
+                throw new IllegalArgumentException("snapshot cell count overflow", exception);
+            }
+            if (cellCount > SpatialCaptureRequest.MAX_BLOCKS) {
+                throw new IllegalArgumentException("snapshot exceeds block limit");
+            }
+            for (BlockPosition block : entry.getValue().blocks().keySet()) {
+                if (!bounds.intersects(block.unitBox())) {
+                    throw new IllegalArgumentException("snapshot block lies outside bounds: " + block);
+                }
+            }
         }
+        chunks = Map.copyOf(chunks);
     }
 
     public Observation<BlockStateSnapshot> block(long expectedWorldEpoch, BlockPosition position) {

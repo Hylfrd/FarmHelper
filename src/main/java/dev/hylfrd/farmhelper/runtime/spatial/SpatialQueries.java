@@ -30,10 +30,14 @@ public final class SpatialQueries {
         if (snapshot.worldEpoch() != expectedWorldEpoch || !snapshot.bounds().contains(query)) {
             return new SpatialScanResult(SpaceStatus.UNKNOWN, List.of(), List.of());
         }
-        List<BlockPosition> inspected = new ArrayList<>();
+        BlockGrid grid = boundedGrid(query);
+        if (grid == null) {
+            return new SpatialScanResult(SpaceStatus.UNKNOWN, List.of(), List.of());
+        }
+        List<BlockPosition> inspected = new ArrayList<>((int) grid.cellCount());
         List<BlockPosition> blocked = new ArrayList<>();
-        List<SpaceStatus> statuses = new ArrayList<>();
-        forEachOverlappingBlock(query, position -> {
+        List<SpaceStatus> statuses = new ArrayList<>((int) grid.cellCount());
+        forEachOverlappingBlock(grid, position -> {
             inspected.add(position);
             SpaceStatus status = blockClearance(snapshot, expectedWorldEpoch, position, query);
             statuses.add(status);
@@ -87,8 +91,12 @@ public final class SpatialQueries {
         if (snapshot.worldEpoch() != expectedWorldEpoch || !snapshot.bounds().contains(probe)) {
             return SpaceStatus.UNKNOWN;
         }
-        List<SpaceStatus> alternatives = new ArrayList<>();
-        forEachOverlappingBlock(probe, position -> {
+        BlockGrid grid = boundedGrid(probe);
+        if (grid == null) {
+            return SpaceStatus.UNKNOWN;
+        }
+        List<SpaceStatus> alternatives = new ArrayList<>((int) grid.cellCount());
+        forEachOverlappingBlock(grid, position -> {
             Observation<BlockStateSnapshot> observed = snapshot.block(expectedWorldEpoch, position);
             if (!observed.isPresent() || !observed.get().collision().isPresent()) {
                 alternatives.add(SpaceStatus.UNKNOWN);
@@ -121,7 +129,17 @@ public final class SpatialQueries {
     ) {
         Objects.requireNonNull(snapshot, "snapshot");
         Objects.requireNonNull(from, "from");
-        if (snapshot.worldEpoch() != expectedWorldEpoch) {
+        if (snapshot.worldEpoch() != expectedWorldEpoch || from.y() <= GARDEN_VOID_MIN_Y) {
+            return SpaceStatus.UNKNOWN;
+        }
+        long cellCount;
+        try {
+            cellCount = Math.addExact(
+                    Math.subtractExact((long) from.y(), (long) GARDEN_VOID_MIN_Y), 1L);
+        } catch (ArithmeticException exception) {
+            return SpaceStatus.UNKNOWN;
+        }
+        if (cellCount <= 0L || cellCount > SpatialCaptureRequest.MAX_BLOCKS) {
             return SpaceStatus.UNKNOWN;
         }
         for (int y = from.y(); y >= GARDEN_VOID_MIN_Y; y--) {
@@ -217,17 +235,38 @@ public final class SpatialQueries {
         return SpaceStatus.UNKNOWN;
     }
 
-    private static void forEachOverlappingBlock(BoxSnapshot box, BlockConsumer consumer) {
-        int minX = checkedFloor(box.minX());
-        int minY = checkedFloor(box.minY());
-        int minZ = checkedFloor(box.minZ());
-        int maxXExclusive = checkedCeil(box.maxX());
-        int maxYExclusive = checkedCeil(box.maxY());
-        int maxZExclusive = checkedCeil(box.maxZ());
-        for (int x = minX; x < maxXExclusive; x++) {
-            for (int y = minY; y < maxYExclusive; y++) {
-                for (int z = minZ; z < maxZExclusive; z++) {
-                    consumer.accept(new BlockPosition(x, y, z));
+    private static BlockGrid boundedGrid(BoxSnapshot box) {
+        if (!box.hasPositiveVolume()) {
+            return null;
+        }
+        try {
+            long minX = checkedFloor(box.minX());
+            long minY = checkedFloor(box.minY());
+            long minZ = checkedFloor(box.minZ());
+            long maxXExclusive = checkedCeil(box.maxX());
+            long maxYExclusive = checkedCeil(box.maxY());
+            long maxZExclusive = checkedCeil(box.maxZ());
+            long sizeX = Math.subtractExact(maxXExclusive, minX);
+            long sizeY = Math.subtractExact(maxYExclusive, minY);
+            long sizeZ = Math.subtractExact(maxZExclusive, minZ);
+            if (sizeX <= 0L || sizeY <= 0L || sizeZ <= 0L) {
+                return null;
+            }
+            long cellCount = Math.multiplyExact(Math.multiplyExact(sizeX, sizeY), sizeZ);
+            if (cellCount <= 0L || cellCount > SpatialCaptureRequest.MAX_BLOCKS) {
+                return null;
+            }
+            return new BlockGrid(minX, minY, minZ, maxXExclusive, maxYExclusive, maxZExclusive, cellCount);
+        } catch (ArithmeticException exception) {
+            return null;
+        }
+    }
+
+    private static void forEachOverlappingBlock(BlockGrid grid, BlockConsumer consumer) {
+        for (long x = grid.minX(); x < grid.maxXExclusive(); x++) {
+            for (long y = grid.minY(); y < grid.maxYExclusive(); y++) {
+                for (long z = grid.minZ(); z < grid.maxZExclusive(); z++) {
+                    consumer.accept(new BlockPosition((int) x, (int) y, (int) z));
                 }
             }
         }
@@ -241,15 +280,23 @@ public final class SpatialQueries {
         return (int) result;
     }
 
-    private static int checkedCeil(double value) {
+    private static long checkedCeil(double value) {
         double result = Math.ceil(value);
         if (result < Integer.MIN_VALUE || result > (double) Integer.MAX_VALUE + 1.0D) {
             throw new ArithmeticException("coordinate lies outside the integer block range");
         }
-        if (result == (double) Integer.MAX_VALUE + 1.0D) {
-            throw new ArithmeticException("exclusive block bound lies outside the integer range");
-        }
-        return (int) result;
+        return (long) result;
+    }
+
+    private record BlockGrid(
+            long minX,
+            long minY,
+            long minZ,
+            long maxXExclusive,
+            long maxYExclusive,
+            long maxZExclusive,
+            long cellCount
+    ) {
     }
 
     @FunctionalInterface

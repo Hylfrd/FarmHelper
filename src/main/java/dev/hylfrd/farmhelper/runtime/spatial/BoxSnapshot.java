@@ -26,7 +26,8 @@ public record BoxSnapshot(
     }
 
     public boolean intersects(BoxSnapshot other) {
-        return minX < other.maxX && maxX > other.minX
+        return hasPositiveVolume() && other.hasPositiveVolume()
+                && minX < other.maxX && maxX > other.minX
                 && minY < other.maxY && maxY > other.minY
                 && minZ < other.maxZ && maxZ > other.minZ;
     }
