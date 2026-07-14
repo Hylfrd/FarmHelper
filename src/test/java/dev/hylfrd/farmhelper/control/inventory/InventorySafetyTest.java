@@ -161,18 +161,44 @@ class InventorySafetyTest {
         for (AccessStage stage : AccessStage.values()) {
             HostileStepList hostile = new HostileStepList(
                     List.of(), stage, HostileAction.REPLACE, List.of(hiddenClick));
+            Optional<HotbarSelection> hotbarSelection = Optional.of(new HotbarSelection(2));
+            Optional<ScreenExpectation> screenExpectation = Optional.empty();
+            InventoryOperation constructed = null;
+            RuntimeException rejection = null;
             try {
-                InventoryOperation operation = new InventoryOperation(
-                        OWNER, Optional.of(new HotbarSelection(2)), Optional.empty(), hostile, 10);
-                hostile.replaceContents(List.of(hiddenClick));
-                assertTrue(operation.steps().isEmpty());
-                assertTrue(operation.screenExpectation().isEmpty());
-                assertThrows(UnsupportedOperationException.class,
-                        () -> operation.steps().add(hiddenClick));
+                constructed = new InventoryOperation(
+                        OWNER, hotbarSelection, screenExpectation, hostile, 10);
             } catch (RuntimeException safeRejection) {
-                // A construction-time mutation may instead expose the click and fail closed.
+                rejection = safeRejection;
             }
+
+            ConstructionAttempt<InventoryOperation> attempt = ConstructionAttempt.of(constructed, rejection);
+            if (attempt.rejection().isPresent()) {
+                assertEquals(IllegalArgumentException.class, attempt.rejection().orElseThrow().getClass());
+                assertTrue(hostile.triggered());
+                continue;
+            }
+
+            InventoryOperation operation = attempt.requireSuccess();
+            hostile.replaceContents(List.of(hiddenClick));
+            assertTrue(operation.steps().isEmpty());
+            assertTrue(operation.screenExpectation().isEmpty());
+            assertThrows(UnsupportedOperationException.class,
+                    () -> operation.steps().add(hiddenClick));
         }
+    }
+
+    @Test
+    void successfulConstructionCannotTreatLaterStepsFailureAsSafeRejection() {
+        StepAccess fakeOperation = () -> {
+            throw new IllegalStateException("post-construction steps access");
+        };
+        ConstructionAttempt<StepAccess> attempt = ConstructionAttempt.success(fakeOperation);
+
+        assertTrue(attempt.rejection().isEmpty());
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> assertSnapshotContents(attempt.requireSuccess(), List.of()));
+        assertEquals("post-construction steps access", failure.getMessage());
     }
 
     @Test
@@ -553,20 +579,44 @@ class InventorySafetyTest {
     @SafeVarargs
     private static void assertSafeSnapshot(
             HostileStepList hostile, List<InventoryStep>... completeSnapshots) {
+        ScreenExpectation screenExpectation = expectation(base());
+        InventoryOperation constructed = null;
+        RuntimeException rejection = null;
         try {
-            InventoryOperation operation = InventoryOperation.clicks(
-                    OWNER, expectation(base()), hostile, 10);
-            assertTrue(java.util.Arrays.stream(completeSnapshots)
-                    .anyMatch(snapshot -> snapshot.equals(operation.steps())));
-            assertTrue(operation.steps().stream().allMatch(java.util.Objects::nonNull));
-            List<InventoryStep> captured = operation.steps();
-            hostile.replaceContents(List.of(step(2)));
-            assertEquals(captured, operation.steps());
-            assertThrows(UnsupportedOperationException.class,
-                    () -> operation.steps().add(step(3)));
+            constructed = InventoryOperation.clicks(
+                    OWNER, screenExpectation, hostile, 10);
         } catch (RuntimeException safeRejection) {
-            assertTrue(hostile.triggered());
+            rejection = safeRejection;
         }
+
+        ConstructionAttempt<InventoryOperation> attempt = ConstructionAttempt.of(constructed, rejection);
+        if (attempt.rejection().isPresent()) {
+            RuntimeException safeRejection = attempt.rejection().orElseThrow();
+            Class<? extends RuntimeException> expectedType = switch (hostile.action()) {
+                case REPLACE -> IllegalArgumentException.class;
+                case RETURN_NULL -> NullPointerException.class;
+                case THROW -> IllegalStateException.class;
+            };
+            assertEquals(expectedType, safeRejection.getClass());
+            assertTrue(hostile.triggered());
+            return;
+        }
+
+        InventoryOperation operation = attempt.requireSuccess();
+        assertSnapshotContents(operation::steps, completeSnapshots);
+        assertTrue(operation.steps().stream().allMatch(java.util.Objects::nonNull));
+        List<InventoryStep> captured = operation.steps();
+        hostile.replaceContents(List.of(step(2)));
+        assertEquals(captured, operation.steps());
+        assertThrows(UnsupportedOperationException.class,
+                () -> operation.steps().add(step(3)));
+    }
+
+    @SafeVarargs
+    private static void assertSnapshotContents(
+            StepAccess operation, List<InventoryStep>... completeSnapshots) {
+        assertTrue(java.util.Arrays.stream(completeSnapshots)
+                .anyMatch(snapshot -> snapshot.equals(operation.steps())));
     }
 
     private static InventoryStep step(int slot) {
@@ -741,6 +791,33 @@ class InventorySafetyTest {
         THROW
     }
 
+    @FunctionalInterface
+    private interface StepAccess {
+        List<InventoryStep> steps();
+    }
+
+    private record ConstructionAttempt<T>(Optional<T> value, Optional<RuntimeException> rejection) {
+        private ConstructionAttempt {
+            java.util.Objects.requireNonNull(value, "value");
+            java.util.Objects.requireNonNull(rejection, "rejection");
+            if (value.isPresent() == rejection.isPresent()) {
+                throw new IllegalArgumentException("exactly one construction result is required");
+            }
+        }
+
+        private static <T> ConstructionAttempt<T> of(T value, RuntimeException rejection) {
+            return new ConstructionAttempt<>(Optional.ofNullable(value), Optional.ofNullable(rejection));
+        }
+
+        private static <T> ConstructionAttempt<T> success(T value) {
+            return new ConstructionAttempt<>(Optional.of(value), Optional.empty());
+        }
+
+        private T requireSuccess() {
+            return value.orElseThrow(() -> new AssertionError("construction was rejected", rejection.orElse(null)));
+        }
+    }
+
     private static final class HostileStepList extends AbstractList<InventoryStep> {
         private final List<InventoryStep> values;
         private final AccessStage stage;
@@ -816,6 +893,10 @@ class InventorySafetyTest {
 
         private boolean triggered() {
             return triggered;
+        }
+
+        private HostileAction action() {
+            return action;
         }
 
         private void replaceContents(List<InventoryStep> newValues) {
