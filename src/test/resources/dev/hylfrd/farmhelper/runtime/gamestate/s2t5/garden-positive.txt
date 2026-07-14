@@ -1,0 +1,32 @@
+[scoreboard]
+SKYBLOCK
+Purse: 1 234,5 (+25,5)
+Bits: 0
+Copper: 9,876
+Jacob's Contest
+Wheat 2m30s
+Collected 1,234
+GOLD with 1,234
+The Garden ൠ x0
+Plot 12 x0
+Server closing: 1:05 soon
+[tab]
+Area: Garden
+Guests (0)
+Plots:
+Bonus: +10%
+Starts In: 3m 05s
+Carrot
+Potato
+Sugar Cane
+Spray: Example Spray
+Time Left: 4m
+Organic Matter: 1.234k
+Fuel: 0k
+[footer]
+Active Effects
+Cookie Buff
+You have a God Potion active!
+Pest Repellent 59m
+[lore]
+Vacuum Bag: 1,234 Pests
