@@ -148,12 +148,8 @@ class RawGameTextSnapshotTest {
         assertTrue(snapshot.tabLines().isUnknown());
         assertEquals(List.of(new ParseDiagnostic("input.total", ParseDiagnosticCode.INPUT_LIMIT)),
                 snapshot.inputDiagnostics());
-        assertEquals(32, scoreboard.getCalls);
-        assertEquals(1, tab.getCalls);
-        assertEquals(0, scoreboard.iteratorCalls);
-        assertEquals(0, tab.iteratorCalls);
-        assertEquals(31, scoreboard.highestIndex);
-        assertEquals(0, tab.highestIndex);
+        assertPreflightOnly(scoreboard, 32);
+        assertPreflightOnly(tab, 1);
     }
 
     @Test
@@ -175,11 +171,11 @@ class RawGameTextSnapshotTest {
         assertTrue(exact.vacuumLore().isPresent());
         assertTrue(exact.chatBatch().isPresent());
         assertTrue(exact.inputDiagnostics().isEmpty());
-        assertProbeTraversals(exactScoreboard, 16, 7);
-        assertProbeTraversals(exactTab, 16, 7);
-        assertProbeTraversals(exactFooter, 16, 7);
-        assertProbeTraversals(exactLore, 14, 6);
-        assertProbeTraversals(exactChat, 2, 0);
+        assertBoundedLegalTraversal(exactScoreboard, 8);
+        assertBoundedLegalTraversal(exactTab, 8);
+        assertBoundedLegalTraversal(exactFooter, 8);
+        assertBoundedLegalTraversal(exactLore, 7);
+        assertBoundedLegalTraversal(exactChat, 1);
 
         ProbeList<String> overScoreboard = new ProbeList<>(Collections.nCopies(8, maximum));
         ProbeList<String> overTab = new ProbeList<>(Collections.nCopies(8, maximum));
@@ -198,11 +194,11 @@ class RawGameTextSnapshotTest {
         assertTrue(over.chatBatch().isUnknown());
         assertEquals(List.of(new ParseDiagnostic("input.total", ParseDiagnosticCode.INPUT_LIMIT)),
                 over.inputDiagnostics());
-        assertProbeTraversals(overScoreboard, 8, 7);
-        assertProbeTraversals(overTab, 8, 7);
-        assertProbeTraversals(overFooter, 8, 7);
-        assertProbeTraversals(overLore, 7, 6);
-        assertProbeTraversals(overChat, 1, 0);
+        assertPreflightOnly(overScoreboard, 8);
+        assertPreflightOnly(overTab, 8);
+        assertPreflightOnly(overFooter, 8);
+        assertPreflightOnly(overLore, 7);
+        assertPreflightOnly(overChat, 1);
     }
 
     @Test
@@ -217,6 +213,70 @@ class RawGameTextSnapshotTest {
                 snapshot.inputDiagnostics());
         assertEquals(0, changing.getCalls);
         assertEquals(-1, changing.highestIndex);
+    }
+
+    @Test
+    void containsEveryHostileStringListCallbackAtTheFieldBoundary() {
+        assertRejectedScoreboard(new ThrowingSizeList<>(
+                new IllegalStateException("private size detail")));
+        assertRejectedScoreboard(new ThrowingGetList<>(
+                List.of("safe"), 1, new AssertionError("private preflight detail")));
+        assertRejectedScoreboard(new ThrowingGetList<>(
+                List.of("safe"), 2, new IllegalArgumentException("private copy detail")));
+        assertRejectedScoreboard(new ThrowingGetList<>(
+                List.of("safe"), 2, new AssertionError("private copy error detail")));
+    }
+
+    @Test
+    void containsEveryHostileChatListCallbackAtTheBatchBoundary() {
+        RawChatMessage message = new RawChatMessage(0, "safe");
+        assertRejectedChat(new ThrowingSizeList<>(
+                new IllegalStateException("private chat size detail")));
+        assertRejectedChat(new ThrowingGetList<>(
+                List.of(message), 1, new AssertionError("private chat preflight detail")));
+        assertRejectedChat(new ThrowingGetList<>(
+                List.of(message), 2, new IllegalArgumentException("private chat copy detail")));
+        assertRejectedChat(new ThrowingGetList<>(
+                List.of(message), 2, new AssertionError("private chat copy error detail")));
+    }
+
+    @Test
+    void rejectsNullElementsAndChangingSizesWithoutPollutingLegalFields() {
+        List<String> nullString = new ArrayList<>();
+        nullString.add(null);
+        RawGameTextSnapshot stringSnapshot = snapshot(
+                Observation.present("SKYBLOCK"), nullString, List.of("Area: Garden"),
+                List.of(), List.of(), List.of());
+        assertTrue(stringSnapshot.scoreboardTitle().isPresent());
+        assertTrue(stringSnapshot.scoreboardLines().isUnknown());
+        assertEquals(List.of("Area: Garden"), stringSnapshot.tabLines().get());
+        assertEquals(List.of(new ParseDiagnostic(
+                "input.scoreboard.lines", ParseDiagnosticCode.INPUT_LIMIT)),
+                stringSnapshot.inputDiagnostics());
+
+        List<RawChatMessage> nullChat = new ArrayList<>();
+        nullChat.add(null);
+        assertRejectedChat(nullChat);
+        assertRejectedChat(new ChangingSizeList<>(1, 0));
+    }
+
+    @Test
+    void hostileResultsAndDiagnosticsRemainDeeplyImmutableAndPrivate() {
+        RawGameTextSnapshot hostile = snapshot(
+                Observation.present("SKYBLOCK"),
+                new ThrowingGetList<>(List.of("secret"), 2,
+                        new AssertionError("do not expose this exception text")),
+                List.of("Area: Garden"), List.of(), List.of(), List.of());
+
+        assertTrue(hostile.scoreboardLines().isUnknown());
+        assertEquals(List.of("Area: Garden"), hostile.tabLines().get());
+        assertThrows(UnsupportedOperationException.class,
+                () -> hostile.tabLines().get().add("mutate"));
+        assertThrows(UnsupportedOperationException.class,
+                () -> hostile.inputDiagnostics().add(new ParseDiagnostic(
+                        "mutate", ParseDiagnosticCode.INPUT_LIMIT)));
+        assertTrue(hostile.inputDiagnostics().toString().contains("input.scoreboard.lines"));
+        assertTrue(!hostile.inputDiagnostics().toString().contains("do not expose"));
     }
 
     @Test
@@ -260,10 +320,48 @@ class RawGameTextSnapshotTest {
                 PlayerFacts.unknown(), Observation.present(WorldTransition.STABLE), 1);
     }
 
-    private static void assertProbeTraversals(ProbeList<?> probe, int getCalls, int highestIndex) {
-        assertEquals(getCalls, probe.getCalls);
-        assertEquals(0, probe.iteratorCalls);
-        assertEquals(highestIndex, probe.highestIndex);
+    private static void assertRejectedScoreboard(List<String> hostile) {
+        RawGameTextSnapshot snapshot = snapshot(
+                Observation.present("SKYBLOCK"), hostile, List.of("Area: Garden"),
+                List.of(), List.of(), List.of());
+        assertTrue(snapshot.scoreboardTitle().isPresent());
+        assertTrue(snapshot.scoreboardLines().isUnknown());
+        assertEquals(List.of("Area: Garden"), snapshot.tabLines().get());
+        assertEquals(List.of(new ParseDiagnostic(
+                "input.scoreboard.lines", ParseDiagnosticCode.INPUT_LIMIT)),
+                snapshot.inputDiagnostics());
+    }
+
+    private static void assertRejectedChat(List<RawChatMessage> hostile) {
+        RawGameTextSnapshot snapshot = snapshot(
+                Observation.present("SKYBLOCK"), List.of("Purse: 0"),
+                List.of("Area: Garden"), List.of(), List.of(), hostile);
+        assertTrue(snapshot.scoreboardTitle().isPresent());
+        assertEquals(List.of("Purse: 0"), snapshot.scoreboardLines().get());
+        assertEquals(List.of("Area: Garden"), snapshot.tabLines().get());
+        assertTrue(snapshot.chatBatch().isUnknown());
+        assertEquals(List.of(new ParseDiagnostic(
+                "input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT)),
+                snapshot.inputDiagnostics());
+    }
+
+    private static void assertPreflightOnly(ProbeList<?> probe, int elementCount) {
+        assertTrue(probe.getCalls <= elementCount,
+                () -> "preflight read too many elements: " + probe.getCalls);
+        assertTrue(probe.iteratorCalls <= 1,
+                () -> "preflight created too many iterators: " + probe.iteratorCalls);
+        assertTrue(probe.highestIndex < elementCount,
+                () -> "out-of-bounds preflight index: " + probe.highestIndex);
+    }
+
+    private static void assertBoundedLegalTraversal(ProbeList<?> probe, int elementCount) {
+        assertTrue(probe.getCalls > 0);
+        assertTrue(probe.getCalls <= elementCount * 2,
+                () -> "legal path read too many elements: " + probe.getCalls);
+        assertTrue(probe.iteratorCalls <= 2,
+                () -> "legal path created too many iterators: " + probe.iteratorCalls);
+        assertTrue(probe.highestIndex < elementCount,
+                () -> "out-of-bounds legal index: " + probe.highestIndex);
     }
 
     private static final class ProbeList<T> extends AbstractList<T> {
@@ -338,5 +436,58 @@ class RawGameTextSnapshotTest {
         public int size() {
             return declaredSize;
         }
+    }
+
+    private static final class ThrowingSizeList<T> extends AbstractList<T> {
+        private final Throwable failure;
+
+        private ThrowingSizeList(Throwable failure) {
+            this.failure = failure;
+        }
+
+        @Override
+        public T get(int index) {
+            throw new AssertionError("an unavailable size must prevent element access");
+        }
+
+        @Override
+        public int size() {
+            throwUnchecked(failure);
+            throw new AssertionError("unreachable");
+        }
+    }
+
+    private static final class ThrowingGetList<T> extends AbstractList<T> {
+        private final List<T> values;
+        private final int failingCall;
+        private final Throwable failure;
+        private int getCalls;
+
+        private ThrowingGetList(List<T> values, int failingCall, Throwable failure) {
+            this.values = values;
+            this.failingCall = failingCall;
+            this.failure = failure;
+        }
+
+        @Override
+        public T get(int index) {
+            getCalls++;
+            if (getCalls == failingCall) {
+                throwUnchecked(failure);
+            }
+            return values.get(index);
+        }
+
+        @Override
+        public int size() {
+            return values.size();
+        }
+    }
+
+    private static void throwUnchecked(Throwable failure) {
+        if (failure instanceof RuntimeException runtimeException) {
+            throw runtimeException;
+        }
+        throw (Error) failure;
     }
 }

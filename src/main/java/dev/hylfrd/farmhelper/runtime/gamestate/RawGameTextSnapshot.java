@@ -43,11 +43,11 @@ public final class RawGameTextSnapshot {
         }
         this.generation = generation;
 
-        int scoreboardSize = observedSize(scoreboardLines, "scoreboardLines value");
-        int tabSize = observedSize(tabLines, "tabLines value");
-        int footerSize = observedSize(tabFooter, "tabFooter value");
-        int loreSize = observedSize(vacuumLore, "vacuumLore value");
-        int chatSize = observedSize(chatBatch, "chatBatch value");
+        int scoreboardSize = observedSize(scoreboardLines);
+        int tabSize = observedSize(tabLines);
+        int footerSize = observedSize(tabFooter);
+        int loreSize = observedSize(vacuumLore);
+        int chatSize = observedSize(chatBatch);
 
         long total = 0L;
         long titleCharacters = preflightTitleCharacters(scoreboardTitle);
@@ -120,11 +120,12 @@ public final class RawGameTextSnapshot {
         this.inputDiagnostics = List.copyOf(diagnostics);
     }
 
-    private static int observedSize(Observation<? extends List<?>> source, String valueName) {
+    private static int observedSize(Observation<? extends List<?>> source) {
         if (!source.isPresent()) {
             return -1;
         }
-        return Objects.requireNonNull(source.get(), valueName).size();
+        ExternalCall<Integer> size = externalSize(source.get());
+        return size.succeeded() ? size.value() : -1;
     }
 
     private static long preflightTitleCharacters(Observation<String> source) {
@@ -146,23 +147,21 @@ public final class RawGameTextSnapshot {
         if (expectedSize < 0 || expectedSize > maximumLines) {
             return -1L;
         }
-        List<String> lines = Objects.requireNonNull(source.get(), "lines");
+        List<String> lines = source.get();
         long characters = 0L;
-        try {
-            for (int index = 0; index < expectedSize; index++) {
-                if (lines.size() != expectedSize) {
-                    return -1L;
-                }
-                String line = Objects.requireNonNull(lines.get(index), "line");
-                if (line.length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
-                    return -1L;
-                }
-                characters = Math.addExact(characters, (long) line.length());
+        for (int index = 0; index < expectedSize; index++) {
+            if (!hasExpectedSize(lines, expectedSize)) {
+                return -1L;
             }
-            return lines.size() == expectedSize ? characters : -1L;
-        } catch (IndexOutOfBoundsException exception) {
-            return -1L;
+            ExternalCall<String> lineCall = externalGet(lines, index);
+            String line = lineCall.value();
+            if (!lineCall.succeeded() || line == null
+                    || line.length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
+                return -1L;
+            }
+            characters = Math.addExact(characters, (long) line.length());
         }
+        return hasExpectedSize(lines, expectedSize) ? characters : -1L;
     }
 
     private static long preflightChatCharacters(
@@ -175,36 +174,30 @@ public final class RawGameTextSnapshot {
         if (expectedSize < 0 || expectedSize > GameTextInputBudget.MAX_CHAT_MESSAGES) {
             return -1L;
         }
-        List<RawChatMessage> messages = Objects.requireNonNull(source.get(), "chatBatch value");
+        List<RawChatMessage> messages = source.get();
         long characters = 0L;
-        try {
-            for (int index = 0; index < expectedSize; index++) {
-                if (messages.size() != expectedSize) {
-                    return -1L;
-                }
-                RawChatMessage message = Objects.requireNonNull(messages.get(index), "message");
-                if (message.channel().length() > GameTextInputBudget.MAX_LINE_CHARACTERS
-                        || message.text().length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
-                    return -1L;
-                }
-                characters = Math.addExact(characters, (long) message.channel().length());
-                characters = Math.addExact(characters, (long) message.text().length());
+        for (int index = 0; index < expectedSize; index++) {
+            if (!hasExpectedSize(messages, expectedSize)) {
+                return -1L;
             }
-            return messages.size() == expectedSize ? characters : -1L;
-        } catch (IndexOutOfBoundsException exception) {
-            return -1L;
+            ExternalCall<RawChatMessage> messageCall = externalGet(messages, index);
+            RawChatMessage message = messageCall.value();
+            if (!messageCall.succeeded() || message == null
+                    || message.channel().length() > GameTextInputBudget.MAX_LINE_CHARACTERS
+                    || message.text().length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
+                return -1L;
+            }
+            characters = Math.addExact(characters, (long) message.channel().length());
+            characters = Math.addExact(characters, (long) message.text().length());
         }
+        return hasExpectedSize(messages, expectedSize) ? characters : -1L;
     }
 
     private static long addPreflightCharacters(long total, long characters) {
         if (characters < 0L) {
             return total;
         }
-        try {
-            return Math.addExact(total, characters);
-        } catch (ArithmeticException exception) {
-            return Long.MAX_VALUE;
-        }
+        return Math.addExact(total, characters);
     }
 
     private static Checked<String> checkTitle(
@@ -233,34 +226,31 @@ public final class RawGameTextSnapshot {
         if (!source.isPresent()) {
             return new Checked<>(source, 0L);
         }
-        List<String> lines = Objects.requireNonNull(source.get(), "lines");
-        int initialSize = lines.size();
+        List<String> lines = source.get();
+        ExternalCall<Integer> initialSize = externalSize(lines);
         if (expectedSize < 0 || expectedSize > maximumLines || expectedCharacters < 0L
-                || initialSize != expectedSize) {
+                || !initialSize.succeeded() || initialSize.value() != expectedSize) {
             diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
             return new Checked<>(Observation.unknown(), 0L);
         }
-        List<String> copy = new ArrayList<>(initialSize);
+        List<String> copy = new ArrayList<>(expectedSize);
         long characters = 0L;
-        try {
-            for (int index = 0; index < expectedSize; index++) {
-                if (lines.size() != expectedSize) {
-                    diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
-                    return new Checked<>(Observation.unknown(), 0L);
-                }
-                String line = Objects.requireNonNull(lines.get(index), "line");
-                if (line.length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
-                    diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
-                    return new Checked<>(Observation.unknown(), 0L);
-                }
-                characters = Math.addExact(characters, (long) line.length());
-                copy.add(line);
+        for (int index = 0; index < expectedSize; index++) {
+            if (!hasExpectedSize(lines, expectedSize)) {
+                diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
+                return new Checked<>(Observation.unknown(), 0L);
             }
-        } catch (IndexOutOfBoundsException exception) {
-            diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
-            return new Checked<>(Observation.unknown(), 0L);
+            ExternalCall<String> lineCall = externalGet(lines, index);
+            String line = lineCall.value();
+            if (!lineCall.succeeded() || line == null
+                    || line.length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
+                diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
+                return new Checked<>(Observation.unknown(), 0L);
+            }
+            characters = Math.addExact(characters, (long) line.length());
+            copy.add(line);
         }
-        if (lines.size() != expectedSize || characters != expectedCharacters) {
+        if (!hasExpectedSize(lines, expectedSize) || characters != expectedCharacters) {
             diagnostics.add(new ParseDiagnostic(field, ParseDiagnosticCode.INPUT_LIMIT));
             return new Checked<>(Observation.unknown(), 0L);
         }
@@ -276,42 +266,73 @@ public final class RawGameTextSnapshot {
         if (!source.isPresent()) {
             return new Checked<>(source, 0L);
         }
-        List<RawChatMessage> messages = Objects.requireNonNull(source.get(), "chatBatch value");
-        int initialSize = messages.size();
+        List<RawChatMessage> messages = source.get();
+        ExternalCall<Integer> initialSize = externalSize(messages);
         if (expectedSize < 0 || expectedSize > GameTextInputBudget.MAX_CHAT_MESSAGES
-                || expectedCharacters < 0L || initialSize != expectedSize) {
+                || expectedCharacters < 0L || !initialSize.succeeded()
+                || initialSize.value() != expectedSize) {
             diagnostics.add(new ParseDiagnostic("input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
             return new Checked<>(Observation.unknown(), 0L);
         }
-        List<RawChatMessage> copy = new ArrayList<>(initialSize);
+        List<RawChatMessage> copy = new ArrayList<>(expectedSize);
         long characters = 0L;
-        try {
-            for (int index = 0; index < expectedSize; index++) {
-                if (messages.size() != expectedSize) {
-                    diagnostics.add(new ParseDiagnostic(
-                            "input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
-                    return new Checked<>(Observation.unknown(), 0L);
-                }
-                RawChatMessage message = Objects.requireNonNull(messages.get(index), "message");
-                if (message.channel().length() > GameTextInputBudget.MAX_LINE_CHARACTERS
-                        || message.text().length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
-                    diagnostics.add(new ParseDiagnostic(
-                            "input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
-                    return new Checked<>(Observation.unknown(), 0L);
-                }
-                characters = Math.addExact(characters, (long) message.channel().length());
-                characters = Math.addExact(characters, (long) message.text().length());
-                copy.add(message);
+        for (int index = 0; index < expectedSize; index++) {
+            if (!hasExpectedSize(messages, expectedSize)) {
+                diagnostics.add(new ParseDiagnostic(
+                        "input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
+                return new Checked<>(Observation.unknown(), 0L);
             }
-        } catch (IndexOutOfBoundsException exception) {
-            diagnostics.add(new ParseDiagnostic("input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
-            return new Checked<>(Observation.unknown(), 0L);
+            ExternalCall<RawChatMessage> messageCall = externalGet(messages, index);
+            RawChatMessage message = messageCall.value();
+            if (!messageCall.succeeded() || message == null
+                    || message.channel().length() > GameTextInputBudget.MAX_LINE_CHARACTERS
+                    || message.text().length() > GameTextInputBudget.MAX_LINE_CHARACTERS) {
+                diagnostics.add(new ParseDiagnostic(
+                        "input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
+                return new Checked<>(Observation.unknown(), 0L);
+            }
+            characters = Math.addExact(characters, (long) message.channel().length());
+            characters = Math.addExact(characters, (long) message.text().length());
+            copy.add(message);
         }
-        if (messages.size() != expectedSize || characters != expectedCharacters) {
+        if (!hasExpectedSize(messages, expectedSize) || characters != expectedCharacters) {
             diagnostics.add(new ParseDiagnostic("input.chat.batch", ParseDiagnosticCode.INPUT_LIMIT));
             return new Checked<>(Observation.unknown(), 0L);
         }
         return new Checked<>(Observation.present(List.copyOf(copy)), characters);
+    }
+
+    private static boolean hasExpectedSize(List<?> source, int expectedSize) {
+        ExternalCall<Integer> size = externalSize(source);
+        return size.succeeded() && size.value() == expectedSize;
+    }
+
+    /** The try block contains only the untrusted collection callback. */
+    private static ExternalCall<Integer> externalSize(List<?> source) {
+        if (source == null) {
+            return ExternalCall.failed();
+        }
+        int value;
+        try {
+            value = source.size();
+        } catch (RuntimeException | Error ignored) {
+            return ExternalCall.failed();
+        }
+        return ExternalCall.succeeded(value);
+    }
+
+    /** The try block contains only the untrusted collection callback. */
+    private static <T> ExternalCall<T> externalGet(List<T> source, int index) {
+        if (source == null) {
+            return ExternalCall.failed();
+        }
+        T value;
+        try {
+            value = source.get(index);
+        } catch (RuntimeException | Error ignored) {
+            return ExternalCall.failed();
+        }
+        return ExternalCall.succeeded(value);
     }
 
     private static <T> Observation<T> unknownIfPresent(Observation<T> source) {
@@ -366,5 +387,15 @@ public final class RawGameTextSnapshot {
     }
 
     private record Checked<T>(Observation<T> value, long characters) {
+    }
+
+    private record ExternalCall<T>(boolean succeeded, T value) {
+        private static <T> ExternalCall<T> succeeded(T value) {
+            return new ExternalCall<>(true, value);
+        }
+
+        private static <T> ExternalCall<T> failed() {
+            return new ExternalCall<>(false, null);
+        }
     }
 }
