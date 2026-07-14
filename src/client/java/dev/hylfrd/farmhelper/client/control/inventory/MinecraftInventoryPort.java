@@ -1,0 +1,287 @@
+package dev.hylfrd.farmhelper.client.control.inventory;
+
+import dev.hylfrd.farmhelper.control.input.HotbarSelection;
+import dev.hylfrd.farmhelper.control.inventory.InventoryCancelReason;
+import dev.hylfrd.farmhelper.control.inventory.InventoryClick;
+import dev.hylfrd.farmhelper.control.inventory.InventoryClickGuard;
+import dev.hylfrd.farmhelper.control.inventory.InventoryExecutionResult;
+import dev.hylfrd.farmhelper.control.inventory.InventoryItem;
+import dev.hylfrd.farmhelper.control.inventory.InventoryPort;
+import dev.hylfrd.farmhelper.control.inventory.InventoryScreenSnapshot;
+import dev.hylfrd.farmhelper.control.inventory.InventorySlot;
+import dev.hylfrd.farmhelper.control.inventory.ItemComponentSummary;
+import dev.hylfrd.farmhelper.control.inventory.ScreenIdentity;
+import dev.hylfrd.farmhelper.control.inventory.ScreenRevision;
+import dev.hylfrd.farmhelper.runtime.snapshot.ItemSummary;
+import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
+import dev.hylfrd.farmhelper.runtime.snapshot.ResourceIdentifier;
+import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.ItemLore;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
+/**
+ * Minecraft 26.1.2 inventory adapter. It is deliberately not wired into the client composition
+ * root until S2-T8.
+ *
+ * <p>{@link #executeGuardedClick(InventoryClickGuard)} performs observation, identity/revision,
+ * slot/item/count/component/cursor eligibility checks, and {@code handleContainerInput} in one
+ * client-thread call. This is the only inventory click write point.</p>
+ */
+public final class MinecraftInventoryPort implements InventoryPort {
+    private final Minecraft client;
+    private Object lastScreen;
+    private AbstractContainerMenu lastMenu;
+    private long nextEpoch = 1L;
+    private long epoch;
+    private long localContentRevision;
+    private ContentFingerprint previousContent;
+
+    public MinecraftInventoryPort() {
+        this(Minecraft.getInstance());
+    }
+
+    MinecraftInventoryPort(Minecraft client) {
+        this.client = Objects.requireNonNull(client, "client");
+    }
+
+    @Override
+    public Observation<InventoryScreenSnapshot> observe() {
+        return capture().map(Captured::snapshot);
+    }
+
+    @Override
+    public InventoryExecutionResult executeGuardedClick(InventoryClickGuard guard) {
+        Objects.requireNonNull(guard, "guard");
+        Observation<Captured> observation = capture();
+        if (!observation.isPresent()) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.SCREEN_CLOSED);
+        }
+        Captured captured = observation.get();
+        InventoryScreenSnapshot current = captured.snapshot();
+        if (!current.identity().equals(guard.target().screen())) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.SCREEN_CHANGED);
+        }
+        Optional<InventorySlot> currentSlot = current.slot(guard.target().menuSlot());
+        if (currentSlot.isEmpty()) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.SLOT_OUT_OF_BOUNDS);
+        }
+        InventorySlot slot = currentSlot.orElseThrow();
+        if (!slot.item().isPresent()) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.ITEM_CHANGED);
+        }
+        InventoryItem expectedItem = guard.target().item();
+        InventoryItem actualItem = slot.item().get();
+        if (!actualItem.summary().identifier().equals(expectedItem.summary().identifier())
+                || !actualItem.components().equals(expectedItem.components())) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.ITEM_CHANGED);
+        }
+        if (actualItem.count() != expectedItem.count()) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.COUNT_CHANGED);
+        }
+        if (!slot.hotbarSelection().equals(guard.hotbarSelection())) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.SLOT_CHANGED);
+        }
+        if (!current.cursor().equals(guard.cursor())) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.CURSOR_CHANGED);
+        }
+        if (!current.revision().equals(guard.target().revision())) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.REVISION_CHANGED);
+        }
+        if (!slot.active() || slot.active() != guard.slotActive()) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.SLOT_INACTIVE);
+        }
+        if (!slot.mayPickup() || slot.mayPickup() != guard.mayPickup()) {
+            return InventoryExecutionResult.rejected(InventoryCancelReason.PICKUP_DENIED);
+        }
+
+        ClickEncoding encoding = encode(guard.click());
+        client.gameMode.handleContainerInput(
+                captured.menu().containerId,
+                slot.menuSlot(),
+                encoding.button(),
+                encoding.input(),
+                captured.player());
+        return InventoryExecutionResult.success();
+    }
+
+    @Override
+    public Optional<InventoryCancelReason> closeScreen(ScreenIdentity expected) {
+        Objects.requireNonNull(expected, "expected");
+        Observation<Captured> observation = capture();
+        if (!observation.isPresent()) {
+            return Optional.of(InventoryCancelReason.SCREEN_CLOSED);
+        }
+        Captured captured = observation.get();
+        if (!captured.snapshot().identity().equals(expected)) {
+            return Optional.of(InventoryCancelReason.SCREEN_CHANGED);
+        }
+        captured.screen().onClose();
+        return Optional.empty();
+    }
+
+    private Observation<Captured> capture() {
+        requireClientThread();
+        if (!(client.screen instanceof AbstractContainerScreen<?> screen)
+                || client.player == null
+                || client.gameMode == null) {
+            clearScreenLifetime();
+            return Observation.absent();
+        }
+        AbstractContainerMenu menu = screen.getMenu();
+        LocalPlayer player = client.player;
+        if (player.containerMenu != menu) {
+            clearScreenLifetime();
+            return Observation.absent();
+        }
+        if (screen != lastScreen || menu != lastMenu) {
+            beginScreenLifetime(screen, menu);
+        }
+
+        String type = menuType(menu, screen);
+        ScreenIdentity identity = new ScreenIdentity(epoch, menu.containerId, type);
+        List<InventorySlot> slots = new ArrayList<>(menu.slots.size());
+        for (int index = 0; index < menu.slots.size(); index++) {
+            Slot slot = menu.getSlot(index);
+            slots.add(new InventorySlot(
+                    index,
+                    summarize(slot.getItem()),
+                    slot.isActive(),
+                    slot.mayPickup(player),
+                    hotbarSlot(slot, player)));
+        }
+        Observation<InventoryItem> cursor = summarize(menu.getCarried());
+        Observation<HotbarSelection> selected = Observation.present(
+                new HotbarSelection(player.getInventory().getSelectedSlot()));
+        ScreenSnapshot screenSummary = new ScreenSnapshot(
+                Observation.present(type),
+                Observation.present(screen.getTitle().getString()));
+        ContentFingerprint content = new ContentFingerprint(screenSummary, slots, cursor, selected);
+        if (previousContent != null && !previousContent.equals(content)) {
+            if (localContentRevision == Long.MAX_VALUE) {
+                throw new IllegalStateException("inventory local content revision exhausted");
+            }
+            localContentRevision++;
+        }
+        previousContent = content;
+        InventoryScreenSnapshot snapshot = new InventoryScreenSnapshot(
+                identity,
+                new ScreenRevision(menu.getStateId(), localContentRevision),
+                screenSummary,
+                slots,
+                cursor,
+                selected);
+        return Observation.present(new Captured(snapshot, screen, menu, player));
+    }
+
+    private void requireClientThread() {
+        if (!client.isSameThread()) {
+            throw new IllegalStateException("inventory adapter must run on the Minecraft client thread");
+        }
+    }
+
+    private void beginScreenLifetime(Object screen, AbstractContainerMenu menu) {
+        if (nextEpoch == Long.MAX_VALUE) {
+            throw new IllegalStateException("inventory screen epoch exhausted");
+        }
+        epoch = nextEpoch++;
+        lastScreen = screen;
+        lastMenu = menu;
+        localContentRevision = 0L;
+        previousContent = null;
+    }
+
+    private void clearScreenLifetime() {
+        lastScreen = null;
+        lastMenu = null;
+        previousContent = null;
+        localContentRevision = 0L;
+    }
+
+    private static String menuType(AbstractContainerMenu menu, AbstractContainerScreen<?> screen) {
+        Identifier key = menu.getType() == null ? null : BuiltInRegistries.MENU.getKey(menu.getType());
+        return key == null ? screen.getClass().getName() : key.toString();
+    }
+
+    private static Optional<HotbarSelection> hotbarSlot(Slot slot, LocalPlayer player) {
+        int containerSlot = slot.getContainerSlot();
+        return slot.container == player.getInventory() && containerSlot >= 0
+                && containerSlot < HotbarSelection.SLOT_COUNT
+                ? Optional.of(new HotbarSelection(containerSlot))
+                : Optional.empty();
+    }
+
+    private static Observation<InventoryItem> summarize(ItemStack stack) {
+        if (stack.isEmpty()) {
+            return Observation.absent();
+        }
+        Identifier key = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        if (key == null) {
+            throw new IllegalStateException("item has no registry identifier");
+        }
+        ItemComponentSummary components = new ItemComponentSummary(
+                componentText(stack.get(DataComponents.CUSTOM_NAME)),
+                componentText(stack.get(DataComponents.ITEM_NAME)),
+                lore(stack.get(DataComponents.LORE)),
+                customData(stack.get(DataComponents.CUSTOM_DATA)));
+        return Observation.present(new InventoryItem(
+                new ItemSummary(ResourceIdentifier.parse(key.toString()), stack.getCount()),
+                components));
+    }
+
+    private static Optional<String> componentText(Component component) {
+        return Optional.ofNullable(component).map(Component::getString);
+    }
+
+    private static List<String> lore(ItemLore lore) {
+        return lore == null ? List.of() : lore.lines().stream().map(Component::getString).toList();
+    }
+
+    private static Optional<String> customData(CustomData data) {
+        return data == null || data.isEmpty() ? Optional.empty() : Optional.of(data.copyTag().toString());
+    }
+
+    private static ClickEncoding encode(InventoryClick click) {
+        return switch (click) {
+            case InventoryClick.Pickup pickup -> new ClickEncoding(
+                    pickup.button() == InventoryClick.PickupButton.PRIMARY ? 0 : 1,
+                    ContainerInput.PICKUP);
+            case InventoryClick.QuickMove ignored -> new ClickEncoding(0, ContainerInput.QUICK_MOVE);
+            case InventoryClick.SwapWithHotbar swap ->
+                    new ClickEncoding(swap.hotbar().slot(), ContainerInput.SWAP);
+        };
+    }
+
+    private record ClickEncoding(int button, ContainerInput input) { }
+
+    private record Captured(
+            InventoryScreenSnapshot snapshot,
+            AbstractContainerScreen<?> screen,
+            AbstractContainerMenu menu,
+            LocalPlayer player) { }
+
+    private record ContentFingerprint(
+            ScreenSnapshot screen,
+            List<InventorySlot> slots,
+            Observation<InventoryItem> cursor,
+            Observation<HotbarSelection> selectedHotbar) {
+        private ContentFingerprint {
+            slots = List.copyOf(slots);
+        }
+    }
+}
