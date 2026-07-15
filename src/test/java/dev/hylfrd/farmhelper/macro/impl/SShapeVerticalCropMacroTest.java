@@ -87,6 +87,29 @@ class SShapeVerticalCropMacroTest {
     }
 
     @Test
+    void directionPriorityIsCropThenVoidThenFirstKnownObstacle() {
+        SShapeVerticalCropMacro crop = macro(VerticalCropMode.NORMAL);
+        MacroDecision cropDecision = crop.tick(context(0L, START, 0.0D, 2.8F,
+                spatial(START, wheat(), true)));
+        assertEquals("farming-right", cropDecision.status());
+
+        PositionSnapshot high = new PositionSnapshot(0.5D, 66.0D, 0.5D);
+        SpatialSnapshot oneSidedVoid = withBlock(spatial(high, wheat(), false),
+                new BlockPosition(-1, 65, 0), Observation.present(air()));
+        SShapeVerticalCropMacro voidMacro = macro(VerticalCropMode.NORMAL);
+        MacroDecision voidDecision = voidMacro.tick(context(0L, high, 0.0D, 2.8F,
+                oneSidedVoid));
+        assertEquals("farming-left-void", voidDecision.status());
+
+        SpatialSnapshot rightObstacle = withBlock(spatial(START, wheat(), false),
+                new BlockPosition(-1, 1, 0), Observation.present(full()));
+        SShapeVerticalCropMacro obstacle = macro(VerticalCropMode.NORMAL);
+        MacroDecision obstacleDecision = obstacle.tick(context(0L, START, 0.0D, 2.8F,
+                rightObstacle));
+        assertEquals("farming-left-obstacle", obstacleDecision.status());
+    }
+
+    @Test
     void rowEndSwitchesLaneAndReversesDirectionAfterOneBlock() {
         SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
         macro.tick(context(0L, START, 0.0D, 2.8F, spatial(START, wheat(), true)));
@@ -676,12 +699,16 @@ class SShapeVerticalCropMacroTest {
             CropFixture crop,
             boolean rightCrop
     ) {
-        BoxSnapshot bounds = new BoxSnapshot(-4, -1, -4, 5, 6, 6);
+        int groundY = (int) Math.floor(player.y()) - 1;
+        int minY = groundY - 1;
+        int maxY = groundY + 6;
+        BoxSnapshot bounds = new BoxSnapshot(-4, minY, -4, 5, maxY, 6);
         Map<BlockPosition, Observation<BlockStateSnapshot>> blocks = new LinkedHashMap<>();
         for (int x = -4; x < 5; x++) {
-            for (int y = -1; y < 6; y++) {
+            for (int y = minY; y < maxY; y++) {
                 for (int z = -4; z < 6; z++) {
-                    blocks.put(new BlockPosition(x, y, z), Observation.present(y == 0 ? full() : air()));
+                    blocks.put(new BlockPosition(x, y, z),
+                            Observation.present(y == groundY ? full() : air()));
                 }
             }
         }

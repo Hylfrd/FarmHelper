@@ -257,6 +257,15 @@ class SpatialQueriesTest {
         assertEquals(SpaceStatus.UNKNOWN, exhausted.status());
         assertEquals(3, exhausted.inspectedBlocks().size());
         assertTrue(exhausted.blockedBlocks().isEmpty());
+
+        BoxSnapshot longBounds = new BoxSnapshot(0, 0, 0, 1, 3, 180);
+        Map<BlockPosition, Observation<BlockStateSnapshot>> longLane =
+                SpatialTestFixtures.walkableLane(0, 179);
+        SpatialScanResult exhaustedAt179 = SpatialQueries.scanForwardUntilBlocked(
+                snapshot(longBounds, longLane), EPOCH, body, forwardZ, 179);
+        assertEquals(SpaceStatus.UNKNOWN, exhaustedAt179.status());
+        assertEquals(179, exhaustedAt179.inspectedBlocks().size());
+        assertTrue(exhaustedAt179.blockedBlocks().isEmpty());
     }
 
     private static SpaceStatus clearanceAt(BlockStateSnapshot state, BoxSnapshot query) {
