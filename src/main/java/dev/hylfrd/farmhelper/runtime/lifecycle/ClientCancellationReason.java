@@ -6,6 +6,7 @@ public enum ClientCancellationReason {
     WORLD_LOAD,
     WORLD_UNLOAD,
     DISCONNECT,
+    CONNECTION_UNAVAILABLE,
     SCREEN_CHANGED,
     EXCEPTION,
     CLIENT_STOP

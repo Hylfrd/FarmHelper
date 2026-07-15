@@ -18,13 +18,23 @@ public final class ClientRotationController {
     private static final ControlOwner EXPLICIT_COMMAND_OWNER = new ControlOwner("explicit-rotation-command");
 
     private final RotationController controller;
+    private final Runnable acquisitionGuard;
 
     public ClientRotationController() {
-        this(SystemMonotonicClock.INSTANCE);
+        this(SystemMonotonicClock.INSTANCE, () -> { });
+    }
+
+    public ClientRotationController(Runnable acquisitionGuard) {
+        this(SystemMonotonicClock.INSTANCE, acquisitionGuard);
     }
 
     ClientRotationController(MonotonicClock clock) {
+        this(clock, () -> { });
+    }
+
+    ClientRotationController(MonotonicClock clock, Runnable acquisitionGuard) {
         controller = new RotationController(Objects.requireNonNull(clock, "clock"));
+        this.acquisitionGuard = Objects.requireNonNull(acquisitionGuard, "acquisitionGuard");
     }
 
     public boolean rotating() {
@@ -49,6 +59,7 @@ public final class ClientRotationController {
     }
 
     public boolean start(Minecraft client, float targetYaw, float targetPitch, long durationMs) {
+        requireClientThread(client);
         return start(new MinecraftRotationView(client), targetYaw, targetPitch, durationMs);
     }
 
@@ -60,6 +71,7 @@ public final class ClientRotationController {
             float targetYaw,
             float targetPitch,
             long durationMs) {
+        acquisitionGuard.run();
         return controller.start(Objects.requireNonNull(owner, "owner"), startYaw, startPitch,
                 targetYaw, targetPitch, durationMs);
     }
@@ -69,6 +81,7 @@ public final class ClientRotationController {
         if (!view.playerPresent()) {
             return false;
         }
+        acquisitionGuard.run();
         controller.start(
                 EXPLICIT_COMMAND_OWNER,
                 view.yaw(),
@@ -157,6 +170,13 @@ public final class ClientRotationController {
             client.player.setYRot(yaw);
             client.player.setXRot(pitch);
             client.player.setYHeadRot(yaw);
+        }
+    }
+
+    private static void requireClientThread(Minecraft client) {
+        Objects.requireNonNull(client, "client");
+        if (!client.isSameThread()) {
+            throw new IllegalStateException("Rotation mutation must run on the client thread");
         }
     }
 }

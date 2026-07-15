@@ -41,7 +41,7 @@ public final class ClientFarmHelperCommandService implements FarmHelperCommandSe
 
     @Override
     public CommandActionResult toggle() {
-        boolean enabled = runtime.core().macroManager().toggle();
+        boolean enabled = runtime.toggle();
         return CommandActionResult.success("Macro " + (enabled ? "enabled" : "disabled") + ".");
     }
 

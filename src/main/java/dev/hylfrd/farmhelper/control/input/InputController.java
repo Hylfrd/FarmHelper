@@ -202,7 +202,9 @@ public final class InputController {
             try {
                 listener.accept(createSnapshot());
             } catch (RuntimeException | Error releaseFailure) {
-                exception.addSuppressed(releaseFailure);
+                if (exception != releaseFailure) {
+                    exception.addSuppressed(releaseFailure);
+                }
             }
             throw exception;
         }

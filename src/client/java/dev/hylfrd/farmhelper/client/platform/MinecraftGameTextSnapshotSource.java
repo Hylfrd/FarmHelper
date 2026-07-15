@@ -23,6 +23,7 @@ import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.level.GameType;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -30,6 +31,9 @@ import java.util.Objects;
 /** Bounded, collection-only adapter for parser inputs. No Minecraft object escapes this class. */
 public final class MinecraftGameTextSnapshotSource implements ClientGameTextSource {
     private static final int VANILLA_RENDERED_TAB_LIMIT = 80;
+    private static final Comparator<PlayerScoreEntry> SCOREBOARD_RENDER_ORDER = Comparator
+            .comparingInt(PlayerScoreEntry::value).reversed()
+            .thenComparing(PlayerScoreEntry::owner, String.CASE_INSENSITIVE_ORDER);
     private static final Comparator<PlayerInfo> TAB_RENDER_ORDER = Comparator
             .comparingInt((PlayerInfo info) -> -info.getTabListOrder())
             .thenComparingInt(info -> info.getGameMode() == GameType.SPECTATOR ? 1 : 0)
@@ -38,9 +42,8 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
 
     private final Minecraft client;
     private final BoundedChatBuffer chat = new BoundedChatBuffer();
+    private final WorldTransitionTracker worldTransitions = new WorldTransitionTracker();
     private long generation;
-    private boolean worldObserved;
-    private Observation<?> previousWorld = Observation.unknown();
 
     public MinecraftGameTextSnapshotSource(Minecraft client) {
         this.client = Objects.requireNonNull(client, "client");
@@ -58,10 +61,8 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
     }
 
     @Override
-    public void reset() {
+    public void resetChat() {
         chat.reset();
-        worldObserved = false;
-        previousWorld = Observation.unknown();
     }
 
     @Override
@@ -88,7 +89,7 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
         if (client.level == null) {
             return Observation.absent();
         }
-        Objective objective = client.level.getScoreboard().getDisplayObjective(DisplaySlot.SIDEBAR);
+        Objective objective = visibleSidebarObjective(client.level.getScoreboard(), localPlayerName());
         return objective == null
                 ? Observation.absent()
                 : bounded(objective.getDisplayName());
@@ -99,19 +100,16 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
             return Observation.absent();
         }
         Scoreboard scoreboard = client.level.getScoreboard();
-        Objective objective = scoreboard.getDisplayObjective(DisplaySlot.SIDEBAR);
+        Objective objective = visibleSidebarObjective(scoreboard, localPlayerName());
         if (objective == null) {
             return Observation.present(List.of());
         }
-        List<PlayerScoreEntry> entries = scoreboard.listPlayerScores(objective).stream()
-                .filter(entry -> !entry.isHidden())
-                .sorted(Comparator.comparingInt(PlayerScoreEntry::value).reversed()
-                        .thenComparing(PlayerScoreEntry::owner))
-                .limit(GameTextInputBudget.MAX_SCOREBOARD_LINES + 1L)
-                .toList();
-        if (entries.size() > GameTextInputBudget.MAX_SCOREBOARD_LINES) {
+        Observation<List<PlayerScoreEntry>> visible = visibleScoreboardEntries(
+                scoreboard.listPlayerScores(objective));
+        if (!visible.isPresent()) {
             return Observation.unknown();
         }
+        List<PlayerScoreEntry> entries = visible.get();
         List<String> lines = new ArrayList<>(entries.size());
         for (PlayerScoreEntry entry : entries) {
             Observation<String> line = visibleScoreboardLine(scoreboard, entry);
@@ -212,13 +210,41 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
     }
 
     private Observation<WorldTransition> worldTransition(ClientSnapshot snapshot) {
-        Observation<?> current = snapshot.world();
-        WorldTransition transition = worldObserved && !previousWorld.equals(current)
-                ? WorldTransition.CHANGING
-                : WorldTransition.STABLE;
-        worldObserved = true;
-        previousWorld = current;
-        return Observation.present(transition);
+        return Observation.present(worldTransitions.observe(snapshot.world()));
+    }
+
+    private String localPlayerName() {
+        return client.player == null ? null : client.player.getScoreboardName();
+    }
+
+    static Objective visibleSidebarObjective(Scoreboard scoreboard, String playerName) {
+        Objects.requireNonNull(scoreboard, "scoreboard");
+        if (playerName != null) {
+            PlayerTeam team = scoreboard.getPlayersTeam(playerName);
+            if (team != null) {
+                DisplaySlot teamSlot = DisplaySlot.teamColorToSlot(team.getColor());
+                Objective teamObjective = teamSlot == null
+                        ? null
+                        : scoreboard.getDisplayObjective(teamSlot);
+                if (teamObjective != null) {
+                    return teamObjective;
+                }
+            }
+        }
+        return scoreboard.getDisplayObjective(DisplaySlot.SIDEBAR);
+    }
+
+    static Observation<List<PlayerScoreEntry>> visibleScoreboardEntries(
+            Collection<PlayerScoreEntry> rawEntries) {
+        Objects.requireNonNull(rawEntries, "rawEntries");
+        if (rawEntries.size() > GameTextInputBudget.MAX_SCOREBOARD_RAW_ENTRIES) {
+            return Observation.unknown();
+        }
+        return Observation.present(rawEntries.stream()
+                .filter(entry -> !entry.isHidden())
+                .sorted(SCOREBOARD_RENDER_ORDER)
+                .limit(GameTextInputBudget.MAX_VISIBLE_SCOREBOARD_LINES)
+                .toList());
     }
 
     static Observation<String> visibleScoreboardLine(Scoreboard scoreboard, PlayerScoreEntry entry) {
@@ -228,6 +254,10 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
 
     static Comparator<PlayerInfo> tabRenderOrder() {
         return TAB_RENDER_ORDER;
+    }
+
+    static Comparator<PlayerScoreEntry> scoreboardRenderOrder() {
+        return SCOREBOARD_RENDER_ORDER;
     }
 
     static Observation<String> bounded(Component component) {

@@ -2,7 +2,12 @@ package dev.hylfrd.farmhelper.runtime.gamestate;
 
 /** Public, fixed limits applied before game text is copied or parsed. */
 public final class GameTextInputBudget {
-    public static final int MAX_SCOREBOARD_LINES = 128;
+    /** Maximum raw score entries inspected before client-side visibility filtering. */
+    public static final int MAX_SCOREBOARD_RAW_ENTRIES = 128;
+    /** Defensive parser boundary matching the visible client sidebar. */
+    public static final int MAX_SCOREBOARD_LINES = 15;
+    /** Vanilla 26.1.2 renders at most this many visible sidebar lines. */
+    public static final int MAX_VISIBLE_SCOREBOARD_LINES = 15;
     public static final int MAX_TAB_LINES = 256;
     public static final int MAX_TAB_FOOTER_LINES = 128;
     public static final int MAX_VACUUM_LORE_LINES = 64;

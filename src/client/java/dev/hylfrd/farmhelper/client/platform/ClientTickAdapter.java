@@ -106,26 +106,26 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         }
         if (observedLevel != null) {
             runtime.worldUnloaded();
-            gameText.reset();
+            gameText.resetChat();
         }
         observedLevel = current;
         if (current != null) {
             runtime.worldLoaded();
-            gameText.reset();
+            gameText.resetChat();
         }
     }
 
     private void disconnect() {
         disconnected = true;
         observedLevel = null;
-        gameText.reset();
+        gameText.resetChat();
         runtime.disconnected();
     }
 
     private void clientStopping() {
         disconnected = true;
         observedLevel = null;
-        gameText.reset();
+        gameText.resetChat();
         runtime.clientStopping();
     }
 
@@ -146,6 +146,7 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
 
     @Override
     public void observeSnapshotLifecycle(ClientSnapshot snapshot) {
+        runtime.observeConnection(snapshot.connection());
         runtime.lifecycle().observeScreen(snapshot.screen());
     }
 
@@ -187,12 +188,14 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         runtime.failed();
     }
 
-    private MacroContext macroContext(ClientSnapshot snapshot) {
+    static MacroContext macroContext(ClientSnapshot snapshot) {
         boolean worldReady = snapshot.world().isPresent();
         boolean playerReady = snapshot.player().isPresent();
+        boolean connectionReady = snapshot.connection().isPresent();
         boolean screenOpenOrUnknown = !snapshot.screen().isAbsent();
         PauseReason pauseReason = !worldReady ? PauseReason.NO_WORLD
                 : !playerReady ? PauseReason.NO_PLAYER
+                : !connectionReady ? PauseReason.NO_CONNECTION
                 : screenOpenOrUnknown ? PauseReason.SCREEN_OPEN
                 : PauseReason.NONE;
         WorldMode worldMode = snapshot.connection().isPresent()
@@ -201,7 +204,7 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
                     case MULTIPLAYER -> WorldMode.MULTIPLAYER;
                 }
                 : WorldMode.NONE;
-        return new MacroContext(playerReady, screenOpenOrUnknown, pauseReason, worldMode,
+        return new MacroContext(playerReady && connectionReady, screenOpenOrUnknown, pauseReason, worldMode,
                 legacyPlayer(snapshot.player().isPresent() ? snapshot.player().get() : null));
     }
 

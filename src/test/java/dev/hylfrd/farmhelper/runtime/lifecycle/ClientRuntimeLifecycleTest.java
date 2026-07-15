@@ -45,4 +45,46 @@ class ClientRuntimeLifecycleTest {
 
         assertEquals(List.of(ClientCancellationReason.SCREEN_CHANGED), cancellations);
     }
+
+    @Test
+    void screenCancellationUsesOnlyObservationStateAndStableIdentity() {
+        List<ClientCancellationReason> cancellations = new ArrayList<>();
+        ClientRuntimeLifecycle lifecycle = new ClientRuntimeLifecycle(cancellations::add);
+
+        lifecycle.observeScreen(Observation.present(new ScreenSnapshot(
+                7L, Observation.present("container"), Observation.present("Chest"))));
+        lifecycle.observeScreen(Observation.present(new ScreenSnapshot(
+                7L, Observation.present("changed-detail"), Observation.present("Renamed"))));
+        assertEquals(List.of(), cancellations);
+
+        lifecycle.observeScreen(Observation.unknown());
+        lifecycle.observeScreen(Observation.absent());
+        lifecycle.observeScreen(Observation.present(new ScreenSnapshot(
+                8L, Observation.unknown(), Observation.unknown())));
+        lifecycle.observeScreen(Observation.present(new ScreenSnapshot(
+                9L, Observation.unknown(), Observation.unknown())));
+
+        assertEquals(List.of(
+                ClientCancellationReason.SCREEN_CHANGED,
+                ClientCancellationReason.SCREEN_CHANGED,
+                ClientCancellationReason.SCREEN_CHANGED,
+                ClientCancellationReason.SCREEN_CHANGED), cancellations);
+    }
+
+    @Test
+    void connectionUnknownAndAbsentTransitionsEmitFailClosedBoundaries() {
+        List<ClientCancellationReason> cancellations = new ArrayList<>();
+        ClientRuntimeLifecycle lifecycle = new ClientRuntimeLifecycle(cancellations::add);
+
+        lifecycle.observeConnection(Observation.unknown());
+        lifecycle.observeConnection(Observation.unknown());
+        lifecycle.observeConnection(Observation.absent());
+        lifecycle.observeConnection(Observation.present("connected"));
+        lifecycle.observeConnection(Observation.unknown());
+
+        assertEquals(List.of(
+                ClientCancellationReason.CONNECTION_UNAVAILABLE,
+                ClientCancellationReason.CONNECTION_UNAVAILABLE,
+                ClientCancellationReason.CONNECTION_UNAVAILABLE), cancellations);
+    }
 }

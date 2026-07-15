@@ -6,5 +6,6 @@ import dev.hylfrd.farmhelper.runtime.gamestate.GameTextSnapshotSource;
 public interface ClientGameTextSource extends GameTextSnapshotSource {
     void acceptChat(String channel, String text);
 
-    void reset();
+    /** Clears transient chat input without erasing independently tracked world-transition evidence. */
+    void resetChat();
 }

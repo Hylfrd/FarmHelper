@@ -22,21 +22,36 @@ public final class FarmHelperRuntime {
     private GameStateParseResult currentGameState;
 
     public FarmHelperRuntime() {
-        this(new FarmHelperConfig(), new MacroManager(), SystemMonotonicClock.INSTANCE);
+        this(new FarmHelperConfig(), () -> { });
     }
 
     public FarmHelperRuntime(FarmHelperConfig config) {
-        this(config, new MacroManager(), SystemMonotonicClock.INSTANCE);
+        this(config, () -> { });
+    }
+
+    public FarmHelperRuntime(FarmHelperConfig config, Runnable acquisitionGuard) {
+        this(config, new MacroManager(acquisitionGuard), SystemMonotonicClock.INSTANCE,
+                acquisitionGuard);
     }
 
     FarmHelperRuntime(FarmHelperConfig config, MacroManager macroManager) {
-        this(config, macroManager, SystemMonotonicClock.INSTANCE);
+        this(config, macroManager, SystemMonotonicClock.INSTANCE, () -> { });
     }
 
     FarmHelperRuntime(FarmHelperConfig config, MacroManager macroManager, MonotonicClock clock) {
+        this(config, macroManager, clock, () -> { });
+    }
+
+    FarmHelperRuntime(
+            FarmHelperConfig config,
+            MacroManager macroManager,
+            MonotonicClock clock,
+            Runnable acquisitionGuard) {
         this.config = config;
         this.macroManager = macroManager;
-        taskQueue = new ClientTaskQueue(Objects.requireNonNull(clock, "clock"));
+        taskQueue = new ClientTaskQueue(
+                Objects.requireNonNull(clock, "clock"),
+                Objects.requireNonNull(acquisitionGuard, "acquisitionGuard"));
         gameStateParser = new GameStateParser();
     }
 

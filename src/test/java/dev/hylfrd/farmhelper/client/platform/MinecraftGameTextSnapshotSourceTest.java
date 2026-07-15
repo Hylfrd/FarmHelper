@@ -1,6 +1,7 @@
 package dev.hylfrd.farmhelper.client.platform;
 
 import com.mojang.authlib.GameProfile;
+import net.minecraft.ChatFormatting;
 import dev.hylfrd.farmhelper.runtime.gamestate.BuffStatus;
 import dev.hylfrd.farmhelper.runtime.gamestate.GameStateParseResult;
 import dev.hylfrd.farmhelper.runtime.gamestate.GameStateParser;
@@ -21,6 +22,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.scores.PlayerScoreEntry;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
+import net.minecraft.world.scores.DisplaySlot;
+import net.minecraft.world.scores.Objective;
+import net.minecraft.world.scores.criteria.ObjectiveCriteria;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -88,6 +92,89 @@ class MinecraftGameTextSnapshotSourceTest {
         assertEquals(List.of(higher, lower), sorted);
     }
 
+    @Test
+    void visibleScoreboardUsesVanillaLimitHiddenFilterAndCaseInsensitiveTieOrder() {
+        List<PlayerScoreEntry> raw = new ArrayList<>();
+        raw.add(new PlayerScoreEntry("beta", 100, Component.empty(), null));
+        raw.add(new PlayerScoreEntry("Alpha", 100, Component.empty(), null));
+        raw.add(new PlayerScoreEntry("alpha", 100, Component.empty(), null));
+        raw.add(new PlayerScoreEntry("#hidden", 10_000, Component.empty(), null));
+        for (int index = 0; index < 20; index++) {
+            raw.add(new PlayerScoreEntry("owner-" + index, 99 - index, Component.empty(), null));
+        }
+
+        List<PlayerScoreEntry> visible = MinecraftGameTextSnapshotSource
+                .visibleScoreboardEntries(raw).get();
+
+        assertEquals(15, visible.size());
+        assertEquals(List.of("Alpha", "alpha", "beta"), visible.subList(0, 3).stream()
+                .map(PlayerScoreEntry::owner).toList());
+        assertTrue(visible.stream().noneMatch(PlayerScoreEntry::isHidden));
+    }
+
+    @Test
+    void rawScoreboardBudgetFailsClosedBeforeVisibleFilteringOrSorting() {
+        List<PlayerScoreEntry> raw = new ArrayList<>();
+        for (int index = 0; index <= GameTextInputBudget.MAX_SCOREBOARD_RAW_ENTRIES; index++) {
+            raw.add(new PlayerScoreEntry("#hidden-" + index, index, Component.empty(), null));
+        }
+
+        assertTrue(MinecraftGameTextSnapshotSource.visibleScoreboardEntries(raw).isUnknown());
+    }
+
+    @Test
+    void sortedVisibleScoreboardPreservesJacobParserAdjacency() {
+        Scoreboard scoreboard = new Scoreboard();
+        List<PlayerScoreEntry> rawEntries = List.of(
+                decoratedEntry(scoreboard, "medal", 97, "GOLD with ", "1,234"),
+                decoratedEntry(scoreboard, "crop", 99, "Wheat ", "2m30s"),
+                decoratedEntry(scoreboard, "header", 100, "Jacob's ", "Contest"),
+                decoratedEntry(scoreboard, "collected", 98, "Collected ", "1,234"));
+        List<String> lines = MinecraftGameTextSnapshotSource.visibleScoreboardEntries(rawEntries)
+                .get().stream()
+                .map(entry -> MinecraftGameTextSnapshotSource
+                        .visibleScoreboardLine(scoreboard, entry).get())
+                .toList();
+        RawGameTextSnapshot raw = new RawGameTextSnapshot(
+                Observation.present("SKYBLOCK"),
+                Observation.present(lines),
+                Observation.present(List.of("Area: Garden")),
+                Observation.present(List.of()),
+                Observation.present(List.of()),
+                Observation.present(List.of()),
+                PlayerFacts.unknown(),
+                Observation.present(WorldTransition.STABLE),
+                4L);
+
+        GameStateParseResult result = new GameStateParser().parse(multiplayer(), raw);
+
+        assertEquals(List.of("Jacob's Contest", "Wheat 2m30s", "Collected 1,234",
+                "GOLD with 1,234"), lines);
+        assertEquals(GardenCrop.WHEAT,
+                result.snapshot().jacob().currentContest().get().crop().get());
+    }
+
+    @Test
+    void teamColorSidebarObjectiveTakesPriorityAndFallsBackToGenericSidebar() {
+        Scoreboard scoreboard = new Scoreboard();
+        Objective generic = objective(scoreboard, "generic", "Generic");
+        Objective teamObjective = objective(scoreboard, "red", "Red");
+        scoreboard.setDisplayObjective(DisplaySlot.SIDEBAR, generic);
+        scoreboard.setDisplayObjective(DisplaySlot.TEAM_RED, teamObjective);
+        PlayerTeam team = scoreboard.addPlayerTeam("local-red");
+        team.setColor(ChatFormatting.RED);
+        scoreboard.addPlayerToTeam("local-player", team);
+
+        assertEquals(teamObjective, MinecraftGameTextSnapshotSource.visibleSidebarObjective(
+                scoreboard, "local-player"));
+
+        scoreboard.setDisplayObjective(DisplaySlot.TEAM_RED, null);
+        assertEquals(generic, MinecraftGameTextSnapshotSource.visibleSidebarObjective(
+                scoreboard, "local-player"));
+        assertEquals(generic, MinecraftGameTextSnapshotSource.visibleSidebarObjective(
+                scoreboard, null));
+    }
+
     private static String visibleLine(Scoreboard scoreboard, String prefix, String suffix) {
         int index = scoreboard.getPlayerTeams().size();
         String owner = "holder-" + index;
@@ -97,6 +184,29 @@ class MinecraftGameTextSnapshotSourceTest {
         scoreboard.addPlayerToTeam(owner, team);
         PlayerScoreEntry entry = new PlayerScoreEntry(owner, index, Component.empty(), null);
         return MinecraftGameTextSnapshotSource.visibleScoreboardLine(scoreboard, entry).get();
+    }
+
+    private static PlayerScoreEntry decoratedEntry(
+            Scoreboard scoreboard,
+            String owner,
+            int score,
+            String prefix,
+            String suffix) {
+        PlayerTeam team = scoreboard.addPlayerTeam("team-" + owner);
+        team.setPlayerPrefix(Component.literal(prefix));
+        team.setPlayerSuffix(Component.literal(suffix));
+        scoreboard.addPlayerToTeam(owner, team);
+        return new PlayerScoreEntry(owner, score, Component.empty(), null);
+    }
+
+    private static Objective objective(Scoreboard scoreboard, String name, String title) {
+        return scoreboard.addObjective(
+                name,
+                ObjectiveCriteria.DUMMY,
+                Component.literal(title),
+                ObjectiveCriteria.RenderType.INTEGER,
+                false,
+                null);
     }
 
     private static ClientSnapshot multiplayer() {

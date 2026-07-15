@@ -17,6 +17,7 @@ public final class InventoryController {
     private final InventoryHotbarPort hotbar;
     private final InventoryPort port;
     private final Consumer<InventoryDiagnostic> diagnostics;
+    private final Runnable acquisitionGuard;
     private long nextToken = 1L;
     private ActiveOperation active;
 
@@ -25,7 +26,16 @@ public final class InventoryController {
             InventoryHotbarPort hotbar,
             InventoryPort port,
             Consumer<InventoryDiagnostic> diagnostics) {
-        this(InventoryTaskScheduler.from(queue), hotbar, port, diagnostics);
+        this(InventoryTaskScheduler.from(queue), hotbar, port, diagnostics, () -> { });
+    }
+
+    public InventoryController(
+            ClientTaskQueue queue,
+            InventoryHotbarPort hotbar,
+            InventoryPort port,
+            Consumer<InventoryDiagnostic> diagnostics,
+            Runnable acquisitionGuard) {
+        this(InventoryTaskScheduler.from(queue), hotbar, port, diagnostics, acquisitionGuard);
     }
 
     public InventoryController(
@@ -33,10 +43,20 @@ public final class InventoryController {
             InventoryHotbarPort hotbar,
             InventoryPort port,
             Consumer<InventoryDiagnostic> diagnostics) {
+        this(scheduler, hotbar, port, diagnostics, () -> { });
+    }
+
+    public InventoryController(
+            InventoryTaskScheduler scheduler,
+            InventoryHotbarPort hotbar,
+            InventoryPort port,
+            Consumer<InventoryDiagnostic> diagnostics,
+            Runnable acquisitionGuard) {
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.hotbar = Objects.requireNonNull(hotbar, "hotbar");
         this.port = Objects.requireNonNull(port, "port");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
+        this.acquisitionGuard = Objects.requireNonNull(acquisitionGuard, "acquisitionGuard");
     }
 
     /** Starts without preempting an existing operation or an existing T2 hotbar owner. */
@@ -44,6 +64,7 @@ public final class InventoryController {
             InventoryOperation operation, Consumer<InventoryOutcome> callback) {
         Objects.requireNonNull(operation, "operation");
         Objects.requireNonNull(callback, "callback");
+        acquisitionGuard.run();
         InventoryOperationToken token = newToken();
         if (active != null) {
             completeRejectedStart(token, callback);

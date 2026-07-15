@@ -19,6 +19,7 @@ public final class ClientTaskQueue {
             .thenComparingLong(Entry::sequence);
 
     private final MonotonicClock clock;
+    private final Runnable acquisitionGuard;
     private final PriorityQueue<Entry> entries = new PriorityQueue<>(ENTRY_ORDER);
     private final Map<TaskOwner, Set<TaskHandle>> pendingByOwner = new HashMap<>();
     private long lastClockNanos;
@@ -27,7 +28,12 @@ public final class ClientTaskQueue {
     private boolean advancing;
 
     public ClientTaskQueue(MonotonicClock clock) {
+        this(clock, () -> { });
+    }
+
+    public ClientTaskQueue(MonotonicClock clock, Runnable acquisitionGuard) {
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.acquisitionGuard = Objects.requireNonNull(acquisitionGuard, "acquisitionGuard");
         lastClockNanos = clock.nowNanos();
     }
 
@@ -37,6 +43,7 @@ public final class ClientTaskQueue {
         if (delayNanos < 0L) {
             throw new IllegalArgumentException("delayNanos must not be negative");
         }
+        acquisitionGuard.run();
         if (nextSequence == Long.MAX_VALUE) {
             throw new IllegalStateException("task sequence exhausted");
         }

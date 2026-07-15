@@ -121,16 +121,23 @@ class RawGameTextSnapshotTest {
         String maximum = "x".repeat(GameTextInputBudget.MAX_LINE_CHARACTERS);
         int lineCount = Math.toIntExact(
                 GameTextInputBudget.MAX_TOTAL_CHARACTERS / GameTextInputBudget.MAX_LINE_CHARACTERS);
-        List<String> maximumTotal = Collections.nCopies(lineCount, maximum);
+        List<String> maximumScoreboard = Collections.nCopies(
+                GameTextInputBudget.MAX_SCOREBOARD_LINES, maximum);
+        List<String> maximumTab = Collections.nCopies(
+                lineCount - GameTextInputBudget.MAX_SCOREBOARD_LINES, maximum);
         RawGameTextSnapshot totalAtLimit = snapshot(
-                Observation.absent(), maximumTotal, List.of(), List.of(), List.of(), List.of());
+                Observation.absent(), maximumScoreboard, maximumTab,
+                List.of(), List.of(), List.of());
         assertTrue(totalAtLimit.scoreboardLines().isPresent());
+        assertTrue(totalAtLimit.tabLines().isPresent());
         assertTrue(totalAtLimit.inputDiagnostics().isEmpty());
 
         RawGameTextSnapshot totalOverLimit = snapshot(
-                Observation.present("x"), maximumTotal, List.of(), List.of(), List.of(), List.of());
+                Observation.present("x"), maximumScoreboard, maximumTab,
+                List.of(), List.of(), List.of());
         assertTrue(totalOverLimit.scoreboardTitle().isUnknown());
         assertTrue(totalOverLimit.scoreboardLines().isUnknown());
+        assertTrue(totalOverLimit.tabLines().isUnknown());
         assertEquals(List.of(new ParseDiagnostic("input.total", ParseDiagnosticCode.INPUT_LIMIT)),
                 totalOverLimit.inputDiagnostics());
     }
@@ -138,8 +145,15 @@ class RawGameTextSnapshotTest {
     @Test
     void rejectsScoreboardPlusTabCounterexampleBeforeCopying() {
         String maximum = "x".repeat(GameTextInputBudget.MAX_LINE_CHARACTERS);
-        ProbeList<String> scoreboard = new ProbeList<>(Collections.nCopies(32, maximum));
-        ProbeList<String> tab = new ProbeList<>(List.of("x"));
+        ProbeList<String> scoreboard = new ProbeList<>(Collections.nCopies(
+                GameTextInputBudget.MAX_SCOREBOARD_LINES, maximum));
+        List<String> tabValues = new ArrayList<>(Collections.nCopies(
+                Math.toIntExact(GameTextInputBudget.MAX_TOTAL_CHARACTERS
+                        / GameTextInputBudget.MAX_LINE_CHARACTERS)
+                        - GameTextInputBudget.MAX_SCOREBOARD_LINES,
+                maximum));
+        tabValues.add("x");
+        ProbeList<String> tab = new ProbeList<>(tabValues);
 
         RawGameTextSnapshot snapshot = snapshot(
                 Observation.absent(), scoreboard, tab, List.of(), List.of(), List.of());
@@ -148,8 +162,8 @@ class RawGameTextSnapshotTest {
         assertTrue(snapshot.tabLines().isUnknown());
         assertEquals(List.of(new ParseDiagnostic("input.total", ParseDiagnosticCode.INPUT_LIMIT)),
                 snapshot.inputDiagnostics());
-        assertPreflightOnly(scoreboard, 32);
-        assertPreflightOnly(tab, 1);
+        assertPreflightOnly(scoreboard, GameTextInputBudget.MAX_SCOREBOARD_LINES);
+        assertPreflightOnly(tab, tabValues.size());
     }
 
     @Test

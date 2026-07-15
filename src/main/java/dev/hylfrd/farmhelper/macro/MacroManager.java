@@ -13,13 +13,27 @@ import java.util.List;
 import java.util.Objects;
 
 public final class MacroManager {
-    private final Macro activeMacro = new StandbyMacro();
+    private final Macro activeMacro;
+    private final Runnable acquisitionGuard;
     private MacroState state = MacroState.STOPPED;
     private PauseReason pauseReason = PauseReason.NONE;
     private WorldMode worldMode = WorldMode.NONE;
     private PlayerSnapshot playerSnapshot = PlayerSnapshot.unknown();
     private ClientSnapshot clientSnapshot = ClientSnapshot.unknown();
     private long runningTicks;
+
+    public MacroManager() {
+        this(new StandbyMacro(), () -> { });
+    }
+
+    public MacroManager(Runnable acquisitionGuard) {
+        this(new StandbyMacro(), acquisitionGuard);
+    }
+
+    MacroManager(Macro activeMacro, Runnable acquisitionGuard) {
+        this.activeMacro = Objects.requireNonNull(activeMacro, "activeMacro");
+        this.acquisitionGuard = Objects.requireNonNull(acquisitionGuard, "acquisitionGuard");
+    }
 
     public boolean enabled() {
         return state != MacroState.STOPPED;
@@ -63,18 +77,29 @@ public final class MacroManager {
     }
 
     public void start() {
+        acquisitionGuard.run();
         runningTicks = 0L;
         state = MacroState.RUNNING;
-        activeMacro.onStart();
+        try {
+            activeMacro.onStart();
+        } catch (RuntimeException | Error failure) {
+            state = MacroState.STOPPED;
+            pauseReason = PauseReason.NONE;
+            runningTicks = 0L;
+            throw failure;
+        }
     }
 
     public void stop() {
-        if (state != MacroState.STOPPED) {
-            activeMacro.onStop();
+        try {
+            if (state != MacroState.STOPPED) {
+                activeMacro.onStop();
+            }
+        } finally {
+            state = MacroState.STOPPED;
+            pauseReason = PauseReason.NONE;
+            runningTicks = 0L;
         }
-        state = MacroState.STOPPED;
-        pauseReason = PauseReason.NONE;
-        runningTicks = 0L;
     }
 
     public void tick(MacroContext context) {

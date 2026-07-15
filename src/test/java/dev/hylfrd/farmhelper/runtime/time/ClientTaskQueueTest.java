@@ -202,4 +202,16 @@ class ClientTaskQueueTest {
         assertThrows(IllegalArgumentException.class, () -> queue.cancel(foreign));
         assertThrows(IllegalArgumentException.class, () -> new TaskOwner("  "));
     }
+
+    @Test
+    void acquisitionGuardRejectsSchedulingWithoutLeavingPendingWork() {
+        ManualClock clock = new ManualClock();
+        ClientTaskQueue queue = new ClientTaskQueue(clock, () -> {
+            throw new IllegalStateException("fenced");
+        });
+
+        assertThrows(IllegalStateException.class,
+                () -> queue.schedule(new TaskOwner("owner"), 0L, () -> { }));
+        assertEquals(0, queue.pendingTaskCount());
+    }
 }

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MacroManagerTest {
     @Test
@@ -82,5 +83,26 @@ class MacroManagerTest {
         assertEquals(MacroState.PAUSED, manager.state());
         assertEquals(PauseReason.NO_WORLD, manager.pauseReason());
         assertEquals(0L, manager.runningTicks());
+    }
+
+    @Test
+    void throwingStopCallbackStillCommitsStoppedStateAndClearsPause() {
+        Macro throwing = new Macro() {
+            @Override public String id() { return "throwing"; }
+            @Override public void onStart() { }
+            @Override public void onStop() { throw new IllegalStateException("stop failed"); }
+            @Override public void tick(MacroContext context) { }
+        };
+        MacroManager manager = new MacroManager(throwing, () -> { });
+        manager.start();
+        manager.tick(new MacroContext(
+                false, false, PauseReason.NO_PLAYER, WorldMode.NONE, PlayerSnapshot.absent()));
+
+        assertThrows(IllegalStateException.class, manager::stop);
+
+        assertEquals(MacroState.STOPPED, manager.state());
+        assertEquals(PauseReason.NONE, manager.pauseReason());
+        assertEquals(0L, manager.runningTicks());
+        assertFalse(manager.enabled());
     }
 }

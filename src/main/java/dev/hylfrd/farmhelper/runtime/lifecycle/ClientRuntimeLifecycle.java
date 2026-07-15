@@ -12,7 +12,9 @@ public final class ClientRuntimeLifecycle {
     private long worldEpoch;
     private boolean worldPresent;
     private boolean screenObserved;
-    private Observation<ScreenSnapshot> screen = Observation.unknown();
+    private ScreenIdentity screen = ScreenIdentity.unknown();
+    private boolean connectionObserved;
+    private Observation.State connectionState = Observation.State.UNKNOWN;
 
     public ClientRuntimeLifecycle(Consumer<ClientCancellationReason> cancellation) {
         this.cancellation = Objects.requireNonNull(cancellation, "cancellation");
@@ -56,14 +58,27 @@ public final class ClientRuntimeLifecycle {
 
     public void observeScreen(Observation<ScreenSnapshot> screen) {
         Objects.requireNonNull(screen, "screen");
+        ScreenIdentity identity = ScreenIdentity.from(screen);
         if (!screenObserved) {
             screenObserved = true;
-            this.screen = screen;
+            this.screen = identity;
             return;
         }
-        if (!this.screen.equals(screen)) {
-            this.screen = screen;
+        if (!this.screen.equals(identity)) {
+            this.screen = identity;
             cancellation.accept(ClientCancellationReason.SCREEN_CHANGED);
+        }
+    }
+
+    /** Emits a boundary when a connection becomes absent/unknown, including first observation. */
+    public void observeConnection(Observation<?> connection) {
+        Objects.requireNonNull(connection, "connection");
+        Observation.State next = connection.state();
+        boolean changed = !connectionObserved || connectionState != next;
+        connectionObserved = true;
+        connectionState = next;
+        if (changed && next != Observation.State.PRESENT) {
+            cancellation.accept(ClientCancellationReason.CONNECTION_UNAVAILABLE);
         }
     }
 
@@ -73,5 +88,17 @@ public final class ClientRuntimeLifecycle {
             throw new IllegalStateException("world epoch exhausted");
         }
         worldEpoch++;
+    }
+
+    private record ScreenIdentity(Observation.State state, long identity) {
+        private static ScreenIdentity from(Observation<ScreenSnapshot> screen) {
+            return screen.isPresent()
+                    ? new ScreenIdentity(Observation.State.PRESENT, screen.get().identity())
+                    : new ScreenIdentity(screen.state(), 0L);
+        }
+
+        private static ScreenIdentity unknown() {
+            return new ScreenIdentity(Observation.State.UNKNOWN, 0L);
+        }
     }
 }

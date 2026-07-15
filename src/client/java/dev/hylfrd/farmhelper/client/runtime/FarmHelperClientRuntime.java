@@ -15,6 +15,7 @@ import dev.hylfrd.farmhelper.control.input.ReleaseReason;
 import dev.hylfrd.farmhelper.control.inventory.InventoryCancelReason;
 import dev.hylfrd.farmhelper.control.inventory.InventoryClickGuard;
 import dev.hylfrd.farmhelper.control.inventory.InventoryController;
+import dev.hylfrd.farmhelper.control.inventory.InventoryDiagnostic;
 import dev.hylfrd.farmhelper.control.inventory.InventoryExecutionResult;
 import dev.hylfrd.farmhelper.control.inventory.InventoryOperationToken;
 import dev.hylfrd.farmhelper.control.inventory.InventoryPort;
@@ -25,6 +26,7 @@ import dev.hylfrd.farmhelper.control.rotation.RotationCancelReason;
 import dev.hylfrd.farmhelper.runtime.FarmHelperRuntime;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientCancellationFanout;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientCancellationReason;
+import dev.hylfrd.farmhelper.runtime.lifecycle.ClientOwnershipFence;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientRuntimeLifecycle;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialSnapshotCapturePort;
@@ -41,9 +43,11 @@ import java.util.function.Consumer;
 public final class FarmHelperClientRuntime {
     private final FarmHelperConfigStore configStore;
     private final ConfigLoadResult configLoadResult;
+    private final Minecraft attachedClient;
+    private final ClientOwnershipFence ownershipFence;
     private final FarmHelperRuntime core;
-    private final ClientInputController input = new ClientInputController();
-    private final ClientRotationController rotation = new ClientRotationController();
+    private final ClientInputController input;
+    private final ClientRotationController rotation;
     private final InventoryController inventory;
     private final ClientCancellationFanout cancellationFanout;
     private final ClientRuntimeLifecycle lifecycle;
@@ -51,32 +55,50 @@ public final class FarmHelperClientRuntime {
 
     public FarmHelperClientRuntime() {
         this(FabricLoader.getInstance().getConfigDir().resolve(FarmHelper.MOD_ID + ".json"),
-                Minecraft.getInstance());
+                Minecraft.getInstance(), null, null);
     }
 
     FarmHelperClientRuntime(Path configPath) {
-        this(configPath, null);
+        this(configPath, null, UnavailableInventoryPort.INSTANCE, defaultDiagnostics());
     }
 
-    private FarmHelperClientRuntime(Path configPath, Minecraft client) {
+    FarmHelperClientRuntime(
+            Path configPath,
+            InventoryPort inventoryPort,
+            Consumer<InventoryDiagnostic> diagnostics) {
+        this(configPath, null, inventoryPort, diagnostics);
+    }
+
+    private FarmHelperClientRuntime(
+            Path configPath,
+            Minecraft client,
+            InventoryPort suppliedInventoryPort,
+            Consumer<InventoryDiagnostic> suppliedDiagnostics) {
+        attachedClient = client;
         configStore = new FarmHelperConfigStore(configPath);
         configLoadResult = configStore.load();
-        core = new FarmHelperRuntime(configLoadResult.config());
-        InventoryPort inventoryPort = client == null
-                ? UnavailableInventoryPort.INSTANCE
-                : new MinecraftInventoryPort(client);
+        ownershipFence = new ClientOwnershipFence();
+        core = new FarmHelperRuntime(configLoadResult.config(), ownershipFence::requireAcquisitionAllowed);
+        input = client == null
+                ? ClientInputController.detached(ownershipFence::requireAcquisitionAllowed)
+                : new ClientInputController(ownershipFence::requireAcquisitionAllowed);
+        rotation = new ClientRotationController(ownershipFence::requireAcquisitionAllowed);
+        InventoryPort inventoryPort = suppliedInventoryPort != null
+                ? suppliedInventoryPort
+                : new MinecraftInventoryPort(Objects.requireNonNull(client, "client"));
+        Consumer<InventoryDiagnostic> diagnostics = suppliedDiagnostics != null
+                ? suppliedDiagnostics
+                : defaultDiagnostics();
         inventory = new InventoryController(
                 core.taskQueue(), new ClientInventoryHotbarPort(input), inventoryPort,
-                diagnostic -> FarmHelper.LOGGER.warn("Inventory cancelled: {}", diagnostic.reason()));
+                diagnostics, ownershipFence::requireAcquisitionAllowed);
         cancellationFanout = new ClientCancellationFanout(
-                ignored -> {
-                    core.macroManager().stop();
-                    core.invalidateGameState();
-                },
-                ignored -> core.taskQueue().cancelAll(),
+                ignored -> core.macroManager().stop(),
+                ignored -> core.invalidateGameState(),
                 reason -> inventory.cancelActive(inventoryReason(reason)),
                 reason -> rotation.cancel(rotationReason(reason)),
-                reason -> input.releaseAll(inputReason(reason)));
+                reason -> input.releaseAll(inputReason(reason)),
+                ignored -> core.taskQueue().cancelAll());
         lifecycle = new ClientRuntimeLifecycle(this::cancelOwnership);
         spatialSnapshots = client == null
                 ? request -> Observation.unknown()
@@ -146,8 +168,19 @@ public final class FarmHelperClientRuntime {
     }
 
     public void stop(Minecraft client) {
-        Objects.requireNonNull(client, "client");
+        requireClientThread(client);
         cancelOwnership(ClientCancellationReason.MANUAL_STOP);
+    }
+
+    /** User-visible toggle; disabling always crosses the global MANUAL_STOP boundary. */
+    public boolean toggle() {
+        requireAttachedClientThread();
+        if (core.macroManager().enabled()) {
+            cancelOwnership(ClientCancellationReason.MANUAL_STOP);
+            return false;
+        }
+        core.macroManager().start();
+        return true;
     }
 
     public boolean reset(Minecraft client) {
@@ -169,28 +202,54 @@ public final class FarmHelperClientRuntime {
     }
 
     public void worldLoaded() {
+        requireAttachedClientThread();
+        ownershipFence.setAutomationReady(false);
         lifecycle.worldLoaded();
     }
 
     public void worldUnloaded() {
+        requireAttachedClientThread();
+        ownershipFence.setAutomationReady(false);
         lifecycle.worldUnloaded();
     }
 
     public void disconnected() {
+        requireAttachedClientThread();
+        ownershipFence.setAutomationReady(false);
         lifecycle.disconnected();
     }
 
     public void clientStopping() {
+        requireAttachedClientThread();
+        ownershipFence.setAutomationReady(false);
         lifecycle.clientStopping();
     }
 
     public void failed() {
+        requireAttachedClientThread();
+        ownershipFence.setAutomationReady(false);
         lifecycle.failed();
     }
 
+    /** Updates the persistent acquisition gate before the ordered runtime stages execute. */
+    public void observeConnection(Observation<?> connection) {
+        requireAttachedClientThread();
+        Objects.requireNonNull(connection, "connection");
+        ownershipFence.setAutomationReady(connection.isPresent());
+        lifecycle.observeConnection(connection);
+    }
+
     private void cancelOwnership(ClientCancellationReason reason) {
-        cancellationFanout.cancel(reason).ifPresent(failure ->
-                FarmHelper.LOGGER.error("FarmHelper cancellation {} completed with failures", reason, failure));
+        ClientOwnershipFence.Boundary boundary = ownershipFence.beginCancellation();
+        if (!boundary.owner()) {
+            return;
+        }
+        try {
+            cancellationFanout.cancel(reason).ifPresent(failure ->
+                    FarmHelper.LOGGER.error("FarmHelper cancellation {} completed with failures", reason, failure));
+        } finally {
+            ownershipFence.endCancellation(boundary);
+        }
     }
 
     private static InventoryCancelReason inventoryReason(ClientCancellationReason reason) {
@@ -198,7 +257,7 @@ public final class FarmHelperClientRuntime {
             case MANUAL_STOP -> InventoryCancelReason.REQUESTED;
             case SCREEN_CHANGED -> InventoryCancelReason.SCREEN_CHANGED;
             case WORLD_LOAD, WORLD_UNLOAD -> InventoryCancelReason.WORLD_CHANGED;
-            case DISCONNECT -> InventoryCancelReason.DISCONNECTED;
+            case DISCONNECT, CONNECTION_UNAVAILABLE -> InventoryCancelReason.DISCONNECTED;
             case EXCEPTION -> InventoryCancelReason.EXCEPTION;
             case CLIENT_STOP -> InventoryCancelReason.CLIENT_SHUTDOWN;
         };
@@ -209,7 +268,7 @@ public final class FarmHelperClientRuntime {
             case MANUAL_STOP -> RotationCancelReason.STOPPED;
             case SCREEN_CHANGED -> RotationCancelReason.SCREEN_CHANGED;
             case WORLD_LOAD, WORLD_UNLOAD -> RotationCancelReason.WORLD_CHANGED;
-            case DISCONNECT -> RotationCancelReason.DISCONNECTED;
+            case DISCONNECT, CONNECTION_UNAVAILABLE -> RotationCancelReason.DISCONNECTED;
             case EXCEPTION -> RotationCancelReason.EXCEPTION;
             case CLIENT_STOP -> RotationCancelReason.CLIENT_SHUTDOWN;
         };
@@ -220,7 +279,7 @@ public final class FarmHelperClientRuntime {
             case MANUAL_STOP -> ReleaseReason.STOP;
             case SCREEN_CHANGED -> ReleaseReason.SCREEN;
             case WORLD_LOAD, WORLD_UNLOAD -> ReleaseReason.WORLD_CHANGE;
-            case DISCONNECT -> ReleaseReason.DISCONNECT;
+            case DISCONNECT, CONNECTION_UNAVAILABLE -> ReleaseReason.DISCONNECT;
             case EXCEPTION -> ReleaseReason.EXCEPTION;
             case CLIENT_STOP -> ReleaseReason.EXIT;
         };
@@ -236,6 +295,23 @@ public final class FarmHelperClientRuntime {
             return;
         }
         FarmHelper.LOGGER.warn("FarmHelper configuration status {}: {}", result.status(), result.diagnostic());
+    }
+
+    private static Consumer<InventoryDiagnostic> defaultDiagnostics() {
+        return diagnostic -> FarmHelper.LOGGER.warn("Inventory cancelled: {}", diagnostic.reason());
+    }
+
+    private static void requireClientThread(Minecraft client) {
+        Objects.requireNonNull(client, "client");
+        if (!client.isSameThread()) {
+            throw new IllegalStateException("Runtime mutation must run on the client thread");
+        }
+    }
+
+    private void requireAttachedClientThread() {
+        if (attachedClient != null) {
+            requireClientThread(attachedClient);
+        }
     }
 
     private enum UnavailableInventoryPort implements InventoryPort {
