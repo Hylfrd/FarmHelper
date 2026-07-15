@@ -18,6 +18,7 @@ class FarmHelperRuntimeTest {
 
         assertNotSame(first.config(), second.config());
         assertNotSame(first.macroManager(), second.macroManager());
+        assertNotSame(first.taskQueue(), second.taskQueue());
         assertEquals(45.0F, first.config().targetYaw());
         assertEquals(0.0F, second.config().targetYaw());
         assertTrue(first.macroManager().enabled());

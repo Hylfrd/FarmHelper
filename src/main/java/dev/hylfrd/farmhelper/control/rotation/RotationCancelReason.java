@@ -4,8 +4,10 @@ package dev.hylfrd.farmhelper.control.rotation;
 public enum RotationCancelReason {
     OWNER_CANCELLED,
     STOPPED,
+    SCREEN_CHANGED,
     PLAYER_MISSING,
     WORLD_CHANGED,
     DISCONNECTED,
+    EXCEPTION,
     CLIENT_SHUTDOWN
 }

@@ -16,7 +16,10 @@ This document fixes the top-level ownership and dependency direction established
 
 - one common `FarmHelperRuntime`;
 - one `ClientInputController`;
-- one `ClientRotationController`.
+- one `ClientRotationController`;
+- one `InventoryController` backed by `MinecraftInventoryPort` and the managed hotbar adapter;
+- one deterministic client lifecycle and cancellation fanout;
+- one on-demand loaded-chunk spatial capture port.
 
 The client composition root also registers one `FarmHelperSettingsController`. It owns the native
 settings key mapping and opens a new per-screen draft session; it does not own configuration state.
@@ -24,7 +27,13 @@ settings key mapping and opens a new per-screen draft session; it does not own c
 `FarmHelperRuntime` owns:
 
 - one `FarmHelperConfig`;
-- one `MacroManager`.
+- one `MacroManager`;
+- one owner-cancellable `ClientTaskQueue`;
+- one `GameStateParser` and its current immutable parse result.
+
+The ordered client tick captures lifecycle and immutable client/text snapshots, publishes the
+current parse result, advances due tasks, delivers runtime behavior, advances rotation, and finally
+enforces input safety. Due stateful tasks therefore never observe the previous tick's GameState.
 
 Commands and tick callbacks borrow these services through constructor or registration parameters. They do not own mutable runtime state. There is no mutable service locator.
 

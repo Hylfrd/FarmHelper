@@ -106,6 +106,22 @@ class ClientTaskQueueTest {
     }
 
     @Test
+    void lifecycleCancellationRevokesEveryOwnerWithoutRunningCallbacks() {
+        ManualClock clock = new ManualClock();
+        ClientTaskQueue queue = new ClientTaskQueue(clock);
+        AtomicInteger callbacks = new AtomicInteger();
+        TaskHandle first = queue.schedule(new TaskOwner("macro"), 0L, callbacks::incrementAndGet);
+        TaskHandle second = queue.schedule(new TaskOwner("inventory"), 0L, callbacks::incrementAndGet);
+
+        assertEquals(2, queue.cancelAll());
+        assertEquals(0, queue.cancelAll());
+        assertEquals(0, queue.advance());
+        assertTrue(first.cancelled());
+        assertTrue(second.cancelled());
+        assertEquals(0, callbacks.get());
+    }
+
+    @Test
     void callbackSchedulingWaitsForNextAdvanceAndCancellationIsImmediate() {
         ManualClock clock = new ManualClock();
         ClientTaskQueue queue = new ClientTaskQueue(clock);

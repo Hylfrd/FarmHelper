@@ -4,6 +4,7 @@ import dev.hylfrd.farmhelper.control.RotationTask;
 import dev.hylfrd.farmhelper.control.input.ControlOwner;
 import dev.hylfrd.farmhelper.control.rotation.RotationCancelReason;
 import dev.hylfrd.farmhelper.control.rotation.RotationController;
+import dev.hylfrd.farmhelper.control.rotation.RotationHandle;
 import dev.hylfrd.farmhelper.control.rotation.RotationSnapshot;
 import dev.hylfrd.farmhelper.runtime.time.MonotonicClock;
 import dev.hylfrd.farmhelper.runtime.time.SystemMonotonicClock;
@@ -51,6 +52,18 @@ public final class ClientRotationController {
         return start(new MinecraftRotationView(client), targetYaw, targetPitch, durationMs);
     }
 
+    /** Owned domain entry used by macro/navigation consumers after capturing the current frame. */
+    public RotationHandle start(
+            ControlOwner owner,
+            float startYaw,
+            float startPitch,
+            float targetYaw,
+            float targetPitch,
+            long durationMs) {
+        return controller.start(Objects.requireNonNull(owner, "owner"), startYaw, startPitch,
+                targetYaw, targetPitch, durationMs);
+    }
+
     boolean start(RotationView view, float targetYaw, float targetPitch, long durationMs) {
         Objects.requireNonNull(view, "view");
         if (!view.playerPresent()) {
@@ -70,7 +83,7 @@ public final class ClientRotationController {
         cancel(RotationCancelReason.STOPPED);
     }
 
-    /** Explicit lifecycle hook reserved for S2-T8 callers without adding lifecycle wiring here. */
+    /** Cancels the active owned rotation for a concrete lifecycle reason. */
     public boolean cancel(RotationCancelReason reason) {
         Objects.requireNonNull(reason, "reason");
         return controller.snapshot().owner()

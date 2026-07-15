@@ -6,12 +6,13 @@ import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-/** Client-thread lifecycle state with one monotonically increasing world epoch. */
+/** Client-thread lifecycle state with deterministic world epochs and disconnect sequencing. */
 public final class ClientRuntimeLifecycle {
     private final Consumer<ClientCancellationReason> cancellation;
     private long worldEpoch;
+    private boolean worldPresent;
     private boolean screenObserved;
-    private Observation<String> screenType = Observation.unknown();
+    private Observation<ScreenSnapshot> screen = Observation.unknown();
 
     public ClientRuntimeLifecycle(Consumer<ClientCancellationReason> cancellation) {
         this.cancellation = Objects.requireNonNull(cancellation, "cancellation");
@@ -22,17 +23,26 @@ public final class ClientRuntimeLifecycle {
     }
 
     public void worldLoaded() {
+        if (worldPresent) {
+            worldUnloaded();
+        }
+        worldPresent = true;
         advanceWorldEpoch();
         cancellation.accept(ClientCancellationReason.WORLD_LOAD);
     }
 
     public void worldUnloaded() {
+        if (!worldPresent) {
+            return;
+        }
+        worldPresent = false;
         advanceWorldEpoch();
         cancellation.accept(ClientCancellationReason.WORLD_UNLOAD);
     }
 
+    /** Always emits WORLD_UNLOAD before DISCONNECT and advances the epoch at most once. */
     public void disconnected() {
-        advanceWorldEpoch();
+        worldUnloaded();
         cancellation.accept(ClientCancellationReason.DISCONNECT);
     }
 
@@ -46,18 +56,13 @@ public final class ClientRuntimeLifecycle {
 
     public void observeScreen(Observation<ScreenSnapshot> screen) {
         Objects.requireNonNull(screen, "screen");
-        Observation<String> nextType = switch (screen.state()) {
-            case PRESENT -> screen.get().type();
-            case ABSENT -> Observation.absent();
-            case UNKNOWN -> Observation.unknown();
-        };
         if (!screenObserved) {
             screenObserved = true;
-            screenType = nextType;
+            this.screen = screen;
             return;
         }
-        if (!screenType.equals(nextType)) {
-            screenType = nextType;
+        if (!this.screen.equals(screen)) {
+            this.screen = screen;
             cancellation.accept(ClientCancellationReason.SCREEN_CHANGED);
         }
     }

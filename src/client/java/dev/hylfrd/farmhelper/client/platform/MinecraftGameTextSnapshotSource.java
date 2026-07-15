@@ -19,8 +19,9 @@ import net.minecraft.world.scores.DisplaySlot;
 import net.minecraft.world.scores.Objective;
 import net.minecraft.world.scores.PlayerScoreEntry;
 import net.minecraft.world.scores.Scoreboard;
+import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.world.level.GameType;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -28,11 +29,16 @@ import java.util.Objects;
 
 /** Bounded, collection-only adapter for parser inputs. No Minecraft object escapes this class. */
 public final class MinecraftGameTextSnapshotSource implements ClientGameTextSource {
+    private static final int VANILLA_RENDERED_TAB_LIMIT = 80;
+    private static final Comparator<PlayerInfo> TAB_RENDER_ORDER = Comparator
+            .comparingInt((PlayerInfo info) -> -info.getTabListOrder())
+            .thenComparingInt(info -> info.getGameMode() == GameType.SPECTATOR ? 1 : 0)
+            .thenComparing(info -> info.getTeam() == null ? "" : info.getTeam().getName())
+            .thenComparing(info -> info.getProfile().name(), String.CASE_INSENSITIVE_ORDER);
+
     private final Minecraft client;
-    private final ArrayDeque<RawChatMessage> chat = new ArrayDeque<>();
-    private long nextChatSequence;
+    private final BoundedChatBuffer chat = new BoundedChatBuffer();
     private long generation;
-    private boolean chatOverflow;
     private boolean worldObserved;
     private Observation<?> previousWorld = Observation.unknown();
 
@@ -44,12 +50,18 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
     public void acceptChat(String channel, String text) {
         Objects.requireNonNull(channel, "channel");
         Objects.requireNonNull(text, "text");
-        if (!client.isSameThread() || nextChatSequence == Long.MAX_VALUE
-                || chat.size() >= GameTextInputBudget.MAX_CHAT_MESSAGES) {
-            chatOverflow = true;
+        if (!client.isSameThread()) {
+            chat.overflow();
             return;
         }
-        chat.addLast(new RawChatMessage(nextChatSequence++, channel, text));
+        chat.accept(channel, text);
+    }
+
+    @Override
+    public void reset() {
+        chat.reset();
+        worldObserved = false;
+        previousWorld = Observation.unknown();
     }
 
     @Override
@@ -67,8 +79,7 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
                     scoreboardTitle(), scoreboardLines(), tabLines(), tabFooter(), vacuumLore(),
                     drainChat(), playerFacts(), worldTransition(clientSnapshot), currentGeneration);
         } catch (RuntimeException exception) {
-            chat.clear();
-            chatOverflow = false;
+            chat.reset();
             return RawGameTextSnapshot.unknown(currentGeneration);
         }
     }
@@ -80,7 +91,7 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
         Objective objective = client.level.getScoreboard().getDisplayObjective(DisplaySlot.SIDEBAR);
         return objective == null
                 ? Observation.absent()
-                : Observation.present(objective.getDisplayName().getString());
+                : bounded(objective.getDisplayName());
     }
 
     private Observation<List<String>> scoreboardLines() {
@@ -101,9 +112,15 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
         if (entries.size() > GameTextInputBudget.MAX_SCOREBOARD_LINES) {
             return Observation.unknown();
         }
-        return Observation.present(entries.stream()
-                .map(entry -> entry.ownerName().getString())
-                .toList());
+        List<String> lines = new ArrayList<>(entries.size());
+        for (PlayerScoreEntry entry : entries) {
+            Observation<String> line = visibleScoreboardLine(scoreboard, entry);
+            if (!line.isPresent()) {
+                return Observation.unknown();
+            }
+            lines.add(line.get());
+        }
+        return Observation.present(lines);
     }
 
     private Observation<List<String>> tabLines() {
@@ -111,12 +128,20 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
         if (connection == null) {
             return Observation.absent();
         }
-        List<String> lines = new ArrayList<>();
-        for (PlayerInfo info : connection.getListedOnlinePlayers()) {
-            if (lines.size() == GameTextInputBudget.MAX_TAB_LINES) {
+        if (connection.getListedOnlinePlayers().size() > GameTextInputBudget.MAX_TAB_LINES) {
+            return Observation.unknown();
+        }
+        List<PlayerInfo> rendered = connection.getListedOnlinePlayers().stream()
+                .sorted(TAB_RENDER_ORDER)
+                .limit(VANILLA_RENDERED_TAB_LIMIT)
+                .toList();
+        List<String> lines = new ArrayList<>(rendered.size());
+        for (PlayerInfo info : rendered) {
+            Observation<String> line = bounded(client.gui.getTabList().getNameForDisplay(info));
+            if (!line.isPresent()) {
                 return Observation.unknown();
             }
-            lines.add(client.gui.getTabList().getNameForDisplay(info).getString());
+            lines.add(line.get());
         }
         return Observation.present(lines);
     }
@@ -130,10 +155,18 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
         if (footer == null) {
             return Observation.present(List.of());
         }
-        List<String> lines = footer.getString().lines()
+        int characterLimit = Math.toIntExact(Math.min(GameTextInputBudget.MAX_TOTAL_CHARACTERS,
+                GameTextInputBudget.MAX_TAB_FOOTER_LINES
+                        * (long) (GameTextInputBudget.MAX_LINE_CHARACTERS + 1)));
+        String value = footer.getString(characterLimit + 1);
+        if (value.length() > characterLimit) {
+            return Observation.unknown();
+        }
+        List<String> lines = value.lines()
                 .limit(GameTextInputBudget.MAX_TAB_FOOTER_LINES + 1L)
                 .toList();
         return lines.size() > GameTextInputBudget.MAX_TAB_FOOTER_LINES
+                || lines.stream().anyMatch(line -> line.length() > GameTextInputBudget.MAX_LINE_CHARACTERS)
                 ? Observation.unknown()
                 : Observation.present(lines);
     }
@@ -153,18 +186,19 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
         if (lore.lines().size() > GameTextInputBudget.MAX_VACUUM_LORE_LINES) {
             return Observation.unknown();
         }
-        return Observation.present(lore.lines().stream().map(Component::getString).toList());
+        List<String> lines = new ArrayList<>(lore.lines().size());
+        for (Component component : lore.lines()) {
+            Observation<String> line = bounded(component);
+            if (!line.isPresent()) {
+                return Observation.unknown();
+            }
+            lines.add(line.get());
+        }
+        return Observation.present(lines);
     }
 
     private Observation<List<RawChatMessage>> drainChat() {
-        if (chatOverflow) {
-            chat.clear();
-            chatOverflow = false;
-            return Observation.unknown();
-        }
-        List<RawChatMessage> drained = List.copyOf(chat);
-        chat.clear();
-        return Observation.present(drained);
+        return chat.drain();
     }
 
     private PlayerFacts playerFacts() {
@@ -185,5 +219,24 @@ public final class MinecraftGameTextSnapshotSource implements ClientGameTextSour
         worldObserved = true;
         previousWorld = current;
         return Observation.present(transition);
+    }
+
+    static Observation<String> visibleScoreboardLine(Scoreboard scoreboard, PlayerScoreEntry entry) {
+        PlayerTeam team = scoreboard.getPlayersTeam(entry.owner());
+        return bounded(PlayerTeam.formatNameForTeam(team, entry.ownerName()));
+    }
+
+    static Comparator<PlayerInfo> tabRenderOrder() {
+        return TAB_RENDER_ORDER;
+    }
+
+    static Observation<String> bounded(Component component) {
+        if (component == null) {
+            return Observation.unknown();
+        }
+        String value = component.getString(GameTextInputBudget.MAX_LINE_CHARACTERS + 1);
+        return value.length() > GameTextInputBudget.MAX_LINE_CHARACTERS
+                ? Observation.unknown()
+                : Observation.present(value);
     }
 }

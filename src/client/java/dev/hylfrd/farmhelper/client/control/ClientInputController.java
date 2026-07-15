@@ -83,7 +83,7 @@ public final class ClientInputController {
         controller.releaseAll(reason);
     }
 
-    /** Compatibility bridge for the current composition root until lifecycle wiring moves to S2-T8. */
+    /** Compatibility bridge for command callers that still pass the current client. */
     public void releaseAll(Minecraft client) {
         Objects.requireNonNull(client, "client");
         releaseAll(ReleaseReason.STOP);

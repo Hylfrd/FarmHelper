@@ -30,22 +30,26 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.LongSupplier;
 
 /**
- * Unwired client-thread capture adapter. It observes only requested blocks in already-loaded FULL
+ * On-demand client-thread capture adapter. It observes only requested blocks in already-loaded FULL
  * chunks and never asks Minecraft to create or load a chunk.
  */
 public final class ClientSpatialSnapshotCapture implements SpatialSnapshotCapturePort {
     private final Minecraft client;
+    private final LongSupplier currentWorldEpoch;
 
-    public ClientSpatialSnapshotCapture(Minecraft client) {
+    public ClientSpatialSnapshotCapture(Minecraft client, LongSupplier currentWorldEpoch) {
         this.client = Objects.requireNonNull(client, "client");
+        this.currentWorldEpoch = Objects.requireNonNull(currentWorldEpoch, "currentWorldEpoch");
     }
 
     @Override
     public Observation<SpatialSnapshot> capture(SpatialCaptureRequest request) {
         Objects.requireNonNull(request, "request");
-        if (!client.isSameThread() || client.level == null || client.player == null) {
+        if (!client.isSameThread() || client.level == null || client.player == null
+                || request.worldEpoch() != currentWorldEpoch.getAsLong()) {
             return Observation.unknown();
         }
         try {

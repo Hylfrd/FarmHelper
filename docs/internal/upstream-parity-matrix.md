@@ -211,7 +211,7 @@
 | `MixinSoundManager` | Failsafe 声音音量/静音调整 | 本地声音服务与失败隔离；S8-T4 |
 | `fml.MixinFMLHandshakeMessage` | 从 FML 握手 mod list 隐藏 FarmHelper | **已确认删除**；Forge/FML 遗留且不属于保留行为 |
 | `gui.AccessorGuiEditSign` | 自动输入/确认 Sign（Rancher speed 等） | 用现代 Screen/Menu 适配，必要时窄 Accessor；S2-T6/S7-T6 |
-| `gui.IGuiPlayerTabOverlayAccessor` | 读取 Tab header/footer | 用现代 player-list API/网络快照；S2-T5 |
+| `gui.IGuiPlayerTabOverlayAccessor` | 读取 Tab header/footer | Tab 列表用现代公开 player-list API；26.1.2 footer 无公开 getter，保留一个只读 footer Accessor，唯一消费者为有界 GameState parser 输入；S2-T5 |
 | `MixinGuiContainer` | 绘制后与库存按键事件 | Screen callback/adapter；S2-T6/S2-T8 |
 | `MixinGuiDisconnected` | AutoReconnect 倒计时和按钮 | 保留本地重连行为，使用现代 Screen；S6-T7/S7-T13 |
 | `MixinGuiMainMenu` | 显示 Welcome GUI | 不属于确认删除；保留本地安全提示意图与否待 S8 UI 决策，禁止外部控制 |

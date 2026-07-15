@@ -7,6 +7,7 @@ public enum InventoryCancelReason {
     WORLD_CHANGED,
     DISCONNECTED,
     CLIENT_SHUTDOWN,
+    EXCEPTION,
     TIMEOUT,
     OWNER_CONFLICT,
     STALE_TOKEN,

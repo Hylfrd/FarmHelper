@@ -1,5 +1,5 @@
 /**
- * Unwired Fabric/Minecraft 26.1.2 inventory adapters.
+ * Owned Fabric/Minecraft 26.1.2 inventory adapters.
  *
  * <p>These adapters migrate recognition from upstream
  * {@code src/main/java/com/jelly/farmhelperv2/util/InventoryUtils.java} at fixed commit

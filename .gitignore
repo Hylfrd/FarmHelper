@@ -1,6 +1,7 @@
 .idea/
 .vscode/
 run/
+logs/
 build/
 .gradle/
 *.swp

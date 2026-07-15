@@ -7,7 +7,9 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 /**
  * Narrow read-only bridge for the tab footer. Minecraft 26.1.2 exposes footer mutation but no
- * getter, and Fabric has no public vanilla tab-list packet observation callback.
+ * getter, and Fabric has no public vanilla tab-list packet observation callback. Its sole consumer
+ * is {@code MinecraftGameTextSnapshotSource.tabFooter()}, which bounds the text before delivering
+ * it to {@code GameStateParser} for Garden, Jacob, economy, pest, and buff observations.
  */
 @Mixin(PlayerTabOverlay.class)
 public interface PlayerTabOverlayAccessor {

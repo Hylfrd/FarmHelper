@@ -1,5 +1,5 @@
 /**
- * Unwired Fabric client capture for the Minecraft-free spatial runtime.
+ * On-demand Fabric client capture for the Minecraft-free spatial runtime.
  *
  * <p>Collision behavior was studied from fixed upstream
  * {@code src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java} at commit

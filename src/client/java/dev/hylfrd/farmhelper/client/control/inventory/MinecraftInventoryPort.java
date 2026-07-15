@@ -19,6 +19,7 @@ import dev.hylfrd.farmhelper.runtime.snapshot.ItemSummary;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.ResourceIdentifier;
 import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
+import dev.hylfrd.farmhelper.runtime.gamestate.GameTextInputBudget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.player.LocalPlayer;
@@ -40,8 +41,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Minecraft 26.1.2 inventory adapter. It is deliberately not wired into the client composition
- * root until S2-T8.
+ * Minecraft 26.1.2 inventory adapter, owned by the client composition root.
  *
  * <p>{@link #executeGuardedClick(InventoryClickGuard)} performs observation, identity/revision,
  * slot/item/count/component/cursor eligibility checks, and {@code handleContainerInput} in one
@@ -64,7 +64,7 @@ public final class MinecraftInventoryPort implements InventoryPort {
         this(Minecraft.getInstance());
     }
 
-    MinecraftInventoryPort(Minecraft client) {
+    public MinecraftInventoryPort(Minecraft client) {
         this.client = Objects.requireNonNull(client, "client");
     }
 
@@ -222,9 +222,9 @@ public final class MinecraftInventoryPort implements InventoryPort {
         Observation<HotbarSelection> selected = Observation.present(
                 new HotbarSelection(player.getInventory().getSelectedSlot()));
         ScreenSnapshot screenSummary = new ScreenSnapshot(
+                epoch,
                 Observation.present(type),
-                Observation.present(ItemComponentSummary.sanitize(
-                        screen.getTitle().getString(), ItemComponentSummary.MAX_NAME_CODE_POINTS)));
+                boundedScreenTitle(screen.getTitle()));
         RawContentFingerprint content = new RawContentFingerprint(
                 screenSummary, slots, rawSlots, menu.getCarried(), cursor, selected);
         if (previousContent != null && !previousContent.sameAs(content)) {
@@ -312,11 +312,33 @@ public final class MinecraftInventoryPort implements InventoryPort {
     }
 
     private static Optional<String> componentText(Component component) {
-        return Optional.ofNullable(component).map(Component::getString);
+        if (component == null) {
+            return Optional.empty();
+        }
+        int characterLimit = ItemComponentSummary.MAX_NAME_CODE_POINTS * 2;
+        return Optional.of(ItemComponentSummary.sanitize(
+                component.getString(characterLimit), ItemComponentSummary.MAX_NAME_CODE_POINTS));
     }
 
     private static List<String> lore(ItemLore lore) {
-        return lore == null ? List.of() : lore.lines().stream().map(Component::getString).toList();
+        if (lore == null) {
+            return List.of();
+        }
+        int characterLimit = ItemComponentSummary.MAX_LORE_CODE_POINTS * 2;
+        return lore.lines().stream()
+                .limit(ItemComponentSummary.MAX_LORE_LINES)
+                .map(component -> component.getString(characterLimit))
+                .toList();
+    }
+
+    private static Observation<String> boundedScreenTitle(Component component) {
+        if (component == null) {
+            return Observation.unknown();
+        }
+        String value = component.getString(GameTextInputBudget.MAX_LINE_CHARACTERS + 1);
+        return value.length() > GameTextInputBudget.MAX_LINE_CHARACTERS
+                ? Observation.unknown()
+                : Observation.present(value);
     }
 
     private static ClickEncoding encode(InventoryClick click) {

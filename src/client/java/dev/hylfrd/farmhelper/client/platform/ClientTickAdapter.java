@@ -1,163 +1,237 @@
 package dev.hylfrd.farmhelper.client.platform;
 
 import dev.hylfrd.farmhelper.client.runtime.FarmHelperClientRuntime;
+import dev.hylfrd.farmhelper.control.input.ReleaseReason;
 import dev.hylfrd.farmhelper.macro.MacroContext;
 import dev.hylfrd.farmhelper.macro.MacroState;
 import dev.hylfrd.farmhelper.macro.PauseReason;
 import dev.hylfrd.farmhelper.macro.WorldMode;
+import dev.hylfrd.farmhelper.platform.FarmHelper;
+import dev.hylfrd.farmhelper.runtime.ClientTickPipeline;
+import dev.hylfrd.farmhelper.runtime.gamestate.GameStateParseResult;
+import dev.hylfrd.farmhelper.runtime.gamestate.GameTextInputBudget;
+import dev.hylfrd.farmhelper.runtime.gamestate.RawGameTextSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ConnectionSnapshot;
-import dev.hylfrd.farmhelper.runtime.snapshot.ItemSummary;
-import dev.hylfrd.farmhelper.runtime.snapshot.MotionSnapshot;
-import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.PositionSnapshot;
-import dev.hylfrd.farmhelper.runtime.snapshot.ResourceIdentifier;
 import dev.hylfrd.farmhelper.runtime.snapshot.RotationSnapshot;
-import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
-import dev.hylfrd.farmhelper.runtime.snapshot.StatusEffectSummary;
-import dev.hylfrd.farmhelper.runtime.snapshot.WorldSnapshot;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLevelEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.network.chat.Component;
 
-import java.util.Comparator;
-import java.util.List;
+import java.util.Objects;
 
-/** Adapts Fabric client ticks and Minecraft state into the common runtime model. */
-public final class ClientTickAdapter {
-    private ClientTickAdapter() {
+/** One ordered client-thread adapter for every active P0 runtime consumer. */
+public final class ClientTickAdapter implements ClientTickPipeline.Actions {
+    private final Minecraft client;
+    private final FarmHelperClientRuntime runtime;
+    private final ClientSnapshotCapture snapshots;
+    private final ClientGameTextSource gameText;
+    private final ClientTickPipeline pipeline;
+    private ClientLevel observedLevel;
+    private boolean disconnected;
+
+    ClientTickAdapter(
+            Minecraft client,
+            FarmHelperClientRuntime runtime,
+            ClientSnapshotCapture snapshots,
+            ClientGameTextSource gameText,
+            ClientTickPipeline pipeline) {
+        this.client = Objects.requireNonNull(client, "client");
+        this.runtime = Objects.requireNonNull(runtime, "runtime");
+        this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
+        this.gameText = Objects.requireNonNull(gameText, "gameText");
+        this.pipeline = Objects.requireNonNull(pipeline, "pipeline");
     }
 
     public static void register(FarmHelperClientRuntime runtime) {
-        ClientTickAdapter adapter = new ClientTickAdapter();
-        ClientTickEvents.END_CLIENT_TICK.register(client -> adapter.tick(client, runtime));
+        Minecraft client = Minecraft.getInstance();
+        ClientTickAdapter adapter = new ClientTickAdapter(
+                client, runtime, new ClientSnapshotCapture(),
+                new MinecraftGameTextSnapshotSource(client), new ClientTickPipeline());
+
+        ClientTickEvents.END_CLIENT_TICK.register(ignored -> adapter.tick());
+        ClientLevelEvents.AFTER_CLIENT_LEVEL_CHANGE.register(
+                (ignored, level) -> adapter.dispatch(() -> adapter.observeLevel(level, true)));
+        ClientPlayConnectionEvents.DISCONNECT.register(
+                (handler, ignored) -> adapter.dispatch(adapter::disconnect));
+        ClientReceiveMessageEvents.CHAT.register((message, signed, profile, parameters, time) ->
+                adapter.dispatch(() -> adapter.acceptChat("chat", message)));
+        ClientReceiveMessageEvents.GAME.register((message, overlay) ->
+                adapter.dispatch(() -> adapter.acceptChat(overlay ? "overlay" : "game", message)));
+        ClientLifecycleEvents.CLIENT_STOPPING.register(
+                ignored -> adapter.dispatch(adapter::clientStopping));
     }
 
-    private void tick(Minecraft client, FarmHelperClientRuntime runtime) {
-        boolean worldReady = client.level != null;
-        boolean playerReady = worldReady && client.player != null;
-        boolean screenOpen = client.screen != null;
-        PauseReason pauseReason = pauseReason(worldReady, playerReady, screenOpen);
-        WorldMode worldMode = worldMode(client, worldReady);
-        dev.hylfrd.farmhelper.macro.PlayerSnapshot legacyPlayerSnapshot = playerReady
-                ? new dev.hylfrd.farmhelper.macro.PlayerSnapshot(
-                        client.player.getX(),
-                        client.player.getY(),
-                        client.player.getZ(),
-                        client.player.getYRot(),
-                        client.player.getXRot())
-                : dev.hylfrd.farmhelper.macro.PlayerSnapshot.absent();
-        ClientSnapshot clientSnapshot = snapshot(client, worldReady, playerReady);
+    private void dispatch(Runnable action) {
+        if (client.isSameThread()) {
+            runBoundary(action);
+        } else {
+            client.execute(() -> runBoundary(action));
+        }
+    }
 
-        runtime.core().macroManager().tick(clientSnapshot, new MacroContext(
-                playerReady,
-                screenOpen,
-                pauseReason,
-                worldMode,
-                legacyPlayerSnapshot));
+    private void runBoundary(Runnable action) {
+        try {
+            action.run();
+        } catch (RuntimeException | Error failure) {
+            runtime.failed();
+            FarmHelper.LOGGER.error("FarmHelper client event failed", failure);
+        }
+    }
 
+    private void tick() {
+        if (!client.isSameThread()) {
+            dispatch(this::tick);
+            return;
+        }
+        pipeline.tick(this).ifPresent(failure -> FarmHelper.LOGGER.error(
+                "FarmHelper tick failed during {}", failure.stage(), failure.cause()));
+    }
+
+    private void observeLevel(ClientLevel current, boolean explicitLoad) {
+        if (explicitLoad) {
+            disconnected = false;
+        } else if (disconnected) {
+            return;
+        }
+        if (current == observedLevel) {
+            return;
+        }
+        if (observedLevel != null) {
+            runtime.worldUnloaded();
+            gameText.reset();
+        }
+        observedLevel = current;
+        if (current != null) {
+            runtime.worldLoaded();
+            gameText.reset();
+        }
+    }
+
+    private void disconnect() {
+        disconnected = true;
+        observedLevel = null;
+        gameText.reset();
+        runtime.disconnected();
+    }
+
+    private void clientStopping() {
+        disconnected = true;
+        observedLevel = null;
+        gameText.reset();
+        runtime.clientStopping();
+    }
+
+    private void acceptChat(String channel, Component message) {
+        String bounded = message.getString(GameTextInputBudget.MAX_LINE_CHARACTERS + 1);
+        gameText.acceptChat(channel, bounded);
+    }
+
+    @Override
+    public void observeClientLifecycle() {
+        observeLevel(client.level, false);
+    }
+
+    @Override
+    public ClientSnapshot captureClientSnapshot() {
+        return snapshots.capture(client, runtime.lifecycle().worldEpoch());
+    }
+
+    @Override
+    public void observeSnapshotLifecycle(ClientSnapshot snapshot) {
+        runtime.lifecycle().observeScreen(snapshot.screen());
+    }
+
+    @Override
+    public RawGameTextSnapshot captureGameText(ClientSnapshot snapshot) {
+        return gameText.snapshot(snapshot);
+    }
+
+    @Override
+    public GameStateParseResult parseGameState(ClientSnapshot snapshot, RawGameTextSnapshot raw) {
+        return runtime.core().parseGameState(snapshot, raw);
+    }
+
+    @Override
+    public void advanceTaskQueue() {
+        runtime.core().taskQueue().advance();
+    }
+
+    @Override
+    public void deliverRuntimeTick(ClientSnapshot snapshot, GameStateParseResult gameState) {
+        runtime.core().macroManager().tick(snapshot, macroContext(snapshot));
+    }
+
+    @Override
+    public void tickRotation() {
         runtime.rotation().tick(client);
-        if (shouldReleaseInputs(screenOpen, runtime)) {
-            runtime.input().releaseAll(client);
+    }
+
+    @Override
+    public void enforceInputSafety(ClientSnapshot snapshot) {
+        ReleaseReason reason = unsafeReason(snapshot);
+        if (reason != null) {
+            runtime.input().releaseAll(reason);
         }
     }
 
-    private boolean shouldReleaseInputs(boolean screenOpen, FarmHelperClientRuntime runtime) {
-        return screenOpen
-                || runtime.rotation().rotating()
-                || runtime.core().macroManager().state() != MacroState.RUNNING;
+    @Override
+    public void onFailure(ClientTickPipeline.Failure failure) {
+        runtime.failed();
     }
 
-    private PauseReason pauseReason(boolean worldReady, boolean playerReady, boolean screenOpen) {
-        if (!worldReady) {
-            return PauseReason.NO_WORLD;
-        }
-        if (!playerReady) {
-            return PauseReason.NO_PLAYER;
-        }
-        if (screenOpen) {
-            return PauseReason.SCREEN_OPEN;
-        }
-        return PauseReason.NONE;
+    private MacroContext macroContext(ClientSnapshot snapshot) {
+        boolean worldReady = snapshot.world().isPresent();
+        boolean playerReady = snapshot.player().isPresent();
+        boolean screenOpenOrUnknown = !snapshot.screen().isAbsent();
+        PauseReason pauseReason = !worldReady ? PauseReason.NO_WORLD
+                : !playerReady ? PauseReason.NO_PLAYER
+                : screenOpenOrUnknown ? PauseReason.SCREEN_OPEN
+                : PauseReason.NONE;
+        WorldMode worldMode = snapshot.connection().isPresent()
+                ? switch (snapshot.connection().get().mode()) {
+                    case SINGLEPLAYER -> WorldMode.SINGLEPLAYER;
+                    case MULTIPLAYER -> WorldMode.MULTIPLAYER;
+                }
+                : WorldMode.NONE;
+        return new MacroContext(playerReady, screenOpenOrUnknown, pauseReason, worldMode,
+                legacyPlayer(snapshot.player().isPresent() ? snapshot.player().get() : null));
     }
 
-    private WorldMode worldMode(Minecraft client, boolean worldReady) {
-        if (!worldReady) {
-            return WorldMode.NONE;
+    private static dev.hylfrd.farmhelper.macro.PlayerSnapshot legacyPlayer(PlayerSnapshot player) {
+        if (player == null) {
+            return dev.hylfrd.farmhelper.macro.PlayerSnapshot.absent();
         }
-        return client.hasSingleplayerServer() ? WorldMode.SINGLEPLAYER : WorldMode.MULTIPLAYER;
-    }
-
-    private ClientSnapshot snapshot(Minecraft client, boolean worldReady, boolean playerReady) {
-        Observation<WorldSnapshot> world = worldReady
-                ? Observation.present(new WorldSnapshot(Observation.present(identifier(
-                        client.level.dimension().identifier()))))
-                : Observation.absent();
-        Observation<PlayerSnapshot> player = playerReady
-                ? Observation.present(playerSnapshot(client.player))
-                : Observation.absent();
-        Observation<ConnectionSnapshot> connection = connectionSnapshot(client, worldReady);
-        Observation<ScreenSnapshot> screen = client.screen == null
-                ? Observation.absent()
-                : Observation.present(new ScreenSnapshot(
-                        Observation.present(client.screen.getClass().getName()),
-                        Observation.present(client.screen.getTitle().getString())));
-        return new ClientSnapshot(player, world, connection, screen);
-    }
-
-    private Observation<ConnectionSnapshot> connectionSnapshot(Minecraft client, boolean worldReady) {
-        if (!worldReady) {
-            return Observation.absent();
+        if (!player.position().isPresent() || !player.rotation().isPresent()) {
+            return dev.hylfrd.farmhelper.macro.PlayerSnapshot.unknown();
         }
-        if (client.hasSingleplayerServer()) {
-            return Observation.present(ConnectionSnapshot.singleplayer());
+        PositionSnapshot position = player.position().get();
+        RotationSnapshot rotation = player.rotation().get();
+        return new dev.hylfrd.farmhelper.macro.PlayerSnapshot(
+                position.x(), position.y(), position.z(), rotation.yaw(), rotation.pitch());
+    }
+
+    private ReleaseReason unsafeReason(ClientSnapshot snapshot) {
+        if (!snapshot.screen().isAbsent()) {
+            return ReleaseReason.SCREEN;
         }
-        if (client.getConnection() != null) {
-            return Observation.present(ConnectionSnapshot.multiplayer());
+        if (!snapshot.world().isPresent() || !snapshot.player().isPresent()
+                || !snapshot.connection().isPresent()) {
+            return ReleaseReason.WORLD_CHANGE;
         }
-        return Observation.unknown();
-    }
-
-    private PlayerSnapshot playerSnapshot(LocalPlayer player) {
-        Vec3 velocity = player.getDeltaMovement();
-        ItemStack mainHand = player.getMainHandItem();
-        Observation<ItemSummary> mainHandItem = mainHand.isEmpty()
-                ? Observation.absent()
-                : Observation.present(new ItemSummary(
-                        identifier(BuiltInRegistries.ITEM.getKey(mainHand.getItem())),
-                        mainHand.getCount()));
-        List<StatusEffectSummary> effects = player.getActiveEffects().stream()
-                .map(this::statusEffectSummary)
-                .sorted(Comparator.comparing(effect -> effect.identifier().toString()))
-                .toList();
-        return new PlayerSnapshot(
-                Observation.present(new PositionSnapshot(player.getX(), player.getY(), player.getZ())),
-                Observation.present(new MotionSnapshot(velocity.x, velocity.y, velocity.z)),
-                Observation.present(new RotationSnapshot(player.getYRot(), player.getXRot())),
-                mainHandItem,
-                Observation.present(effects));
-    }
-
-    private StatusEffectSummary statusEffectSummary(MobEffectInstance effect) {
-        Identifier effectIdentifier = effect.getEffect().unwrapKey()
-                .map(key -> key.identifier())
-                .orElseGet(() -> BuiltInRegistries.MOB_EFFECT.getKey(effect.getEffect().value()));
-        return new StatusEffectSummary(
-                identifier(effectIdentifier),
-                effect.getAmplifier(),
-                effect.getDuration(),
-                effect.isAmbient(),
-                effect.isVisible(),
-                effect.showIcon());
-    }
-
-    private ResourceIdentifier identifier(Identifier identifier) {
-        return new ResourceIdentifier(identifier.getNamespace(), identifier.getPath());
+        if (runtime.rotation().rotating()) {
+            return ReleaseReason.ROTATION_CONFLICT;
+        }
+        if (runtime.core().macroManager().state() != MacroState.RUNNING) {
+            return ReleaseReason.PAUSE;
+        }
+        return null;
     }
 }
