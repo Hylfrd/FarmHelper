@@ -61,6 +61,41 @@ class FarmHelperCommandTreeTest {
     }
 
     @Test
+    void bothRootsDelegateEveryMacroAndRewarpCommandExactlyOnce() throws CommandSyntaxException {
+        for (String root : List.of("farmhelper", "fh")) {
+            for (String action : List.of("start", "pause", "resume", "stop")) {
+                assertEquals(1, execute(root + " macro " + action));
+            }
+            for (int mode : List.of(0, 1, 2, 5, 6, 9)) {
+                assertEquals(1, execute(root + " macro mode " + mode));
+                assertEquals("mode:" + mode, feedback.getLast());
+            }
+            assertEquals(1, execute(root + " spawn set"));
+            assertEquals(1, execute(root + " rewarp add"));
+            assertEquals(1, execute(root + " rewarp remove"));
+            assertEquals(1, execute(root + " rewarp clear"));
+        }
+
+        for (String call : List.of(
+                "macro-start", "macro-pause", "macro-resume", "macro-stop",
+                "spawn-set", "rewarp-add", "rewarp-remove", "rewarp-clear")) {
+            assertEquals(2, service.calls.stream().filter(call::equals).count(), call);
+        }
+        for (int mode : List.of(0, 1, 2, 5, 6, 9)) {
+            assertEquals(2, service.calls.stream().filter(("mode:" + mode)::equals).count());
+        }
+    }
+
+    @Test
+    void invalidMappedModesReturnZeroWithoutCommandOwnedState() throws CommandSyntaxException {
+        for (int mode : List.of(3, 4, 7, 8)) {
+            assertEquals(0, execute("farmhelper macro mode " + mode));
+            assertEquals("invalid-mode:" + mode, feedback.getLast());
+            assertEquals(0, execute("fh macro mode " + mode));
+        }
+    }
+
+    @Test
     void invalidArgumentsNeverReachAServiceOrLeavePartialState() {
         int callsBefore = service.calls.size();
 
@@ -92,6 +127,20 @@ class FarmHelperCommandTreeTest {
         assertEquals(List.of("diagnostics"), rootSuggestions.stream()
                 .map(suggestion -> suggestion.getText())
                 .toList());
+
+        for (String root : List.of("farmhelper", "fh")) {
+            assertEquals(List.of("mode", "pause", "resume", "start", "stop"), dispatcher
+                    .getCompletionSuggestions(dispatcher.parse(root + " macro ", "source"))
+                    .join().getList().stream().map(suggestion -> suggestion.getText())
+                    .sorted().toList());
+            assertEquals(List.of("add", "clear", "remove"), dispatcher
+                    .getCompletionSuggestions(dispatcher.parse(root + " rewarp ", "source"))
+                    .join().getList().stream().map(suggestion -> suggestion.getText())
+                    .sorted().toList());
+            assertEquals(List.of("set"), dispatcher
+                    .getCompletionSuggestions(dispatcher.parse(root + " spawn ", "source"))
+                    .join().getList().stream().map(suggestion -> suggestion.getText()).toList());
+        }
     }
 
     @Test
@@ -189,6 +238,55 @@ class FarmHelperCommandTreeTest {
         @Override
         public CommandActionResult releaseInput() {
             return action("release-input");
+        }
+
+        @Override
+        public CommandActionResult setMacroMode(int code) {
+            if (!List.of(0, 1, 2, 5, 6, 9).contains(code)) {
+                calls.add("invalid-mode:" + code);
+                return CommandActionResult.failure("invalid-mode:" + code);
+            }
+            return action("mode:" + code);
+        }
+
+        @Override
+        public CommandActionResult startMacro() {
+            return action("macro-start");
+        }
+
+        @Override
+        public CommandActionResult pauseMacro() {
+            return action("macro-pause");
+        }
+
+        @Override
+        public CommandActionResult resumeMacro() {
+            return action("macro-resume");
+        }
+
+        @Override
+        public CommandActionResult stopMacro() {
+            return action("macro-stop");
+        }
+
+        @Override
+        public CommandActionResult setSpawn() {
+            return action("spawn-set");
+        }
+
+        @Override
+        public CommandActionResult addRewarp() {
+            return action("rewarp-add");
+        }
+
+        @Override
+        public CommandActionResult removeRewarp() {
+            return action("rewarp-remove");
+        }
+
+        @Override
+        public CommandActionResult clearRewarps() {
+            return action("rewarp-clear");
         }
 
         @Override

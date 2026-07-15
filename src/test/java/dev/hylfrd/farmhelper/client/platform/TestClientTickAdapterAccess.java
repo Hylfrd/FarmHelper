@@ -2,6 +2,9 @@ package dev.hylfrd.farmhelper.client.platform;
 
 import dev.hylfrd.farmhelper.client.runtime.FarmHelperClientRuntime;
 import dev.hylfrd.farmhelper.runtime.ClientTickPipeline;
+import dev.hylfrd.farmhelper.macro.FarmingContext;
+import dev.hylfrd.farmhelper.macro.MacroDecision;
+import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.gamestate.GameStateParseResult;
 import dev.hylfrd.farmhelper.runtime.gamestate.RawGameTextSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
@@ -19,6 +22,20 @@ public final class TestClientTickAdapterAccess {
             ClientSnapshot snapshot
     ) {
         ClientTickAdapter.enforceInputSafety(runtime, snapshot);
+    }
+
+    public static void applyMacroRotationDisposition(
+            FarmHelperClientRuntime runtime,
+            MacroDecision decision
+    ) {
+        ClientTickAdapter.applyMacroRotationDisposition(runtime, decision);
+    }
+
+    public static void applyManagedDecision(
+            FarmHelperClientRuntime runtime,
+            MacroDecision decision
+    ) {
+        ClientTickAdapter.applyManagedDecision(runtime, decision);
     }
 
     /** Executes the complete production stage order while delegating adapter-owned tail actions. */
@@ -69,7 +86,12 @@ public final class TestClientTickAdapterAccess {
                     GameStateParseResult gameState
             ) {
                 runtime.core().macroManager().tick(
-                        observed, ClientTickAdapter.macroContext(observed));
+                        observed, new FarmingContext(
+                                runtime.core().nowNanos(), runtime.lifecycle().worldEpoch(),
+                                observed.player(), Observation.unknown(),
+                                gameState.snapshot().inGarden(), false,
+                                runtime.core().serverResponsiveness(
+                                        observed.connection().isPresent())));
             }
 
             @Override
@@ -85,6 +107,34 @@ public final class TestClientTickAdapterAccess {
             public void onFailure(ClientTickPipeline.Failure failure) {
                 runtime.failed();
             }
+        });
+    }
+
+    public static Optional<ClientTickPipeline.Failure> decisionBeforeRotation(
+            FarmHelperClientRuntime runtime,
+            ClientSnapshot snapshot,
+            MacroDecision decision,
+            Runnable rotationStage
+    ) {
+        return new ClientTickPipeline().tick(new ClientTickPipeline.Actions() {
+            @Override public void observeClientLifecycle() { }
+            @Override public ClientSnapshot captureClientSnapshot() { return snapshot; }
+            @Override public void observeSnapshotLifecycle(ClientSnapshot observed) { }
+            @Override public RawGameTextSnapshot captureGameText(ClientSnapshot observed) {
+                return RawGameTextSnapshot.unknown(runtime.lifecycle().worldEpoch());
+            }
+            @Override public GameStateParseResult parseGameState(
+                    ClientSnapshot observed, RawGameTextSnapshot raw) {
+                return runtime.core().parseGameState(observed, raw);
+            }
+            @Override public void advanceTaskQueue() { }
+            @Override public void deliverRuntimeTick(
+                    ClientSnapshot observed, GameStateParseResult gameState) {
+                ClientTickAdapter.applyManagedDecision(runtime, decision);
+            }
+            @Override public void tickRotation() { rotationStage.run(); }
+            @Override public void enforceInputSafety(ClientSnapshot observed) { }
+            @Override public void onFailure(ClientTickPipeline.Failure failure) { runtime.failed(); }
         });
     }
 }

@@ -60,6 +60,29 @@ public final class FarmHelperCommandTree {
         root.then(FarmHelperCommandTree.<S>literalNode("input")
                 .then(FarmHelperCommandTree.<S>literalNode("release")
                         .executes(context -> emit(context.getSource(), service.releaseInput(), feedback))));
+        root.then(FarmHelperCommandTree.<S>literalNode("macro")
+                .then(FarmHelperCommandTree.<S>literalNode("start")
+                        .executes(context -> emit(context.getSource(), service.startMacro(), feedback)))
+                .then(FarmHelperCommandTree.<S>literalNode("pause")
+                        .executes(context -> emit(context.getSource(), service.pauseMacro(), feedback)))
+                .then(FarmHelperCommandTree.<S>literalNode("resume")
+                        .executes(context -> emit(context.getSource(), service.resumeMacro(), feedback)))
+                .then(FarmHelperCommandTree.<S>literalNode("stop")
+                        .executes(context -> emit(context.getSource(), service.stopMacro(), feedback)))
+                .then(FarmHelperCommandTree.<S>literalNode("mode")
+                        .then(RequiredArgumentBuilder.<S, Integer>argument("mode", integer(0, 9))
+                                .executes(context -> emit(context.getSource(),
+                                        service.setMacroMode(getInteger(context, "mode")), feedback)))));
+        root.then(FarmHelperCommandTree.<S>literalNode("spawn")
+                .then(FarmHelperCommandTree.<S>literalNode("set")
+                        .executes(context -> emit(context.getSource(), service.setSpawn(), feedback))));
+        root.then(FarmHelperCommandTree.<S>literalNode("rewarp")
+                .then(FarmHelperCommandTree.<S>literalNode("add")
+                        .executes(context -> emit(context.getSource(), service.addRewarp(), feedback)))
+                .then(FarmHelperCommandTree.<S>literalNode("remove")
+                        .executes(context -> emit(context.getSource(), service.removeRewarp(), feedback)))
+                .then(FarmHelperCommandTree.<S>literalNode("clear")
+                        .executes(context -> emit(context.getSource(), service.clearRewarps(), feedback))));
         root.then(FarmHelperCommandTree.<S>literalNode("diagnostics")
                 .executes(context -> emit(context.getSource(), service.diagnostics(), feedback)));
         return root;

@@ -4,5 +4,6 @@ package dev.hylfrd.farmhelper.macro;
 public enum MacroPauseCause {
     MANUAL,
     SCREEN_OPEN,
-    FEATURE
+    FEATURE,
+    ENVIRONMENT
 }

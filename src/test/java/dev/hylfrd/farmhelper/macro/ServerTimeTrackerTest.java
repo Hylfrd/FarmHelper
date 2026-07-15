@@ -8,19 +8,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ServerTimeTrackerTest {
     @Test
-    void isUnknownBeforeJoinAndResponsiveDuringFiveSecondGrace() {
+    void fiveSecondJoinGraceAndNoPacketBoundaryAreExact() {
         ServerTimeTracker tracker = new ServerTimeTracker();
         assertEquals(ServerResponsiveness.UNKNOWN, tracker.observe(0L, true));
 
         tracker.joined(1L);
         assertEquals(ServerResponsiveness.RESPONSIVE,
                 tracker.observe(1L + TimeUnit.MILLISECONDS.toNanos(4_999L), true));
+        assertEquals(ServerResponsiveness.LAGGING,
+                tracker.observe(1L + TimeUnit.SECONDS.toNanos(5L), true));
         assertEquals(ServerResponsiveness.UNKNOWN,
                 tracker.observe(1L + TimeUnit.SECONDS.toNanos(6L), false));
     }
 
     @Test
-    void becomesLaggingOnlyAfterStrictOnePointThreeSecondThreshold() {
+    void thresholdIsStrictAtOnePointThreeSeconds() {
         ServerTimeTracker tracker = new ServerTimeTracker();
         tracker.joined(0L);
         long packet = TimeUnit.SECONDS.toNanos(5L);

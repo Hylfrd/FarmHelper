@@ -2,6 +2,8 @@ package dev.hylfrd.farmhelper.runtime;
 
 import dev.hylfrd.farmhelper.config.FarmHelperConfig;
 import dev.hylfrd.farmhelper.macro.MacroManager;
+import dev.hylfrd.farmhelper.macro.ServerResponsiveness;
+import dev.hylfrd.farmhelper.macro.ServerTimeTracker;
 import dev.hylfrd.farmhelper.runtime.gamestate.GameStateParseResult;
 import dev.hylfrd.farmhelper.runtime.gamestate.GameStateParser;
 import dev.hylfrd.farmhelper.runtime.gamestate.RawGameTextSnapshot;
@@ -19,6 +21,8 @@ public final class FarmHelperRuntime {
     private final FarmHelperConfig config;
     private final MacroManager macroManager;
     private final ClientTaskQueue taskQueue;
+    private final MonotonicClock clock;
+    private final ServerTimeTracker serverTimeTracker;
     private final GameStateParser gameStateParser;
     private GameStateParseResult currentGameState;
 
@@ -31,17 +35,21 @@ public final class FarmHelperRuntime {
     }
 
     public FarmHelperRuntime(FarmHelperConfig config, Runnable acquisitionGuard) {
-        this(config, new MacroManager(acquisitionGuard), SystemMonotonicClock.INSTANCE,
-                acquisitionGuard, Runnable::run);
+        this(config, SystemMonotonicClock.INSTANCE, acquisitionGuard, Runnable::run);
     }
 
     public FarmHelperRuntime(FarmHelperConfig config, ClientOwnershipFence ownershipFence) {
-        this(config,
-                new MacroManager(Objects.requireNonNull(
-                        ownershipFence, "ownershipFence")::requireAcquisitionAllowed),
-                SystemMonotonicClock.INSTANCE,
+        this(config, SystemMonotonicClock.INSTANCE,
                 ownershipFence::requireAcquisitionAllowed,
                 ownershipFence::runTaskCallback);
+    }
+
+    private FarmHelperRuntime(
+            FarmHelperConfig config,
+            MonotonicClock clock,
+            Runnable acquisitionGuard,
+            java.util.function.Consumer<Runnable> callbackRunner) {
+        this(config, new MacroManager(clock, acquisitionGuard), clock, acquisitionGuard, callbackRunner);
     }
 
     FarmHelperRuntime(FarmHelperConfig config, MacroManager macroManager) {
@@ -60,11 +68,14 @@ public final class FarmHelperRuntime {
             java.util.function.Consumer<Runnable> callbackRunner) {
         this.config = config;
         this.macroManager = macroManager;
+        this.clock = Objects.requireNonNull(clock, "clock");
+        serverTimeTracker = new ServerTimeTracker();
         taskQueue = new ClientTaskQueue(
-                Objects.requireNonNull(clock, "clock"),
+                clock,
                 Objects.requireNonNull(acquisitionGuard, "acquisitionGuard"),
                 Objects.requireNonNull(callbackRunner, "callbackRunner"));
         gameStateParser = new GameStateParser();
+        synchronizeMacroSettings();
     }
 
     public FarmHelperConfig config() {
@@ -77,6 +88,26 @@ public final class FarmHelperRuntime {
 
     public ClientTaskQueue taskQueue() {
         return taskQueue;
+    }
+
+    public void serverJoined() {
+        serverTimeTracker.joined(clock.nowNanos());
+    }
+
+    public void receivedServerTimePacket() {
+        serverTimeTracker.receivedTimePacket(clock.nowNanos());
+    }
+
+    public ServerResponsiveness serverResponsiveness(boolean connectionReady) {
+        return serverTimeTracker.observe(clock.nowNanos(), connectionReady);
+    }
+
+    public void resetServerTimeTracker() {
+        serverTimeTracker.reset();
+    }
+
+    public long nowNanos() {
+        return clock.nowNanos();
     }
 
     /** Parses and publishes the current tick before any due stateful task may run. */
@@ -92,5 +123,19 @@ public final class FarmHelperRuntime {
 
     public void invalidateGameState() {
         currentGameState = null;
+    }
+
+    public void synchronizeMacroSettings() {
+        macroManager.settings().replace(
+                dev.hylfrd.farmhelper.macro.VerticalCropMode
+                        .fromCode(config.macroMode()).orElseThrow(),
+                config.macroSpawn().map(spawn ->
+                        new dev.hylfrd.farmhelper.macro.MacroSpawnPose(
+                                new dev.hylfrd.farmhelper.runtime.spatial.RewarpPosition(
+                                        spawn.x(), spawn.y(), spawn.z()),
+                                spawn.yaw(), spawn.pitch(), spawn.plot())),
+                config.macroRewarps().stream().map(rewarp ->
+                        new dev.hylfrd.farmhelper.runtime.spatial.RewarpPosition(
+                                rewarp.x(), rewarp.y(), rewarp.z())).toList());
     }
 }

@@ -31,5 +31,41 @@ public interface FarmHelperCommandService {
 
     CommandActionResult releaseInput();
 
+    default CommandActionResult setMacroMode(int code) {
+        return CommandActionResult.failure("Macro mode is unavailable.");
+    }
+
+    default CommandActionResult startMacro() {
+        return CommandActionResult.failure("Macro start is unavailable.");
+    }
+
+    default CommandActionResult pauseMacro() {
+        return CommandActionResult.failure("Macro pause is unavailable.");
+    }
+
+    default CommandActionResult resumeMacro() {
+        return CommandActionResult.failure("Macro resume is unavailable.");
+    }
+
+    default CommandActionResult stopMacro() {
+        return stop();
+    }
+
+    default CommandActionResult setSpawn() {
+        return CommandActionResult.failure("Spawn management is unavailable.");
+    }
+
+    default CommandActionResult addRewarp() {
+        return CommandActionResult.failure("Rewarp management is unavailable.");
+    }
+
+    default CommandActionResult removeRewarp() {
+        return CommandActionResult.failure("Rewarp management is unavailable.");
+    }
+
+    default CommandActionResult clearRewarps() {
+        return CommandActionResult.failure("Rewarp management is unavailable.");
+    }
+
     List<String> diagnostics();
 }

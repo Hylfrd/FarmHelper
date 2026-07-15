@@ -1,9 +1,5 @@
 package dev.hylfrd.farmhelper.client.platform;
 
-import dev.hylfrd.farmhelper.macro.MacroContext;
-import dev.hylfrd.farmhelper.macro.MacroManager;
-import dev.hylfrd.farmhelper.macro.MacroState;
-import dev.hylfrd.farmhelper.macro.PauseReason;
 import dev.hylfrd.farmhelper.client.runtime.FarmHelperClientRuntime;
 import dev.hylfrd.farmhelper.client.runtime.TestFarmHelperClientRuntimeFactory;
 import dev.hylfrd.farmhelper.control.input.ControlOwner;
@@ -11,12 +7,19 @@ import dev.hylfrd.farmhelper.control.input.HotbarSelection;
 import dev.hylfrd.farmhelper.control.input.InputAction;
 import dev.hylfrd.farmhelper.control.input.InputSnapshot;
 import dev.hylfrd.farmhelper.control.input.ReleaseReason;
+import dev.hylfrd.farmhelper.control.rotation.RotationTerminalReason;
+import dev.hylfrd.farmhelper.macro.MacroWarpRequest;
+import dev.hylfrd.farmhelper.macro.MacroDecision;
+import dev.hylfrd.farmhelper.macro.MacroSpawnPose;
+import dev.hylfrd.farmhelper.macro.MacroControlOwner;
+import dev.hylfrd.farmhelper.macro.FeatureSuspension;
 import dev.hylfrd.farmhelper.runtime.snapshot.ConnectionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.WorldSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.RewarpPosition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -31,12 +34,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ClientTickAdapterTest {
     @TempDir
     Path temporaryDirectory;
-
-    @Test
-    void absentAndUnknownConnectionsPauseBeforeMacroDelivery() {
-        assertConnectionUnavailable(Observation.absent());
-        assertConnectionUnavailable(Observation.unknown());
-    }
 
     @Test
     void inputSafetyWithNoManagedClaimsPreservesTerminalReasonAndRevision() {
@@ -56,8 +53,6 @@ class ClientTickAdapterTest {
 
     @Test
     void inputSafetyReleasesManagedActionAndHotbarForEveryUnsafeBoundary() {
-        assertManagedRelease("pause.json", ReleaseReason.PAUSE,
-                safeSnapshot(Observation.absent()), runtime -> { });
         assertManagedRelease("screen.json", ReleaseReason.SCREEN,
                 safeSnapshot(Observation.present(new ScreenSnapshot(
                         1L, Observation.present("screen"), Observation.present("Screen")))),
@@ -91,25 +86,112 @@ class ClientTickAdapterTest {
         assertFalse(runtime.input().snapshot().emptyState());
     }
 
-    private static void assertConnectionUnavailable(
-            Observation<dev.hylfrd.farmhelper.runtime.snapshot.ConnectionSnapshot> connection) {
-        ClientSnapshot snapshot = new ClientSnapshot(
-                Observation.present(new PlayerSnapshot(
-                        Observation.unknown(), Observation.unknown(), Observation.unknown(),
-                        Observation.unknown(), Observation.unknown())),
-                Observation.present(new WorldSnapshot(1L, Observation.unknown())),
-                connection,
-                Observation.absent());
-        MacroContext context = ClientTickAdapter.macroContext(snapshot);
-        MacroManager manager = new MacroManager();
-        manager.start();
+    @Test
+    void requiresAllThreeDevelopmentConditions() {
+        assertTrue(ClientTickAdapter.developmentGarden(true, true, true));
+        assertFalse(ClientTickAdapter.developmentGarden(false, true, true));
+        assertFalse(ClientTickAdapter.developmentGarden(true, false, true));
+        assertFalse(ClientTickAdapter.developmentGarden(true, true, false));
+    }
 
-        manager.tick(snapshot, context);
+    @Test
+    void productionAlwaysUsesWarpGarden() {
+        RewarpPosition spawn = new RewarpPosition(10, 70, -3);
+        assertEquals("warp garden", ClientTickAdapter.warpCommand(
+                new MacroWarpRequest(false, new MacroSpawnPose(spawn, 91.5F, -12.25F, 4))));
+        assertEquals("tp 10 70 -3 91.5 -12.25", ClientTickAdapter.warpCommand(
+                new MacroWarpRequest(true, new MacroSpawnPose(spawn, 91.5F, -12.25F, 4))));
+    }
 
-        assertFalse(context.playerReady());
-        assertEquals(PauseReason.NO_CONNECTION, context.pauseReason());
-        assertEquals(MacroState.PAUSED, manager.state());
-        assertEquals(0L, manager.runningTicks());
+    @Test
+    void featurePausePreservesFeatureOwnersAcrossSafeTick() {
+        FarmHelperClientRuntime runtime = runtime("feature-owner.json");
+        runtime.toggle();
+        runtime.input().hold(MacroControlOwner.S_SHAPE, InputAction.ATTACK);
+        runtime.rotation().start(MacroControlOwner.S_SHAPE, 0F, 0F, 45F, 5F, 1_000L);
+        FeatureSuspension suspension = runtime.core().macroManager().suspendForFeature("feature");
+        ControlOwner feature = new ControlOwner("feature-owner");
+        runtime.input().hold(feature, List.of(InputAction.USE),
+                Optional.of(new HotbarSelection(4)));
+        runtime.rotation().start(feature, 0F, 0F, 10F, 2F, 1_000L);
+
+        ClientTickAdapter.enforceInputSafety(runtime, safeSnapshot(Observation.absent()));
+
+        assertEquals(feature, runtime.input().snapshot().ownerOf(InputAction.USE).orElseThrow());
+        assertEquals(feature, runtime.input().snapshot().hotbarOwner().orElseThrow());
+        assertEquals(feature, runtime.rotation().snapshot().owner().orElseThrow());
+        assertTrue(runtime.rotation().rotating());
+        suspension.close();
+        assertEquals(feature, runtime.input().snapshot().ownerOf(InputAction.USE).orElseThrow());
+        assertEquals(feature, runtime.rotation().snapshot().owner().orElseThrow());
+    }
+
+    @Test
+    void everyUnknownMacroDecisionCancelsOnlyMacroRotationBeforeFrame() {
+        for (String status : List.of(
+                "garden-unknown", "server-unknown", "spatial-unknown",
+                "player-unknown", "row-spatial-unknown")) {
+            FarmHelperClientRuntime runtime = runtime(status + ".json");
+            runtime.input().hold(MacroControlOwner.S_SHAPE, InputAction.ATTACK);
+            runtime.rotation().start(MacroControlOwner.S_SHAPE,
+                    0F, 0F, 45F, 5F, 1_000L);
+
+            TestClientTickAdapterAccess.applyManagedDecision(
+                    runtime, MacroDecision.failClosed(status));
+
+            assertFalse(runtime.rotation().rotating(), status);
+            assertEquals(RotationTerminalReason.OWNER_CANCELLED,
+                    runtime.rotation().snapshot().terminalReason().orElseThrow(), status);
+            assertTrue(runtime.input().snapshot().emptyState(), status);
+
+            ControlOwner feature = new ControlOwner("feature-" + status);
+            runtime.input().hold(feature, List.of(InputAction.USE),
+                    Optional.of(new HotbarSelection(7)));
+            runtime.rotation().start(feature, 0F, 0F, 10F, 2F, 1_000L);
+            TestClientTickAdapterAccess.applyManagedDecision(
+                    runtime, MacroDecision.failClosed(status));
+            assertTrue(runtime.rotation().rotating(), status);
+            assertEquals(feature, runtime.rotation().snapshot().owner().orElseThrow(), status);
+            assertEquals(feature, runtime.input().snapshot().ownerOf(InputAction.USE).orElseThrow());
+            assertEquals(feature, runtime.input().snapshot().hotbarOwner().orElseThrow());
+        }
+    }
+
+    @Test
+    void ordinaryDecisionWithoutNewRotationKeepsActiveMacroRotation() {
+        FarmHelperClientRuntime runtime = runtime("rotation-keep.json");
+        runtime.rotation().start(MacroControlOwner.S_SHAPE,
+                0F, 0F, 45F, 5F, 1_000L);
+
+        TestClientTickAdapterAccess.applyMacroRotationDisposition(
+                runtime, MacroDecision.idle("ordinary-wait"));
+
+        assertTrue(runtime.rotation().rotating());
+        assertEquals(MacroControlOwner.S_SHAPE,
+                runtime.rotation().snapshot().owner().orElseThrow());
+    }
+
+    @Test
+    void pipelineAppliesTypedReleaseBeforeRotationAndPreservesFeatureOwner() {
+        FarmHelperClientRuntime runtime = runtime("pipeline-release.json");
+        runtime.rotation().start(MacroControlOwner.S_SHAPE,
+                0F, 0F, 45F, 5F, 1_000L);
+        runtime.input().hold(MacroControlOwner.S_SHAPE, InputAction.ATTACK);
+
+        assertTrue(TestClientTickAdapterAccess.decisionBeforeRotation(runtime,
+                safeSnapshot(Observation.absent()), MacroDecision.failClosed("garden-unknown"),
+                () -> assertFalse(runtime.rotation().rotating())).isEmpty());
+
+        ControlOwner feature = new ControlOwner("feature-pipeline");
+        runtime.rotation().start(feature, 0F, 0F, 10F, 2F, 1_000L);
+        runtime.input().hold(feature, InputAction.USE);
+        assertTrue(TestClientTickAdapterAccess.decisionBeforeRotation(runtime,
+                safeSnapshot(Observation.absent()), MacroDecision.failClosed("server-unknown"),
+                () -> {
+                    assertTrue(runtime.rotation().rotating());
+                    assertEquals(feature, runtime.rotation().snapshot().owner().orElseThrow());
+                }).isEmpty());
+        assertEquals(feature, runtime.input().snapshot().ownerOf(InputAction.USE).orElseThrow());
     }
 
     private void assertManagedRelease(

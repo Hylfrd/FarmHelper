@@ -1,5 +1,7 @@
 package dev.hylfrd.farmhelper.macro;
 
+import dev.hylfrd.farmhelper.runtime.time.MonotonicClock;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -11,15 +13,18 @@ import java.util.Set;
  */
 public final class MacroLifecycle {
     private final MacroLifecycleTarget target;
+    private final MonotonicClock clock;
     private final Map<Long, String> featureLeases = new HashMap<>();
     private MacroState state = MacroState.STOPPED;
     private boolean manualPause;
     private boolean screenOpen;
+    private boolean environmentUnavailable;
     private long generation;
     private long nextFeatureLease = 1L;
 
-    public MacroLifecycle(MacroLifecycleTarget target) {
+    public MacroLifecycle(MacroLifecycleTarget target, MonotonicClock clock) {
         this.target = Objects.requireNonNull(target, "target");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     public MacroState state() {
@@ -45,20 +50,24 @@ public final class MacroLifecycle {
         if (!featureLeases.isEmpty()) {
             causes.add(MacroPauseCause.FEATURE);
         }
+        if (environmentUnavailable) {
+            causes.add(MacroPauseCause.ENVIRONMENT);
+        }
         return Set.copyOf(causes);
     }
 
-    public void start(long nowNanos) {
+    public void start() {
         if (state != MacroState.STOPPED) {
             throw new IllegalStateException("macro run is already active");
         }
         generation = nextGeneration();
         manualPause = false;
         screenOpen = false;
+        environmentUnavailable = false;
         featureLeases.clear();
         state = MacroState.RUNNING;
         try {
-            target.start(generation, nowNanos);
+            target.start(generation, clock.nowNanos());
         } catch (RuntimeException | Error failure) {
             state = MacroState.STOPPED;
             generation = nextGeneration();
@@ -66,39 +75,55 @@ public final class MacroLifecycle {
         }
     }
 
-    public void manualPause(long nowNanos) {
+    public void manualPause() {
         if (state == MacroState.STOPPED || manualPause) {
             return;
         }
         manualPause = true;
-        refreshPause(nowNanos);
+        refreshPause(clock.nowNanos());
     }
 
-    public void manualResume(long nowNanos) {
+    public void manualResume() {
         if (state == MacroState.STOPPED || !manualPause) {
             return;
         }
         manualPause = false;
-        refreshPause(nowNanos);
+        refreshPause(clock.nowNanos());
     }
 
-    public void screenOpen(long nowNanos) {
+    public void screenOpen() {
         if (state == MacroState.STOPPED || screenOpen) {
             return;
         }
         screenOpen = true;
-        refreshPause(nowNanos);
+        refreshPause(clock.nowNanos());
     }
 
-    public void screenClosed(long nowNanos) {
+    public void screenClosed() {
         if (state == MacroState.STOPPED || !screenOpen) {
             return;
         }
         screenOpen = false;
-        refreshPause(nowNanos);
+        refreshPause(clock.nowNanos());
     }
 
-    public FeatureSuspension suspendForFeature(String owner, long nowNanos) {
+    public void environmentUnavailable() {
+        if (state == MacroState.STOPPED || environmentUnavailable) {
+            return;
+        }
+        environmentUnavailable = true;
+        refreshPause(clock.nowNanos());
+    }
+
+    public void environmentAvailable() {
+        if (state == MacroState.STOPPED || !environmentUnavailable) {
+            return;
+        }
+        environmentUnavailable = false;
+        refreshPause(clock.nowNanos());
+    }
+
+    public FeatureSuspension suspendForFeature(String owner) {
         Objects.requireNonNull(owner, "owner");
         String normalized = owner.trim();
         if (normalized.isEmpty()) {
@@ -110,8 +135,8 @@ public final class MacroLifecycle {
         long lease = nextFeatureLease++;
         long leaseGeneration = generation;
         featureLeases.put(lease, normalized);
-        refreshPause(nowNanos);
-        return new FeatureSuspension(normalized, () -> releaseFeature(leaseGeneration, lease, nowNanos));
+        refreshPause(clock.nowNanos());
+        return new FeatureSuspension(normalized, () -> releaseFeature(leaseGeneration, lease));
     }
 
     public void stop(MacroTerminalReason reason) {
@@ -123,6 +148,7 @@ public final class MacroLifecycle {
         state = MacroState.STOPPED;
         manualPause = false;
         screenOpen = false;
+        environmentUnavailable = false;
         featureLeases.clear();
         generation = nextGeneration();
         target.stop(stoppedGeneration, reason);
@@ -132,11 +158,11 @@ public final class MacroLifecycle {
         return state != MacroState.STOPPED && generation == candidateGeneration;
     }
 
-    private void releaseFeature(long leaseGeneration, long lease, long nowNanos) {
+    private void releaseFeature(long leaseGeneration, long lease) {
         if (state == MacroState.STOPPED || generation != leaseGeneration || featureLeases.remove(lease) == null) {
             return;
         }
-        refreshPause(nowNanos);
+        refreshPause(clock.nowNanos());
     }
 
     private void refreshPause(long nowNanos) {

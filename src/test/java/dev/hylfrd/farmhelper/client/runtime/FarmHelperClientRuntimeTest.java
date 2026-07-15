@@ -8,6 +8,7 @@ import dev.hylfrd.farmhelper.client.platform.TestClientTickAdapterAccess;
 import dev.hylfrd.farmhelper.client.ui.command.ClientFarmHelperCommandService;
 import dev.hylfrd.farmhelper.control.input.ControlOwner;
 import dev.hylfrd.farmhelper.control.input.InputAction;
+import dev.hylfrd.farmhelper.control.input.HotbarSelection;
 import dev.hylfrd.farmhelper.control.input.ReleaseReason;
 import dev.hylfrd.farmhelper.control.inventory.InventoryCancelReason;
 import dev.hylfrd.farmhelper.control.inventory.InventoryClick;
@@ -23,11 +24,17 @@ import dev.hylfrd.farmhelper.control.inventory.InventoryStep;
 import dev.hylfrd.farmhelper.control.inventory.ScreenExpectation;
 import dev.hylfrd.farmhelper.control.inventory.ScreenIdentity;
 import dev.hylfrd.farmhelper.control.rotation.RotationTerminalReason;
+import dev.hylfrd.farmhelper.macro.MacroState;
+import dev.hylfrd.farmhelper.macro.MacroTerminalReason;
+import dev.hylfrd.farmhelper.macro.MacroControlOwner;
+import dev.hylfrd.farmhelper.macro.MacroPauseCause;
+import dev.hylfrd.farmhelper.macro.FeatureSuspension;
 import dev.hylfrd.farmhelper.runtime.gamestate.RawGameTextSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ConnectionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
+import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.WorldSnapshot;
 import dev.hylfrd.farmhelper.runtime.time.TaskHandle;
 import dev.hylfrd.farmhelper.runtime.time.TaskOwner;
@@ -36,6 +43,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -74,6 +83,78 @@ class FarmHelperClientRuntimeTest {
         assertEquals(60.0F, runtime.configValue(FarmHelperConfigKey.TARGET_YAW));
         FarmHelperClientRuntime reloaded = new FarmHelperClientRuntime(configPath);
         assertEquals(60.0F, reloaded.configValue(FarmHelperConfigKey.TARGET_YAW));
+
+        assertTrue(runtime.setMacroMode(5));
+        assertFalse(runtime.setMacroMode(3));
+        assertEquals(5, runtime.core().config().macroMode());
+        assertEquals(5, runtime.core().macroManager().settings().mode().code());
+    }
+
+    @Test
+    void modeChangeWhileActiveIsRejectedWithoutMutation() {
+        Path configPath = temporaryDirectory.resolve("active-mode.json");
+        FarmHelperClientRuntime runtime = TestFarmHelperClientRuntimeFactory.create(configPath);
+        assertTrue(runtime.setMacroMode(5));
+        ready(runtime);
+        assertTrue(runtime.startMacro());
+        long generation = runtime.core().macroManager().generation();
+        MacroState state = runtime.core().macroManager().state();
+
+        assertFalse(runtime.setMacroMode(6));
+
+        assertEquals(5, runtime.core().config().macroMode());
+        assertEquals(5, runtime.core().macroManager().settings().mode().code());
+        assertEquals(generation, runtime.core().macroManager().generation());
+        assertEquals(state, runtime.core().macroManager().state());
+        FarmHelperClientRuntime reloaded = TestFarmHelperClientRuntimeFactory.create(configPath);
+        assertEquals(5, reloaded.core().config().macroMode());
+        assertEquals(5, reloaded.core().macroManager().settings().mode().code());
+
+        ClientFarmHelperCommandService service = new ClientFarmHelperCommandService(
+                runtime, () -> false, new ClientCommandScreenCloseGuard());
+        assertEquals("Stop the macro before changing mode.", service.setMacroMode(6).message());
+    }
+
+    @Test
+    void mappedModesSynchronizeAndInvalidModesNeverPersistOrThrow() {
+        Path configPath = temporaryDirectory.resolve("mapped-modes.json");
+        FarmHelperClientRuntime runtime = TestFarmHelperClientRuntimeFactory.create(configPath);
+        for (int mode : List.of(0, 1, 2, 5, 6, 9)) {
+            assertTrue(runtime.setMacroMode(mode));
+            assertEquals(mode, runtime.core().config().macroMode());
+            assertEquals(mode, runtime.core().macroManager().settings().mode().code());
+            FarmHelperClientRuntime reloaded = TestFarmHelperClientRuntimeFactory.create(configPath);
+            assertEquals(mode, reloaded.core().config().macroMode());
+            assertEquals(mode, reloaded.core().macroManager().settings().mode().code());
+        }
+        int before = runtime.core().config().macroMode();
+        for (int invalid : List.of(3, 4, 7, 8)) {
+            assertFalse(runtime.setMacroMode(invalid));
+            assertEquals(before, runtime.core().config().macroMode());
+            assertEquals(before, runtime.core().macroManager().settings().mode().code());
+            assertEquals(before, TestFarmHelperClientRuntimeFactory.create(configPath)
+                    .core().config().macroMode());
+        }
+    }
+
+    @Test
+    void failedMacroPersistenceLeavesConfigAndLiveSettingsUnchanged() throws IOException {
+        Path configPath = temporaryDirectory.resolve("failed-save.json");
+        FarmHelperClientRuntime runtime = TestFarmHelperClientRuntimeFactory.create(configPath);
+        dev.hylfrd.farmhelper.config.MacroLocationConfig original =
+                new dev.hylfrd.farmhelper.config.MacroLocationConfig(0, 70, 0, 10F, 5F, 2);
+        assertTrue(runtime.setMacroSpawn(original));
+        Files.delete(configPath);
+        Files.createDirectory(configPath);
+
+        assertFalse(runtime.setMacroSpawn(
+                new dev.hylfrd.farmhelper.config.MacroLocationConfig(10, 80, 10, 20F, 6F, 3)));
+
+        assertEquals(original, runtime.core().config().macroSpawn().orElseThrow());
+        assertEquals(original.x(), runtime.core().macroManager().settings()
+                .spawn().orElseThrow().position().x());
+        assertEquals(original.plot(), runtime.core().macroManager().settings()
+                .spawn().orElseThrow().plot());
     }
 
     @Test
@@ -276,6 +357,172 @@ class FarmHelperClientRuntimeTest {
         assertTrue(runtime.inventory().activeToken().isEmpty());
     }
 
+    @Test
+    void screenChangesPauseWithoutDiscardingTheMacroGeneration() {
+        FarmHelperClientRuntime runtime = new FarmHelperClientRuntime(
+                temporaryDirectory.resolve("screen-lifecycle.json"));
+        ready(runtime);
+        runtime.toggle();
+        long generation = runtime.core().macroManager().generation();
+
+        runtime.observeMacroScreen(Observation.present(ScreenSnapshot.unknownDetails()));
+        runtime.lifecycle().observeScreen(Observation.present(ScreenSnapshot.unknownDetails()));
+
+        assertEquals(MacroState.PAUSED, runtime.core().macroManager().state());
+        assertEquals(generation, runtime.core().macroManager().generation());
+        assertTrue(runtime.core().macroManager().lastTerminalReason().isEmpty());
+
+        runtime.observeMacroScreen(Observation.absent());
+        runtime.lifecycle().observeScreen(Observation.absent());
+
+        assertEquals(MacroState.RUNNING, runtime.core().macroManager().state());
+        assertEquals(generation, runtime.core().macroManager().generation());
+    }
+
+    @Test
+    void disconnectPrecedenceFreezesTheStrongestTerminalReason() {
+        FarmHelperClientRuntime runtime = new FarmHelperClientRuntime(
+                temporaryDirectory.resolve("disconnect-precedence.json"));
+        ready(runtime);
+        runtime.toggle();
+
+        runtime.disconnected();
+
+        assertEquals(MacroTerminalReason.DISCONNECT,
+                runtime.core().macroManager().lastTerminalReason().orElseThrow());
+    }
+
+    @Test
+    void statusReportsExactTerminalReasonAndDisconnectOutranksWorldUnload() {
+        FarmHelperClientRuntime manual = TestFarmHelperClientRuntimeFactory.create(
+                temporaryDirectory.resolve("status-manual.json"));
+        assertTrue(status(manual).contains("terminal: none"));
+        ready(manual);
+        assertTrue(manual.startMacro());
+        assertTrue(manual.stopMacro());
+        assertTrue(status(manual).contains("terminal: manual_stop"));
+
+        FarmHelperClientRuntime world = TestFarmHelperClientRuntimeFactory.create(
+                temporaryDirectory.resolve("status-world.json"));
+        world.worldLoaded();
+        ready(world);
+        assertTrue(world.startMacro());
+        world.worldUnloaded();
+        assertTrue(status(world).contains("terminal: world_change"));
+
+        FarmHelperClientRuntime disconnect = TestFarmHelperClientRuntimeFactory.create(
+                temporaryDirectory.resolve("status-disconnect.json"));
+        disconnect.worldLoaded();
+        ready(disconnect);
+        assertTrue(disconnect.startMacro());
+        disconnect.disconnected();
+        assertTrue(status(disconnect).contains("terminal: disconnect"));
+        disconnect.worldLoaded();
+        assertTrue(status(disconnect).contains("terminal: disconnect"));
+    }
+
+    @Test
+    void clientReasonsMapToMacroReasonsExactly() {
+        assertTerminal("manual.json", MacroTerminalReason.MANUAL_STOP, runtime -> runtime.toggle());
+        assertTerminal("world-load.json", MacroTerminalReason.WORLD_CHANGE, FarmHelperClientRuntime::worldLoaded);
+        assertTerminalAfterWorldLoad("world-unload.json", MacroTerminalReason.WORLD_CHANGE,
+                FarmHelperClientRuntime::worldUnloaded);
+        assertTerminal("disconnect.json", MacroTerminalReason.DISCONNECT,
+                FarmHelperClientRuntime::disconnected);
+        assertTerminal("connection.json", MacroTerminalReason.CONNECTION_LOST,
+                runtime -> runtime.observeConnection(Observation.absent()));
+        assertTerminal("exception.json", MacroTerminalReason.EXCEPTION, FarmHelperClientRuntime::failed);
+        assertTerminal("client-stop.json", MacroTerminalReason.CLIENT_STOP,
+                FarmHelperClientRuntime::clientStopping);
+    }
+
+    @Test
+    void clientOwnershipAndMacroGenerationsRemainIndependent() {
+        FarmHelperClientRuntime runtime = new FarmHelperClientRuntime(
+                temporaryDirectory.resolve("independent-generations.json"));
+        ready(runtime);
+        runtime.toggle();
+        long macroGeneration = runtime.core().macroManager().generation();
+        long ownershipGeneration = runtime.ownershipGeneration();
+        Observation<ScreenSnapshot> screen = Observation.present(ScreenSnapshot.unknownDetails());
+
+        runtime.observeMacroScreen(screen);
+        runtime.lifecycle().observeScreen(Observation.absent());
+        runtime.lifecycle().observeScreen(screen);
+
+        assertEquals(macroGeneration, runtime.core().macroManager().generation());
+        assertTrue(runtime.ownershipGeneration() > ownershipGeneration);
+        assertEquals(MacroState.PAUSED, runtime.core().macroManager().state());
+    }
+
+    @Test
+    void manualPauseReleasesMacroControlsBeforeResumeCanRun() {
+        FarmHelperClientRuntime runtime = new FarmHelperClientRuntime(
+                temporaryDirectory.resolve("manual-pause-controls.json"));
+        ready(runtime);
+        runtime.toggle();
+        long generation = runtime.core().macroManager().generation();
+        runtime.input().hold(MacroControlOwner.S_SHAPE, List.of(InputAction.FORWARD),
+                Optional.of(new HotbarSelection(3)));
+        runtime.rotation().start(MacroControlOwner.S_SHAPE, 0F, 0F, 90F, 10F, 1_000L);
+
+        assertTrue(runtime.pauseMacro());
+
+        assertTrue(runtime.input().snapshot().emptyState());
+        assertFalse(runtime.rotation().rotating());
+        assertEquals(RotationTerminalReason.OWNER_CANCELLED,
+                runtime.rotation().snapshot().terminalReason().orElseThrow());
+        assertEquals(generation, runtime.core().macroManager().generation());
+        assertTrue(runtime.resumeMacro());
+        assertEquals(MacroState.RUNNING, runtime.core().macroManager().state());
+        assertTrue(runtime.input().snapshot().emptyState());
+        assertFalse(runtime.rotation().rotating());
+    }
+
+    @Test
+    void nestedFeaturePauseReleasesOnceAndNeverResurrectsControls() {
+        FarmHelperClientRuntime runtime = new FarmHelperClientRuntime(
+                temporaryDirectory.resolve("feature-pause-controls.json"));
+        ready(runtime);
+        runtime.toggle();
+        runtime.input().hold(MacroControlOwner.S_SHAPE, InputAction.ATTACK);
+        runtime.rotation().start(MacroControlOwner.S_SHAPE, 0F, 0F, 45F, 5F, 1_000L);
+
+        FeatureSuspension first = runtime.core().macroManager().suspendForFeature("first");
+        FeatureSuspension second = runtime.core().macroManager().suspendForFeature("second");
+
+        assertTrue(runtime.input().snapshot().emptyState());
+        assertFalse(runtime.rotation().rotating());
+        first.close();
+        assertEquals(MacroState.PAUSED, runtime.core().macroManager().state());
+        second.close();
+        assertEquals(MacroState.RUNNING, runtime.core().macroManager().state());
+        assertTrue(runtime.input().snapshot().emptyState());
+        assertFalse(runtime.rotation().rotating());
+    }
+
+    @Test
+    void manualPauseOverlapsScreenWithoutPrematureResume() {
+        FarmHelperClientRuntime runtime = new FarmHelperClientRuntime(
+                temporaryDirectory.resolve("overlapping-manual-screen.json"));
+        ready(runtime);
+        runtime.toggle();
+        long generation = runtime.core().macroManager().generation();
+
+        runtime.observeMacroScreen(Observation.present(ScreenSnapshot.unknownDetails()));
+        assertTrue(runtime.pauseMacro());
+        assertEquals(java.util.Set.of(MacroPauseCause.MANUAL, MacroPauseCause.SCREEN_OPEN),
+                runtime.core().macroManager().pauseCauses());
+        runtime.observeMacroScreen(Observation.absent());
+
+        assertEquals(MacroState.PAUSED, runtime.core().macroManager().state());
+        assertEquals(java.util.Set.of(MacroPauseCause.MANUAL),
+                runtime.core().macroManager().pauseCauses());
+        assertEquals(generation, runtime.core().macroManager().generation());
+        assertTrue(runtime.resumeMacro());
+        assertEquals(MacroState.RUNNING, runtime.core().macroManager().state());
+    }
+
     private static void assertFenced(FarmHelperClientRuntime runtime) {
         ControlOwner owner = new ControlOwner("fenced");
         assertThrows(IllegalStateException.class, runtime::toggle);
@@ -287,6 +534,33 @@ class FarmHelperClientRuntimeTest {
                 () -> runtime.rotation().start(owner, 0F, 0F, 1F, 1F, 1L));
         assertThrows(IllegalStateException.class,
                 () -> runtime.inventory().start(operation(owner, 10L), ignored -> { }));
+    }
+
+    private void assertTerminal(
+            String name,
+            MacroTerminalReason expected,
+            java.util.function.Consumer<FarmHelperClientRuntime> boundary
+    ) {
+        FarmHelperClientRuntime runtime = new FarmHelperClientRuntime(temporaryDirectory.resolve(name));
+        ready(runtime);
+        runtime.toggle();
+        boundary.accept(runtime);
+        assertEquals(expected, runtime.core().macroManager().lastTerminalReason().orElseThrow());
+        assertTrue(status(runtime).contains("terminal: " + expected.name().toLowerCase()));
+    }
+
+    private void assertTerminalAfterWorldLoad(
+            String name,
+            MacroTerminalReason expected,
+            java.util.function.Consumer<FarmHelperClientRuntime> boundary
+    ) {
+        FarmHelperClientRuntime runtime = new FarmHelperClientRuntime(temporaryDirectory.resolve(name));
+        runtime.worldLoaded();
+        ready(runtime);
+        runtime.toggle();
+        boundary.accept(runtime);
+        assertEquals(expected, runtime.core().macroManager().lastTerminalReason().orElseThrow());
+        assertTrue(status(runtime).contains("terminal: " + expected.name().toLowerCase()));
     }
 
     private static void captureBlocked(List<RuntimeException> failures, Runnable action) {
@@ -307,6 +581,11 @@ class FarmHelperClientRuntimeTest {
 
     private static void ready(FarmHelperClientRuntime runtime) {
         runtime.observeConnection(Observation.present(ConnectionSnapshot.multiplayer()));
+    }
+
+    private static String status(FarmHelperClientRuntime runtime) {
+        return new ClientFarmHelperCommandService(runtime, () -> false,
+                new ClientCommandScreenCloseGuard()).status().getFirst();
     }
 
     private static InventoryOperation operation(ControlOwner owner, long identityValue) {

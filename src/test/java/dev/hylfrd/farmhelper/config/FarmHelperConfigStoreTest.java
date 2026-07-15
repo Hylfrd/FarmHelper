@@ -30,7 +30,7 @@ class FarmHelperConfigStoreTest {
         assertEquals(0.0F, result.config().targetYaw());
         assertEquals(0.0F, result.config().targetPitch());
         assertTrue(Files.isRegularFile(path));
-        assertTrue(Files.readString(path, StandardCharsets.UTF_8).contains("\"schemaVersion\": 3"));
+        assertTrue(Files.readString(path, StandardCharsets.UTF_8).contains("\"schemaVersion\": 4"));
         assertEquals(FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY, result.config().openSettingsKey());
     }
 
@@ -53,7 +53,7 @@ class FarmHelperConfigStoreTest {
     @Test
     void missingCurrentFieldsUseTypedDefaults() throws IOException {
         Path path = temporaryDirectory.resolve("farmhelper.json");
-        Files.writeString(path, "{\"schemaVersion\":3}", StandardCharsets.UTF_8);
+        Files.writeString(path, "{\"schemaVersion\":4}", StandardCharsets.UTF_8);
 
         ConfigLoadResult result = new FarmHelperConfigStore(path).load();
 
@@ -188,7 +188,7 @@ class FarmHelperConfigStoreTest {
         assertEquals(ConfigLoadStatus.MIGRATED, result.status());
         assertEquals(45.5F, result.config().targetYaw());
         assertEquals(-30.0F, result.config().targetPitch());
-        assertTrue(migrated.contains("\"schemaVersion\": 3"));
+        assertTrue(migrated.contains("\"schemaVersion\": 4"));
         assertTrue(migrated.contains("\"rotation\""));
         assertFalse(migrated.contains("\"targetYaw\": 45.5\n"));
     }
@@ -267,7 +267,7 @@ class FarmHelperConfigStoreTest {
         assertEquals(ConfigLoadStatus.MIGRATED, result.status());
         assertEquals(45.0F, result.config().targetYaw());
         assertEquals(FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY, result.config().openSettingsKey());
-        assertTrue(migrated.contains("\"schemaVersion\": 3"));
+        assertTrue(migrated.contains("\"schemaVersion\": 4"));
         assertTrue(migrated.contains("\"openSettingsKey\": 344"));
     }
 
@@ -298,5 +298,36 @@ class FarmHelperConfigStoreTest {
         assertEquals(ConfigLoadStatus.RECOVERED_DEFAULTS, result.status());
         assertEquals(FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY, result.config().openSettingsKey());
         assertTrue(result.backup().isPresent());
+    }
+
+    @Test
+    void p1MacroSpawnRewarpAndTimingConfigRoundTrips() throws IOException {
+        Path path = temporaryDirectory.resolve("macro-roundtrip.json");
+        FarmHelperConfig config = new FarmHelperConfig();
+        config.setMacroMode(6);
+        config.setMacroSpawn(new MacroLocationConfig(10, 72, -10, 90.0F, -38.5F, 6));
+        assertTrue(config.addMacroRewarp(
+                new MacroLocationConfig(20, 71, -10, 90.0F, -38.5F, 6)));
+
+        FarmHelperConfigStore store = new FarmHelperConfigStore(path);
+        store.save(config);
+        FarmHelperConfig loaded = store.load().config();
+
+        assertEquals(6, loaded.macroMode());
+        assertEquals(config.macroSpawn(), loaded.macroSpawn());
+        assertEquals(config.macroRewarps(), loaded.macroRewarps());
+    }
+
+    @Test
+    void spawnUpdatePersistsPosePlotAndEvictsNearbyRewarp() {
+        FarmHelperConfig config = new FarmHelperConfig();
+        assertTrue(config.addMacroRewarp(
+                new MacroLocationConfig(1, 70, 0, 0.0F, 0.0F, 0)));
+        MacroLocationConfig spawn = new MacroLocationConfig(0, 70, 0, 45.0F, 10.0F, 0);
+
+        config.setMacroSpawn(spawn);
+
+        assertEquals(spawn, config.macroSpawn().orElseThrow());
+        assertTrue(config.macroRewarps().isEmpty());
     }
 }

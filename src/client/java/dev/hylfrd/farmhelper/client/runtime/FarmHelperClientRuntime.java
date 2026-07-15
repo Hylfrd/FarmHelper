@@ -10,6 +10,7 @@ import dev.hylfrd.farmhelper.config.ConfigLoadStatus;
 import dev.hylfrd.farmhelper.config.FarmHelperConfig;
 import dev.hylfrd.farmhelper.config.FarmHelperConfigKey;
 import dev.hylfrd.farmhelper.config.FarmHelperConfigStore;
+import dev.hylfrd.farmhelper.config.MacroLocationConfig;
 import dev.hylfrd.farmhelper.platform.FarmHelper;
 import dev.hylfrd.farmhelper.control.input.ReleaseReason;
 import dev.hylfrd.farmhelper.control.inventory.InventoryCancelReason;
@@ -23,12 +24,15 @@ import dev.hylfrd.farmhelper.control.inventory.InventoryScreenSnapshot;
 import dev.hylfrd.farmhelper.control.inventory.ScreenIdentity;
 import dev.hylfrd.farmhelper.control.input.ControlOwner;
 import dev.hylfrd.farmhelper.control.rotation.RotationCancelReason;
+import dev.hylfrd.farmhelper.macro.MacroTerminalReason;
+import dev.hylfrd.farmhelper.macro.MacroControlOwner;
 import dev.hylfrd.farmhelper.runtime.FarmHelperRuntime;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientCancellationFanout;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientCancellationReason;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientOwnershipFence;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientRuntimeLifecycle;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
+import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialSnapshotCapturePort;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -53,6 +57,7 @@ public final class FarmHelperClientRuntime {
     private final ClientRuntimeLifecycle lifecycle;
     private final SpatialSnapshotCapturePort spatialSnapshots;
     private boolean disconnectLatched;
+    private boolean serverHeartbeatJoined;
 
     public FarmHelperClientRuntime() {
         this(FabricLoader.getInstance().getConfigDir().resolve(FarmHelper.MOD_ID + ".json"),
@@ -84,6 +89,7 @@ public final class FarmHelperClientRuntime {
                 ? ClientInputController.detached(ownershipFence::requireAcquisitionAllowed)
                 : new ClientInputController(ownershipFence::requireAcquisitionAllowed);
         rotation = new ClientRotationController(ownershipFence::requireAcquisitionAllowed);
+        core.macroManager().installPauseObserver(this::releaseMacroControls);
         InventoryPort inventoryPort = suppliedInventoryPort != null
                 ? suppliedInventoryPort
                 : new MinecraftInventoryPort(Objects.requireNonNull(client, "client"));
@@ -94,12 +100,13 @@ public final class FarmHelperClientRuntime {
                 core.taskQueue(), new ClientInventoryHotbarPort(input), inventoryPort,
                 diagnostics, ownershipFence::requireAcquisitionAllowed);
         cancellationFanout = new ClientCancellationFanout(
-                ignored -> core.macroManager().stop(),
+                this::cancelMacro,
                 ignored -> core.invalidateGameState(),
                 reason -> inventory.cancelActive(inventoryReason(reason)),
                 reason -> rotation.cancel(rotationReason(reason)),
                 reason -> input.releaseAll(inputReason(reason)),
-                ignored -> core.taskQueue().cancelAll());
+                ignored -> core.taskQueue().cancelAll(),
+                this::resetServerHeartbeat);
         lifecycle = new ClientRuntimeLifecycle(this::cancelOwnership);
         spatialSnapshots = client == null
                 ? request -> Observation.unknown()
@@ -161,16 +168,51 @@ public final class FarmHelperClientRuntime {
     }
 
     public boolean resetConfig() {
-        return updateConfig(FarmHelperConfig::reset);
+        return updateMacroConfig(FarmHelperConfig::reset);
     }
 
     public FarmHelperConfig configSnapshot() {
         return core.config().copy();
     }
 
+    public boolean setMacroMode(int code) {
+        if (core.macroManager().enabled()) {
+            return false;
+        }
+        return updateMacroConfig(config -> config.setMacroMode(code));
+    }
+
+    public boolean setMacroSpawn(MacroLocationConfig position) {
+        return updateMacroConfig(config -> config.setMacroSpawn(position));
+    }
+
+    public boolean addMacroRewarp(MacroLocationConfig position) {
+        FarmHelperConfig candidate = core.config().copy();
+        if (!candidate.addMacroRewarp(position)) {
+            return false;
+        }
+        return replaceMacroConfig(candidate);
+    }
+
+    public boolean removeMacroRewarp(MacroLocationConfig position) {
+        FarmHelperConfig candidate = core.config().copy();
+        if (!candidate.removeMacroRewarp(position, 2.0D)) {
+            return false;
+        }
+        return replaceMacroConfig(candidate);
+    }
+
+    public boolean clearMacroRewarps() {
+        return updateMacroConfig(FarmHelperConfig::clearMacroRewarps);
+    }
+
     public boolean saveConfig(FarmHelperConfig replacement) {
         FarmHelperConfig snapshot = replacement.copy();
-        return updateConfig(config -> config.replaceWith(snapshot));
+        if (core.macroManager().enabled()
+                && snapshot.macroMode() != core.config().macroMode()) {
+            return false;
+        }
+        return replaceMacroConfig(snapshot);
     }
 
     public void stop(Minecraft client) {
@@ -246,6 +288,130 @@ public final class FarmHelperClientRuntime {
         Objects.requireNonNull(connection, "connection");
         ownershipFence.setAutomationReady(connection.isPresent() && !disconnectLatched);
         lifecycle.observeConnection(connection);
+        if (connection.isPresent() && !disconnectLatched && !serverHeartbeatJoined) {
+            core.serverJoined();
+            serverHeartbeatJoined = true;
+        }
+    }
+
+    private boolean updateMacroConfig(Consumer<FarmHelperConfig> update) {
+        FarmHelperConfig candidate = core.config().copy();
+        try {
+            update.accept(candidate);
+        } catch (RuntimeException exception) {
+            FarmHelper.LOGGER.error("Rejected FarmHelper macro configuration: {}", exception.toString());
+            return false;
+        }
+        return replaceMacroConfig(candidate);
+    }
+
+    private boolean replaceMacroConfig(FarmHelperConfig replacement) {
+        FarmHelperConfig before = core.config().copy();
+        boolean diskChanged = false;
+        try {
+            configStore.save(replacement);
+            diskChanged = true;
+            core.config().replaceWith(replacement);
+            core.synchronizeMacroSettings();
+            return true;
+        } catch (IOException | RuntimeException exception) {
+            core.config().replaceWith(before);
+            try {
+                core.synchronizeMacroSettings();
+                if (diskChanged) {
+                    configStore.save(before);
+                }
+            } catch (IOException | RuntimeException rollbackFailure) {
+                exception.addSuppressed(rollbackFailure);
+            }
+            FarmHelper.LOGGER.error("Failed to replace FarmHelper macro configuration: {}",
+                    exception.toString());
+            return false;
+        }
+    }
+
+    public boolean startMacro() {
+        requireAttachedClientThread();
+        if (core.macroManager().enabled()) {
+            return false;
+        }
+        core.macroManager().start();
+        return true;
+    }
+
+    public boolean pauseMacro() {
+        requireAttachedClientThread();
+        if (!core.macroManager().enabled()
+                || core.macroManager().pauseCauses().contains(
+                dev.hylfrd.farmhelper.macro.MacroPauseCause.MANUAL)) {
+            return false;
+        }
+        core.macroManager().manualPause();
+        return true;
+    }
+
+    public boolean resumeMacro() {
+        requireAttachedClientThread();
+        if (!core.macroManager().pauseCauses().contains(
+                dev.hylfrd.farmhelper.macro.MacroPauseCause.MANUAL)) {
+            return false;
+        }
+        core.macroManager().manualResume();
+        return true;
+    }
+
+    public boolean stopMacro() {
+        requireAttachedClientThread();
+        if (!core.macroManager().enabled()) {
+            return false;
+        }
+        cancelOwnership(ClientCancellationReason.MANUAL_STOP);
+        return true;
+    }
+
+    public void receivedServerTimePacket() {
+        requireAttachedClientThread();
+        core.receivedServerTimePacket();
+    }
+
+    /** Screen presence pauses the macro run but never discards its private generation. */
+    public void observeMacroScreen(Observation<ScreenSnapshot> screen) {
+        requireAttachedClientThread();
+        Objects.requireNonNull(screen, "screen");
+        core.macroManager().observeScreen(!screen.isAbsent());
+    }
+
+    private void cancelMacro(ClientCancellationReason reason) {
+        if (reason == ClientCancellationReason.SCREEN_CHANGED) {
+            return;
+        }
+        MacroTerminalReason terminal = switch (reason) {
+            case MANUAL_STOP -> MacroTerminalReason.MANUAL_STOP;
+            case WORLD_LOAD, WORLD_UNLOAD -> disconnectLatched
+                    ? MacroTerminalReason.DISCONNECT
+                    : MacroTerminalReason.WORLD_CHANGE;
+            case DISCONNECT -> MacroTerminalReason.DISCONNECT;
+            case CONNECTION_UNAVAILABLE -> MacroTerminalReason.CONNECTION_LOST;
+            case EXCEPTION -> MacroTerminalReason.EXCEPTION;
+            case CLIENT_STOP -> MacroTerminalReason.CLIENT_STOP;
+            case SCREEN_CHANGED -> throw new AssertionError("screen changes are state-preserving");
+        };
+        core.macroManager().stop(terminal);
+    }
+
+    private void resetServerHeartbeat(ClientCancellationReason reason) {
+        if (reason == ClientCancellationReason.SCREEN_CHANGED) {
+            return;
+        }
+        serverHeartbeatJoined = false;
+        core.resetServerTimeTracker();
+    }
+
+    private void releaseMacroControls() {
+        input.release(MacroControlOwner.S_SHAPE);
+        if (rotation.snapshot().owner().filter(MacroControlOwner.S_SHAPE::equals).isPresent()) {
+            rotation.cancel(RotationCancelReason.OWNER_CANCELLED);
+        }
     }
 
     private void cancelOwnership(ClientCancellationReason reason) {

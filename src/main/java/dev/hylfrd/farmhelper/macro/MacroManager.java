@@ -1,46 +1,72 @@
 package dev.hylfrd.farmhelper.macro;
 
-import dev.hylfrd.farmhelper.macro.impl.StandbyMacro;
+import dev.hylfrd.farmhelper.macro.impl.SShapeVerticalCropMacro;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
-import dev.hylfrd.farmhelper.runtime.snapshot.ConnectionSnapshot;
-import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
-import dev.hylfrd.farmhelper.runtime.snapshot.PositionSnapshot;
-import dev.hylfrd.farmhelper.runtime.snapshot.RotationSnapshot;
-import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
-import dev.hylfrd.farmhelper.runtime.snapshot.WorldSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
+import dev.hylfrd.farmhelper.runtime.time.MonotonicClock;
+import dev.hylfrd.farmhelper.runtime.time.SystemMonotonicClock;
 
-import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
-public final class MacroManager {
+public final class MacroManager implements MacroLifecycleTarget {
+    private static final Runnable NOOP_OBSERVER = () -> { };
     private final Macro activeMacro;
     private final Runnable acquisitionGuard;
-    private MacroState state = MacroState.STOPPED;
-    private PauseReason pauseReason = PauseReason.NONE;
-    private WorldMode worldMode = WorldMode.NONE;
-    private PlayerSnapshot playerSnapshot = PlayerSnapshot.unknown();
+    private final MacroLifecycle lifecycle;
+    private final MacroSettings settings;
     private ClientSnapshot clientSnapshot = ClientSnapshot.unknown();
     private long runningTicks;
+    private MacroTerminalReason lastTerminalReason;
+    private String lastStatus = "stopped";
+    private Runnable pauseObserver = NOOP_OBSERVER;
 
     public MacroManager() {
-        this(new StandbyMacro(), () -> { });
+        this(SystemMonotonicClock.INSTANCE, () -> { });
     }
 
     public MacroManager(Runnable acquisitionGuard) {
-        this(new StandbyMacro(), acquisitionGuard);
+        this(SystemMonotonicClock.INSTANCE, acquisitionGuard);
     }
 
     MacroManager(Macro activeMacro, Runnable acquisitionGuard) {
+        this(activeMacro, new MacroSettings(), SystemMonotonicClock.INSTANCE, acquisitionGuard);
+    }
+
+    public MacroManager(MonotonicClock clock, Runnable acquisitionGuard) {
+        this(new MacroSettings(), clock, acquisitionGuard);
+    }
+
+    private MacroManager(MacroSettings settings, MonotonicClock clock, Runnable acquisitionGuard) {
+        this(new SShapeVerticalCropMacro(settings,
+                        () -> ThreadLocalRandom.current().nextDouble()),
+                settings, clock, acquisitionGuard);
+    }
+
+    MacroManager(Macro activeMacro, MonotonicClock clock, Runnable acquisitionGuard) {
+        this(activeMacro, new MacroSettings(), clock, acquisitionGuard);
+    }
+
+    private MacroManager(
+            Macro activeMacro,
+            MacroSettings settings,
+            MonotonicClock clock,
+            Runnable acquisitionGuard
+    ) {
         this.activeMacro = Objects.requireNonNull(activeMacro, "activeMacro");
+        this.settings = Objects.requireNonNull(settings, "settings");
         this.acquisitionGuard = Objects.requireNonNull(acquisitionGuard, "acquisitionGuard");
+        lifecycle = new MacroLifecycle(this, Objects.requireNonNull(clock, "clock"));
     }
 
     public boolean enabled() {
-        return state != MacroState.STOPPED;
+        return lifecycle.state() != MacroState.STOPPED;
     }
 
     public MacroState state() {
-        return state;
+        return lifecycle.state();
     }
 
     public String activeMacroId() {
@@ -51,20 +77,43 @@ public final class MacroManager {
         return runningTicks;
     }
 
-    public PauseReason pauseReason() {
-        return pauseReason;
+    public long generation() {
+        return lifecycle.generation();
     }
 
-    public WorldMode worldMode() {
-        return worldMode;
-    }
-
-    public PlayerSnapshot playerSnapshot() {
-        return playerSnapshot;
+    public Set<MacroPauseCause> pauseCauses() {
+        return lifecycle.pauseCauses();
     }
 
     public ClientSnapshot clientSnapshot() {
         return clientSnapshot;
+    }
+
+    public Optional<MacroTerminalReason> lastTerminalReason() {
+        return Optional.ofNullable(lastTerminalReason);
+    }
+
+    public MacroSettings settings() {
+        return settings;
+    }
+
+    public String lastStatus() {
+        return lastStatus;
+    }
+
+    public void installPauseObserver(Runnable observer) {
+        Objects.requireNonNull(observer, "observer");
+        if (pauseObserver != NOOP_OBSERVER && pauseObserver != observer) {
+            throw new IllegalStateException("macro pause observer is already installed");
+        }
+        pauseObserver = observer;
+    }
+
+    public Optional<SpatialCaptureRequest> spatialRequest(
+            dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot player,
+            long worldEpoch
+    ) {
+        return activeMacro.spatialRequest(player, worldEpoch);
     }
 
     public boolean toggle() {
@@ -79,85 +128,99 @@ public final class MacroManager {
     public void start() {
         acquisitionGuard.run();
         runningTicks = 0L;
-        state = MacroState.RUNNING;
         try {
-            activeMacro.onStart();
+            lifecycle.start();
         } catch (RuntimeException | Error failure) {
-            state = MacroState.STOPPED;
-            pauseReason = PauseReason.NONE;
+            lastTerminalReason = MacroTerminalReason.EXCEPTION;
             runningTicks = 0L;
             throw failure;
         }
     }
 
     public void stop() {
-        try {
-            if (state != MacroState.STOPPED) {
-                activeMacro.onStop();
+        stop(MacroTerminalReason.MANUAL_STOP);
+    }
+
+    public void stop(MacroTerminalReason reason) {
+        Objects.requireNonNull(reason, "reason");
+        if (!enabled()) {
+            if (reason == MacroTerminalReason.DISCONNECT
+                    && (lastTerminalReason == MacroTerminalReason.WORLD_CHANGE
+                    || lastTerminalReason == MacroTerminalReason.CONNECTION_LOST)) {
+                lastTerminalReason = MacroTerminalReason.DISCONNECT;
+                lastStatus = "stopped:disconnect";
             }
-        } finally {
-            state = MacroState.STOPPED;
-            pauseReason = PauseReason.NONE;
-            runningTicks = 0L;
+            return;
+        }
+        lifecycle.stop(reason);
+    }
+
+    public void manualPause() {
+        lifecycle.manualPause();
+    }
+
+    public void manualResume() {
+        lifecycle.manualResume();
+    }
+
+    public FeatureSuspension suspendForFeature(String owner) {
+        return lifecycle.suspendForFeature(owner);
+    }
+
+    public void observeScreen(boolean open) {
+        if (open) {
+            lifecycle.screenOpen();
+        } else {
+            lifecycle.screenClosed();
         }
     }
 
-    public void tick(MacroContext context) {
-        tick(legacyClientSnapshot(context), context);
-    }
-
-    public void tick(ClientSnapshot clientSnapshot, MacroContext context) {
+    public MacroDecision tick(ClientSnapshot clientSnapshot, FarmingContext context) {
         this.clientSnapshot = Objects.requireNonNull(clientSnapshot, "clientSnapshot");
         Objects.requireNonNull(context, "context");
-        worldMode = context.worldMode();
-        playerSnapshot = context.player();
-        if (state == MacroState.STOPPED) {
-            return;
+        if (lifecycle.state() == MacroState.STOPPED) {
+            return MacroDecision.idle("stopped");
         }
-        if (!context.playerReady() || context.screenOpen()) {
-            state = MacroState.PAUSED;
-            pauseReason = context.pauseReason();
-            return;
+        if (!context.player().isPresent()) {
+            lifecycle.environmentUnavailable();
+        } else {
+            lifecycle.environmentAvailable();
         }
-        state = MacroState.RUNNING;
-        pauseReason = PauseReason.NONE;
+        if (!lifecycle.running()) {
+            return MacroDecision.idle("paused");
+        }
         runningTicks++;
-        activeMacro.tick(context);
+        MacroDecision decision = activeMacro.tick(context);
+        lastStatus = (context.developmentGarden() ? "[DEV WORLD] " : "") + decision.status();
+        return decision;
     }
 
-    private static ClientSnapshot legacyClientSnapshot(MacroContext context) {
-        Objects.requireNonNull(context, "context");
-        Observation<dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot> player = switch (context.player().state()) {
-            case PRESENT -> Observation.present(new dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot(
-                    Observation.present(new PositionSnapshot(
-                            context.player().x(),
-                            context.player().y(),
-                            context.player().z())),
-                    Observation.unknown(),
-                    Observation.present(new RotationSnapshot(
-                            context.player().yaw(),
-                            context.player().pitch())),
-                    Observation.unknown(),
-                    Observation.<List<dev.hylfrd.farmhelper.runtime.snapshot.StatusEffectSummary>>unknown()));
-            case ABSENT -> Observation.absent();
-            case UNKNOWN -> Observation.unknown();
-        };
-        Observation<WorldSnapshot> world = switch (context.worldMode()) {
-            case SINGLEPLAYER, MULTIPLAYER -> Observation.present(new WorldSnapshot(Observation.unknown()));
-            case NONE -> context.pauseReason() == PauseReason.NO_WORLD
-                    ? Observation.absent()
-                    : Observation.unknown();
-        };
-        Observation<ConnectionSnapshot> connection = switch (context.worldMode()) {
-            case SINGLEPLAYER -> Observation.present(ConnectionSnapshot.singleplayer());
-            case MULTIPLAYER -> Observation.present(ConnectionSnapshot.multiplayer());
-            case NONE -> context.pauseReason() == PauseReason.NO_WORLD
-                    ? Observation.absent()
-                    : Observation.unknown();
-        };
-        Observation<ScreenSnapshot> screen = context.screenOpen()
-                ? Observation.present(ScreenSnapshot.unknownDetails())
-                : Observation.absent();
-        return new ClientSnapshot(player, world, connection, screen);
+    @Override
+    public void start(long generation, long nowNanos) {
+        lastTerminalReason = null;
+        lastStatus = "starting";
+        activeMacro.onStart(nowNanos);
+    }
+
+    @Override
+    public void pause(long generation, long nowNanos, Set<MacroPauseCause> causes) {
+        activeMacro.onPause(causes, nowNanos);
+        pauseObserver.run();
+    }
+
+    @Override
+    public void resume(long generation, long nowNanos) {
+        activeMacro.onResume(nowNanos);
+    }
+
+    @Override
+    public void stop(long generation, MacroTerminalReason reason) {
+        lastTerminalReason = reason;
+        try {
+            activeMacro.onStop(reason);
+        } finally {
+            runningTicks = 0L;
+            lastStatus = "stopped:" + reason.name().toLowerCase();
+        }
     }
 }

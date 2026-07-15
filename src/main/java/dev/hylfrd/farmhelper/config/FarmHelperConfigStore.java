@@ -3,6 +3,7 @@ package dev.hylfrd.farmhelper.config;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
@@ -28,8 +29,11 @@ public final class FarmHelperConfigStore {
     );
     private static final Set<String> VERSION_TWO_ROOT_FIELDS = Set.of("schemaVersion", "rotation");
     private static final Set<String> VERSION_THREE_ROOT_FIELDS = Set.of("schemaVersion", "rotation", "ui");
+    private static final Set<String> VERSION_FOUR_ROOT_FIELDS = Set.of("schemaVersion", "rotation", "ui", "macro");
     private static final Set<String> ROTATION_FIELDS = Set.of("targetYaw", "targetPitch");
     private static final Set<String> UI_FIELDS = Set.of("openSettingsKey");
+    private static final Set<String> MACRO_FIELDS = Set.of("mode", "spawn", "rewarps");
+    private static final Set<String> LOCATION_FIELDS = Set.of("x", "y", "z", "yaw", "pitch", "plot");
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
             .disableHtmlEscaping()
@@ -75,6 +79,7 @@ public final class FarmHelperConfigStore {
             FarmHelperConfig config = switch (schemaVersion) {
                 case 1 -> migrateVersionOne(root);
                 case 2 -> readVersionTwo(root);
+                case 3 -> readVersionThree(root);
                 case FarmHelperConfig.CURRENT_SCHEMA_VERSION -> readCurrent(root);
                 default -> throw new ConfigFormatException("No migration path for schema version " + schemaVersion);
             };
@@ -93,7 +98,8 @@ public final class FarmHelperConfigStore {
     public synchronized void save(FarmHelperConfig config) throws IOException {
         Objects.requireNonNull(config, "config");
         FarmHelperConfig validated = FarmHelperConfig.fromPersisted(
-                config.targetYaw(), config.targetPitch(), config.openSettingsKey());
+                config.targetYaw(), config.targetPitch(), config.openSettingsKey(),
+                config.macroMode(), config.macroSpawn().orElse(null), config.macroRewarps());
         byte[] json = (GSON.toJson(toJson(validated)) + System.lineSeparator()).getBytes(StandardCharsets.UTF_8);
 
         Path parent = configPath.getParent();
@@ -121,7 +127,7 @@ public final class FarmHelperConfigStore {
     }
 
     private static FarmHelperConfig readCurrent(JsonObject root) {
-        requireOnlyFields(root, VERSION_THREE_ROOT_FIELDS, "configuration root");
+        requireOnlyFields(root, VERSION_FOUR_ROOT_FIELDS, "configuration root");
         JsonObject rotation = optionalObject(root, "rotation");
         float yaw = 0.0F;
         float pitch = 0.0F;
@@ -137,7 +143,35 @@ public final class FarmHelperConfigStore {
             requireOnlyFields(ui, UI_FIELDS, "ui");
             openSettingsKey = optionalInteger(ui, "openSettingsKey", FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY);
         }
-        return FarmHelperConfig.fromPersisted(yaw, pitch, openSettingsKey);
+        JsonObject macro = optionalObject(root, "macro");
+        int mode = 0;
+        MacroLocationConfig spawn = null;
+        java.util.List<MacroLocationConfig> rewarps = java.util.List.of();
+        if (macro != null) {
+            requireOnlyFields(macro, MACRO_FIELDS, "macro");
+            mode = optionalInteger(macro, "mode", 0);
+            JsonObject spawnObject = optionalObject(macro, "spawn");
+            spawn = spawnObject == null ? null : location(spawnObject, "macro.spawn");
+            rewarps = locations(macro.get("rewarps"), "macro.rewarps");
+        }
+        return FarmHelperConfig.fromPersisted(yaw, pitch, openSettingsKey, mode, spawn, rewarps);
+    }
+
+    private static FarmHelperConfig readVersionThree(JsonObject root) {
+        requireOnlyFields(root, VERSION_THREE_ROOT_FIELDS, "schema 3 configuration root");
+        JsonObject rotation = optionalObject(root, "rotation");
+        JsonObject ui = optionalObject(root, "ui");
+        float yaw = rotation == null ? 0.0F : optionalFloat(rotation, "targetYaw", 0.0F);
+        float pitch = rotation == null ? 0.0F : optionalFloat(rotation, "targetPitch", 0.0F);
+        if (rotation != null) {
+            requireOnlyFields(rotation, ROTATION_FIELDS, "rotation");
+        }
+        int key = ui == null ? FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY
+                : optionalInteger(ui, "openSettingsKey", FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY);
+        if (ui != null) {
+            requireOnlyFields(ui, UI_FIELDS, "ui");
+        }
+        return FarmHelperConfig.fromPersisted(yaw, pitch, key);
     }
 
     private static FarmHelperConfig readVersionTwo(JsonObject root) {
@@ -210,7 +244,63 @@ public final class FarmHelperConfigStore {
         JsonObject ui = new JsonObject();
         ui.addProperty("openSettingsKey", config.openSettingsKey());
         root.add("ui", ui);
+
+        JsonObject macro = new JsonObject();
+        macro.addProperty("mode", config.macroMode());
+        macro.add("spawn", config.macroSpawn().isPresent()
+                ? locationJson(config.macroSpawn().orElseThrow())
+                : com.google.gson.JsonNull.INSTANCE);
+        JsonArray rewarps = new JsonArray();
+        config.macroRewarps().forEach(rewarp -> rewarps.add(locationJson(rewarp)));
+        macro.add("rewarps", rewarps);
+        root.add("macro", macro);
         return root;
+    }
+
+    private static JsonObject locationJson(MacroLocationConfig location) {
+        JsonObject value = new JsonObject();
+        value.addProperty("x", location.x());
+        value.addProperty("y", location.y());
+        value.addProperty("z", location.z());
+        value.addProperty("yaw", location.yaw());
+        value.addProperty("pitch", location.pitch());
+        value.addProperty("plot", location.plot());
+        return value;
+    }
+
+    private static MacroLocationConfig location(JsonObject object, String name) {
+        requireOnlyFields(object, LOCATION_FIELDS, name);
+        return new MacroLocationConfig(
+                requiredInteger(object, "x", name),
+                requiredInteger(object, "y", name),
+                requiredInteger(object, "z", name),
+                optionalFloat(object, "yaw", 0.0F),
+                optionalFloat(object, "pitch", 0.0F),
+                optionalInteger(object, "plot", -1));
+    }
+
+    private static java.util.List<MacroLocationConfig> locations(JsonElement value, String name) {
+        if (value == null || value.isJsonNull()) {
+            return java.util.List.of();
+        }
+        if (!value.isJsonArray()) {
+            throw new ConfigFormatException(name + " must be an array");
+        }
+        java.util.List<MacroLocationConfig> result = new java.util.ArrayList<>();
+        for (JsonElement element : value.getAsJsonArray()) {
+            if (!element.isJsonObject()) {
+                throw new ConfigFormatException(name + " entries must be objects");
+            }
+            result.add(location(element.getAsJsonObject(), name + " entry"));
+        }
+        return java.util.List.copyOf(result);
+    }
+
+    private static int requiredInteger(JsonObject root, String field, String name) {
+        if (!root.has(field)) {
+            throw new ConfigFormatException(name + "." + field + " is required");
+        }
+        return optionalInteger(root, field, 0);
     }
 
     private static int requiredSchemaVersion(JsonObject root) {

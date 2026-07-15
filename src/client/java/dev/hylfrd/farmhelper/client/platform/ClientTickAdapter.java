@@ -2,10 +2,14 @@ package dev.hylfrd.farmhelper.client.platform;
 
 import dev.hylfrd.farmhelper.client.runtime.FarmHelperClientRuntime;
 import dev.hylfrd.farmhelper.control.input.ReleaseReason;
-import dev.hylfrd.farmhelper.macro.MacroContext;
+import dev.hylfrd.farmhelper.control.rotation.RotationCancelReason;
+import dev.hylfrd.farmhelper.macro.FarmingContext;
+import dev.hylfrd.farmhelper.macro.MacroControlOwner;
+import dev.hylfrd.farmhelper.macro.MacroDecision;
+import dev.hylfrd.farmhelper.macro.MacroRotationRequest;
+import dev.hylfrd.farmhelper.macro.MacroRotationDisposition;
 import dev.hylfrd.farmhelper.macro.MacroState;
-import dev.hylfrd.farmhelper.macro.PauseReason;
-import dev.hylfrd.farmhelper.macro.WorldMode;
+import dev.hylfrd.farmhelper.macro.PlayerPosture;
 import dev.hylfrd.farmhelper.platform.FarmHelper;
 import dev.hylfrd.farmhelper.runtime.ClientTickPipeline;
 import dev.hylfrd.farmhelper.runtime.gamestate.GameStateParseResult;
@@ -13,9 +17,12 @@ import dev.hylfrd.farmhelper.runtime.gamestate.GameTextInputBudget;
 import dev.hylfrd.farmhelper.runtime.gamestate.RawGameTextSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ConnectionSnapshot;
+import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
-import dev.hylfrd.farmhelper.runtime.snapshot.PositionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.RotationSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
+import dev.hylfrd.farmhelper.runtime.spatial.SpatialSnapshot;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLevelEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -26,6 +33,7 @@ import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.network.chat.Component;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /** One ordered client-thread adapter for every active P0 runtime consumer. */
 public final class ClientTickAdapter implements ClientTickPipeline.Actions {
@@ -120,6 +128,7 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
 
     @Override
     public void observeSnapshotLifecycle(ClientSnapshot snapshot) {
+        runtime.observeMacroScreen(snapshot.screen());
         clientLifecycle.observeConnection(snapshot.connection());
         commandScreenClose.observeScreen(
                 snapshot.screen(), client.screen, client.screen instanceof ChatScreen,
@@ -143,7 +152,102 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
 
     @Override
     public void deliverRuntimeTick(ClientSnapshot snapshot, GameStateParseResult gameState) {
-        runtime.core().macroManager().tick(snapshot, macroContext(snapshot));
+        Observation<SpatialSnapshot> spatial = Observation.unknown();
+        if (snapshot.player().isPresent()) {
+            Optional<SpatialCaptureRequest> request = runtime.core().macroManager()
+                    .spatialRequest(snapshot.player().get(), runtime.lifecycle().worldEpoch());
+            if (request.isPresent()) {
+                spatial = runtime.spatialSnapshots().capture(request.orElseThrow());
+            }
+        }
+        boolean developmentGarden = developmentGarden();
+        Observation<Boolean> inGarden = developmentGarden
+                ? Observation.present(true)
+                : gameState.snapshot().inGarden();
+        MacroDecision decision = runtime.core().macroManager().tick(snapshot, new FarmingContext(
+                runtime.core().nowNanos(),
+                runtime.lifecycle().worldEpoch(),
+                snapshot.player(),
+                spatial,
+                inGarden,
+                developmentGarden,
+                runtime.core().serverResponsiveness(snapshot.connection().isPresent()),
+                client.player == null ? Observation.unknown() : Observation.present(
+                        new PlayerPosture(client.player.getAbilities().flying,
+                                client.player.onGround()))));
+        applyDecision(snapshot, decision);
+    }
+
+    private void applyDecision(ClientSnapshot snapshot, MacroDecision decision) {
+        applyManagedDecision(runtime, decision);
+        decision.rotation().ifPresent(rotation -> startRotation(snapshot, rotation));
+        decision.warp().ifPresent(request -> {
+            if (client.getConnection() == null) {
+                throw new IllegalStateException("Cannot warp without a client connection");
+            }
+            String command = warpCommand(request);
+            client.getConnection().sendCommand(command);
+        });
+    }
+
+    static void applyManagedDecision(
+            FarmHelperClientRuntime runtime,
+            MacroDecision decision
+    ) {
+        Objects.requireNonNull(runtime, "runtime");
+        Objects.requireNonNull(decision, "decision");
+        if (decision.inputs().isEmpty()) {
+            runtime.input().release(MacroControlOwner.S_SHAPE);
+        } else {
+            runtime.input().replace(MacroControlOwner.S_SHAPE, decision.inputs());
+        }
+        applyMacroRotationDisposition(runtime, decision);
+    }
+
+    static void applyMacroRotationDisposition(
+            FarmHelperClientRuntime runtime,
+            MacroDecision decision
+    ) {
+        Objects.requireNonNull(runtime, "runtime");
+        Objects.requireNonNull(decision, "decision");
+        if (decision.rotationDisposition() == MacroRotationDisposition.RELEASE
+                && runtime.rotation().snapshot().owner()
+                .filter(MacroControlOwner.S_SHAPE::equals).isPresent()) {
+            runtime.rotation().cancel(RotationCancelReason.OWNER_CANCELLED);
+        }
+    }
+
+    private void startRotation(ClientSnapshot snapshot, MacroRotationRequest request) {
+        if (runtime.rotation().rotating() || !snapshot.player().isPresent()
+                || !snapshot.player().get().rotation().isPresent()) {
+            return;
+        }
+        RotationSnapshot current = snapshot.player().get().rotation().get();
+        runtime.rotation().start(MacroControlOwner.S_SHAPE, current.yaw(), current.pitch(),
+                request.yaw(), request.pitch(), request.durationMillis());
+    }
+
+    private boolean developmentGarden() {
+        return developmentGarden(
+                FabricLoader.getInstance().isDevelopmentEnvironment(),
+                client.hasSingleplayerServer(),
+                Boolean.getBoolean("farmhelper.developmentWorld"));
+    }
+
+    static boolean developmentGarden(
+            boolean developmentEnvironment,
+            boolean integratedServer,
+            boolean enabledProperty
+    ) {
+        return developmentEnvironment && integratedServer && enabledProperty;
+    }
+
+    static String warpCommand(dev.hylfrd.farmhelper.macro.MacroWarpRequest request) {
+        return request.developmentWorld()
+                ? "tp " + request.spawn().position().x() + " " + request.spawn().position().y()
+                + " " + request.spawn().position().z() + " " + request.spawn().yaw()
+                + " " + request.spawn().pitch()
+                : "warp garden";
     }
 
     @Override
@@ -165,6 +269,14 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         if (runtime.input().snapshot().emptyState()) {
             return;
         }
+        if (runtime.core().macroManager().state() != MacroState.RUNNING
+                && snapshot.screen().isAbsent()
+                && snapshot.world().isPresent()
+                && snapshot.player().isPresent()
+                && snapshot.connection().isPresent()) {
+            runtime.input().release(MacroControlOwner.S_SHAPE);
+            return;
+        }
         ReleaseReason reason = unsafeReason(runtime, snapshot);
         if (reason != null) {
             runtime.input().releaseAll(reason);
@@ -184,39 +296,6 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         runtime.failed();
     }
 
-    static MacroContext macroContext(ClientSnapshot snapshot) {
-        boolean worldReady = snapshot.world().isPresent();
-        boolean playerReady = snapshot.player().isPresent();
-        boolean connectionReady = snapshot.connection().isPresent();
-        boolean screenOpenOrUnknown = !snapshot.screen().isAbsent();
-        PauseReason pauseReason = !worldReady ? PauseReason.NO_WORLD
-                : !playerReady ? PauseReason.NO_PLAYER
-                : !connectionReady ? PauseReason.NO_CONNECTION
-                : screenOpenOrUnknown ? PauseReason.SCREEN_OPEN
-                : PauseReason.NONE;
-        WorldMode worldMode = snapshot.connection().isPresent()
-                ? switch (snapshot.connection().get().mode()) {
-                    case SINGLEPLAYER -> WorldMode.SINGLEPLAYER;
-                    case MULTIPLAYER -> WorldMode.MULTIPLAYER;
-                }
-                : WorldMode.NONE;
-        return new MacroContext(playerReady && connectionReady, screenOpenOrUnknown, pauseReason, worldMode,
-                legacyPlayer(snapshot.player().isPresent() ? snapshot.player().get() : null));
-    }
-
-    private static dev.hylfrd.farmhelper.macro.PlayerSnapshot legacyPlayer(PlayerSnapshot player) {
-        if (player == null) {
-            return dev.hylfrd.farmhelper.macro.PlayerSnapshot.absent();
-        }
-        if (!player.position().isPresent() || !player.rotation().isPresent()) {
-            return dev.hylfrd.farmhelper.macro.PlayerSnapshot.unknown();
-        }
-        PositionSnapshot position = player.position().get();
-        RotationSnapshot rotation = player.rotation().get();
-        return new dev.hylfrd.farmhelper.macro.PlayerSnapshot(
-                position.x(), position.y(), position.z(), rotation.yaw(), rotation.pitch());
-    }
-
     private static ReleaseReason unsafeReason(
             FarmHelperClientRuntime runtime,
             ClientSnapshot snapshot
@@ -230,9 +309,6 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         }
         if (runtime.rotation().rotating()) {
             return ReleaseReason.ROTATION_CONFLICT;
-        }
-        if (runtime.core().macroManager().state() != MacroState.RUNNING) {
-            return ReleaseReason.PAUSE;
         }
         return null;
     }
