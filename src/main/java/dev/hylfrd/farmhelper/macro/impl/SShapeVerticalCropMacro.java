@@ -28,6 +28,7 @@ import dev.hylfrd.farmhelper.runtime.spatial.RewarpPosition;
 import dev.hylfrd.farmhelper.runtime.spatial.SpaceStatus;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialQueries;
+import dev.hylfrd.farmhelper.runtime.spatial.SpatialScanResult;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialSnapshot;
 
 import java.util.EnumSet;
@@ -73,6 +74,15 @@ public final class SShapeVerticalCropMacro implements Macro {
     private Float targetYaw;
     private Float targetPitch;
     private long pausedAt = Long.MIN_VALUE;
+    private long spatialScanGeneration = 1L;
+    private long nextSpatialScanPhase = 1L;
+    private long nextSpatialRequestToken = 1L;
+    private long spatialScanWorldEpoch = Long.MIN_VALUE;
+    private Direction nextSpatialScanDirection = Direction.RIGHT;
+    private ScanAnchor spatialScanAnchor;
+    private PendingSpatialScan pendingSpatialScan;
+    private ObstacleEvidence rightObstacleEvidence;
+    private ObstacleEvidence leftObstacleEvidence;
 
     public SShapeVerticalCropMacro(MacroSettings settings, MacroRandom random) {
         this.settings = Objects.requireNonNull(settings, "settings");
@@ -127,6 +137,7 @@ public final class SShapeVerticalCropMacro implements Macro {
             case STOPPED, ALIGNING -> { }
         }
         pausedAt = Long.MIN_VALUE;
+        invalidateSpatialScan();
     }
 
     @Override
@@ -138,6 +149,22 @@ public final class SShapeVerticalCropMacro implements Macro {
         PositionSnapshot position = player.position().get();
         RotationSnapshot rotation = player.rotation().get();
         RelativeFrame cardinal = RelativeFrame.cardinal(rotation.yaw());
+        ScanAnchor anchor = scanAnchor(position, cardinal);
+        if (state == State.ALIGNING) {
+            if (spatialScanWorldEpoch != worldEpoch
+                    || spatialScanAnchor != null && !spatialScanAnchor.equals(anchor)) {
+                invalidateSpatialScan();
+                spatialScanWorldEpoch = worldEpoch;
+            }
+            if (spatialScanRoundComplete()) {
+                invalidateSpatialScan();
+                spatialScanWorldEpoch = worldEpoch;
+            }
+            spatialScanAnchor = anchor;
+            if (pendingSpatialScan != null) {
+                return Optional.of(pendingSpatialScan.request());
+            }
+        }
         Set<BlockPosition> blocks = new HashSet<>();
         for (int right = -3; right <= 3; right++) {
             for (int forward = -2; forward <= 3; forward++) {
@@ -148,25 +175,39 @@ public final class SShapeVerticalCropMacro implements Macro {
         }
         Direction active = direction;
         if (state == State.ALIGNING) {
+            Direction scanDirection = nextSpatialScanDirection;
+            int scanSign = scanDirection == Direction.RIGHT ? 1 : -1;
             for (int distance = 1; distance <= 179; distance++) {
-                addBodyCells(blocks, body(position).move(
-                        cardinal.rightX() * (double) distance,
+                addWalkabilityCells(blocks, body(position).move(
+                        cardinal.rightX() * scanSign * (double) distance,
                         0.0D,
-                        cardinal.rightZ() * (double) distance));
+                        cardinal.rightZ() * scanSign * (double) distance));
             }
             int anchorY = RelativeFrame.gridAnchorY(position.y());
-            if (anchorY > SpatialQueries.GARDEN_VOID_MIN_Y) {
+            if (anchorY > SpatialQueries.GARDEN_VOID_MIN_Y
+                    && (long) anchorY + 4L - SpatialQueries.GARDEN_VOID_MIN_Y
+                    <= (long) SpatialCaptureRequest.MAX_AXIS_SPAN) {
                 for (int side : new int[]{-1, 1}) {
                     for (int y = SpatialQueries.GARDEN_VOID_MIN_Y; y <= anchorY; y++) {
                         blocks.add(cardinal.blockAt(position.x(), y, position.z(), side, 0, 0));
                     }
                 }
             }
+            long requestToken = nextSpatialRequestToken;
+            nextSpatialRequestToken = incrementPositive(nextSpatialRequestToken);
+            SpatialCaptureRequest request = new SpatialCaptureRequest(
+                    worldEpoch, requestToken, bounds(blocks), blocks);
+            pendingSpatialScan = new PendingSpatialScan(
+                    spatialScanGeneration, nextSpatialScanPhase,
+                    scanDirection, anchor, request);
+            nextSpatialScanPhase = incrementPositive(nextSpatialScanPhase);
+            return Optional.of(request);
         } else if (active != null && (state == State.FARMING || state == State.SWITCHING_LANE)) {
             int dx = active == Direction.RIGHT ? cardinal.rightX() : -cardinal.rightX();
             int dz = active == Direction.RIGHT ? cardinal.rightZ() : -cardinal.rightZ();
             for (int distance = 1; distance <= SpatialQueries.MAX_END_ROW_BLOCKS; distance++) {
-                addBodyCells(blocks, body(position).move(dx * (double) distance, 0.0D, dz * (double) distance));
+                addWalkabilityCells(blocks,
+                        body(position).move(dx * (double) distance, 0.0D, dz * (double) distance));
             }
         }
         return Optional.of(new SpatialCaptureRequest(worldEpoch, bounds(blocks), blocks));
@@ -188,9 +229,25 @@ public final class SShapeVerticalCropMacro implements Macro {
             return MacroDecision.failClosed(context.serverResponsiveness() == ServerResponsiveness.LAGGING
                     ? "server-lagging" : "server-unknown");
         }
+        if (state == State.ALIGNING && context.spatial().isPresent()
+                && context.spatial().get().requestToken() != 0L
+                && context.spatial().get().worldEpoch() != context.worldEpoch()) {
+            invalidateSpatialScan();
+            return MacroDecision.failClosed("row-obstacle-scan-stale");
+        }
+        if (context.spatial().isUnknown()) {
+            MacroDecision unknownCapture = consumeUnknownSpatialCapture(context);
+            if (unknownCapture != null) {
+                return unknownCapture;
+            }
+        }
         Observed observed = observe(context);
         if (observed == null) {
             return MacroDecision.failClosed("spatial-unknown");
+        }
+        MacroDecision staleSpatialPhase = consumeSpatialScan(observed);
+        if (staleSpatialPhase != null) {
+            return staleSpatialPhase;
         }
 
         if (state == State.STARTUP) {
@@ -272,6 +329,14 @@ public final class SShapeVerticalCropMacro implements Macro {
         return state;
     }
 
+    long spatialScanGeneration() {
+        return spatialScanGeneration;
+    }
+
+    boolean spatialScanPending() {
+        return pendingSpatialScan != null;
+    }
+
     private MacroDecision align(FarmingContext context, Observed observed) {
         if (targetYaw == null) {
             targetYaw = closestCardinal(observed.rotation().yaw());
@@ -302,6 +367,9 @@ public final class SShapeVerticalCropMacro implements Macro {
             beginRow(Direction.LEFT, context, observed);
             return farmInputs("farming-left");
         }
+        if (right == CropStatus.INCOMPATIBLE || left == CropStatus.INCOMPATIBLE) {
+            return MacroDecision.failClosed("crop-mode-incompatible");
+        }
         if (right == CropStatus.UNKNOWN || left == CropStatus.UNKNOWN) {
             return MacroDecision.failClosed("row-direction-unknown");
         }
@@ -322,16 +390,47 @@ public final class SShapeVerticalCropMacro implements Macro {
                 return MacroDecision.failClosed("row-void-unknown");
             }
         }
-        SpaceStatus rightObstacle = scanDirection(observed, Direction.RIGHT);
+        if (rightObstacleEvidence != null || leftObstacleEvidence != null
+                || observed.spatial().requestToken() != 0L) {
+            return choosePhasedObstacleDirection(context, observed);
+        }
+        SpaceStatus rightObstacle = scanDirection(observed, Direction.RIGHT).status();
         if (rightObstacle == SpaceStatus.BLOCKED) {
             beginRow(Direction.LEFT, context, observed);
             return farmInputs("farming-left-obstacle");
         }
-        SpaceStatus leftObstacle = scanDirection(observed, Direction.LEFT);
+        SpaceStatus leftObstacle = scanDirection(observed, Direction.LEFT).status();
         if (leftObstacle == SpaceStatus.BLOCKED) {
             beginRow(Direction.RIGHT, context, observed);
             return farmInputs("farming-right-obstacle");
         }
+        return MacroDecision.failClosed("row-direction-unresolved");
+    }
+
+    private MacroDecision choosePhasedObstacleDirection(FarmingContext context, Observed observed) {
+        if (rightObstacleEvidence == null || leftObstacleEvidence == null) {
+            return MacroDecision.failClosed("row-obstacle-scan-pending");
+        }
+        if (rightObstacleEvidence == ObstacleEvidence.UNKNOWN
+                || leftObstacleEvidence == ObstacleEvidence.UNKNOWN) {
+            invalidateSpatialScan();
+            return MacroDecision.failClosed("row-obstacle-scan-unknown");
+        }
+        if (rightObstacleEvidence == ObstacleEvidence.BLOCKED) {
+            beginRow(Direction.LEFT, context, observed);
+            return farmInputs("farming-left-obstacle");
+        }
+        if (rightObstacleEvidence == ObstacleEvidence.EXHAUSTED
+                && leftObstacleEvidence == ObstacleEvidence.BLOCKED) {
+            beginRow(Direction.RIGHT, context, observed);
+            return farmInputs("farming-right-obstacle");
+        }
+        if (rightObstacleEvidence == ObstacleEvidence.EXHAUSTED
+                && leftObstacleEvidence == ObstacleEvidence.EXHAUSTED) {
+            invalidateSpatialScan();
+            return MacroDecision.failClosed("row-direction-unresolved");
+        }
+        invalidateSpatialScan();
         return MacroDecision.failClosed("row-direction-unresolved");
     }
 
@@ -341,19 +440,119 @@ public final class SShapeVerticalCropMacro implements Macro {
                 direction == Direction.RIGHT ? 1 : -1, 0, 0);
     }
 
-    private static SpaceStatus scanDirection(Observed observed, Direction direction) {
+    private static SpatialScanResult scanDirection(Observed observed, Direction direction) {
         int sign = direction == Direction.RIGHT ? 1 : -1;
         int dx = observed.frame().rightX() * sign;
         int dz = observed.frame().rightZ() * sign;
         RelativeFrame movement = new RelativeFrame(-dz, dx, dx, dz);
         return SpatialQueries.scanForwardUntilBlocked(
                 observed.spatial(), observed.worldEpoch(), observed.spatial().playerBox(),
-                movement, 179).status();
+                movement, 179);
+    }
+
+    private MacroDecision consumeSpatialScan(Observed observed) {
+        if (state != State.ALIGNING) {
+            return null;
+        }
+        SpatialSnapshot snapshot = observed.spatial();
+        if (snapshot.requestToken() == 0L) {
+            return null;
+        }
+        PendingSpatialScan pending = pendingSpatialScan;
+        ScanAnchor currentAnchor = scanAnchor(observed.position(), observed.frame());
+        if (pending == null
+                || pending.generation() != spatialScanGeneration
+                || pending.phase() != (pending.direction() == Direction.RIGHT ? 1L : 2L)
+                || pending.request().requestToken() != snapshot.requestToken()
+                || pending.request().worldEpoch() != snapshot.worldEpoch()
+                || !pending.request().bounds().equals(snapshot.bounds())
+                || spatialScanAnchor == null
+                || !spatialScanAnchor.equals(currentAnchor)
+                || !pending.anchor().equals(spatialScanAnchor)
+                || !pending.anchor().footprint().equals(bodyFootprint(snapshot.playerBox()))) {
+            invalidateSpatialScan();
+            return MacroDecision.failClosed("row-obstacle-scan-stale");
+        }
+        SpatialScanResult result = scanDirection(observed, pending.direction());
+        ObstacleEvidence evidence;
+        if (result.status() == SpaceStatus.BLOCKED) {
+            evidence = ObstacleEvidence.BLOCKED;
+        } else if (result.inspectedBlocks().size() == 179
+                && walkabilityAtDistance(observed, pending.direction(), 179)
+                == SpaceStatus.PASSABLE) {
+            evidence = ObstacleEvidence.EXHAUSTED;
+        } else {
+            evidence = ObstacleEvidence.UNKNOWN;
+        }
+        recordObstacleEvidence(pending, evidence);
+        return null;
+    }
+
+    private MacroDecision consumeUnknownSpatialCapture(FarmingContext context) {
+        PendingSpatialScan pending = pendingSpatialScan;
+        if (state != State.ALIGNING || pending == null) {
+            return null;
+        }
+        if (!context.player().isPresent()
+                || !context.player().get().position().isPresent()
+                || !context.player().get().rotation().isPresent()) {
+            invalidateSpatialScan();
+            return MacroDecision.failClosed("spatial-unknown");
+        }
+        PositionSnapshot position = context.player().get().position().get();
+        RelativeFrame frame = RelativeFrame.cardinal(
+                context.player().get().rotation().get().yaw());
+        ScanAnchor currentAnchor = scanAnchor(position, frame);
+        if (pending.generation() != spatialScanGeneration
+                || pending.phase() != (pending.direction() == Direction.RIGHT ? 1L : 2L)
+                || pending.request().worldEpoch() != context.worldEpoch()
+                || spatialScanAnchor == null
+                || !spatialScanAnchor.equals(currentAnchor)
+                || !pending.anchor().equals(spatialScanAnchor)) {
+            invalidateSpatialScan();
+            return MacroDecision.failClosed("row-obstacle-scan-stale");
+        }
+        recordObstacleEvidence(pending, ObstacleEvidence.UNKNOWN);
+        if (spatialScanRoundComplete()) {
+            invalidateSpatialScan();
+            return MacroDecision.failClosed("row-obstacle-scan-unknown");
+        }
+        return MacroDecision.failClosed("spatial-unknown");
+    }
+
+    private void recordObstacleEvidence(
+            PendingSpatialScan pending,
+            ObstacleEvidence evidence
+    ) {
+        if (pending.direction() == Direction.RIGHT) {
+            rightObstacleEvidence = evidence;
+        } else {
+            leftObstacleEvidence = evidence;
+        }
+        pendingSpatialScan = null;
+        nextSpatialScanDirection = pending.direction().opposite();
+    }
+
+    private static SpaceStatus walkabilityAtDistance(
+            Observed observed,
+            Direction direction,
+            int distance
+    ) {
+        int sign = direction == Direction.RIGHT ? 1 : -1;
+        BoxSnapshot target = observed.spatial().playerBox().move(
+                observed.frame().rightX() * sign * (double) distance,
+                0.0D,
+                observed.frame().rightZ() * sign * (double) distance);
+        return SpatialQueries.walkability(
+                observed.spatial(), observed.worldEpoch(), target);
     }
 
     private MacroDecision farmRow(FarmingContext context, Observed observed) {
         SpaceStatus next = nextStep(observed);
         CropStatus crop = cropStatus(observed, direction);
+        if (crop == CropStatus.INCOMPATIBLE) {
+            return MacroDecision.failClosed("crop-mode-incompatible");
+        }
         if (next == SpaceStatus.UNKNOWN || crop == CropStatus.UNKNOWN) {
             return MacroDecision.failClosed("row-spatial-unknown");
         }
@@ -420,6 +619,7 @@ public final class SShapeVerticalCropMacro implements Macro {
         if (current.isEmpty()) {
             return Optional.empty();
         }
+        invalidateSpatialScan();
         state = State.REWARP_DWELL;
         warpOrigin = current.orElseThrow();
         stateAt = context.nowNanos();
@@ -501,6 +701,7 @@ public final class SShapeVerticalCropMacro implements Macro {
         int right = side == Direction.RIGHT ? 1 : -1;
         VerticalCropMode mode = settings.mode();
         boolean unknown = false;
+        boolean incompatible = false;
         for (int up = mode == VerticalCropMode.COCOA ? 0 : -1; up <= 2; up++) {
             for (int forward = -1; forward <= 1; forward++) {
                 BlockPosition position = observed.frame().blockAt(
@@ -518,11 +719,16 @@ public final class SShapeVerticalCropMacro implements Macro {
                     continue;
                 }
                 CropObservation value = crop.get();
-                if (value.mature() && value.directlyHarvestable()
-                        && mode.compatibility(value.kind()) == CropCompatibility.COMPATIBLE) {
-                    return CropStatus.READY;
+                if (value.mature() && value.directlyHarvestable()) {
+                    if (mode.compatibility(value.kind()) == CropCompatibility.COMPATIBLE) {
+                        return CropStatus.READY;
+                    }
+                    incompatible = true;
                 }
             }
+        }
+        if (incompatible) {
+            return CropStatus.INCOMPATIBLE;
         }
         return unknown ? CropStatus.UNKNOWN : CropStatus.ABSENT;
     }
@@ -537,6 +743,7 @@ public final class SShapeVerticalCropMacro implements Macro {
     }
 
     private void beginRow(Direction next, FarmingContext context, Observed observed) {
+        invalidateSpatialScan();
         direction = next;
         state = State.FARMING;
         rowY = observed.position().y();
@@ -604,6 +811,7 @@ public final class SShapeVerticalCropMacro implements Macro {
     }
 
     private void clearLaneState() {
+        invalidateSpatialScan();
         direction = null;
         rowY = 0.0D;
         lastProgressCoordinate = 0.0D;
@@ -651,7 +859,26 @@ public final class SShapeVerticalCropMacro implements Macro {
                 position.x() + 0.3D, position.y() + 1.8D, position.z() + 0.3D);
     }
 
-    private static void addBodyCells(Set<BlockPosition> blocks, BoxSnapshot body) {
+    private static ScanAnchor scanAnchor(PositionSnapshot position, RelativeFrame frame) {
+        BoxSnapshot body = body(position);
+        BlockPosition grid = new BlockPosition(
+                (int) Math.floor(position.x()), RelativeFrame.gridAnchorY(position.y()),
+                (int) Math.floor(position.z()));
+        return new ScanAnchor(grid, frame, bodyFootprint(body));
+    }
+
+    private static BodyFootprint bodyFootprint(BoxSnapshot body) {
+        return new BodyFootprint(
+                (int) Math.floor(body.minX()),
+                (int) Math.floor(Math.nextDown(body.maxX())),
+                (int) Math.floor(body.minY() - 0.01D),
+                (int) Math.floor(Math.nextDown(body.maxY())),
+                (int) Math.floor(body.minZ()),
+                (int) Math.floor(Math.nextDown(body.maxZ())));
+    }
+
+    /** Adds every clearance and support-probe cell read by {@link SpatialQueries#walkability}. */
+    private static void addWalkabilityCells(Set<BlockPosition> blocks, BoxSnapshot body) {
         int minX = (int) Math.floor(body.minX());
         int maxX = (int) Math.floor(Math.nextDown(body.maxX()));
         int minY = (int) Math.floor(body.minY() - 0.01D);
@@ -788,6 +1015,26 @@ public final class SShapeVerticalCropMacro implements Macro {
         targetYaw = null;
         targetPitch = null;
         pausedAt = Long.MIN_VALUE;
+        invalidateSpatialScan();
+    }
+
+    private void invalidateSpatialScan() {
+        spatialScanGeneration = incrementPositive(spatialScanGeneration);
+        nextSpatialScanPhase = 1L;
+        spatialScanWorldEpoch = Long.MIN_VALUE;
+        nextSpatialScanDirection = Direction.RIGHT;
+        spatialScanAnchor = null;
+        pendingSpatialScan = null;
+        rightObstacleEvidence = null;
+        leftObstacleEvidence = null;
+    }
+
+    private boolean spatialScanRoundComplete() {
+        return rightObstacleEvidence != null && leftObstacleEvidence != null;
+    }
+
+    private static long incrementPositive(long value) {
+        return value == Long.MAX_VALUE ? 1L : value + 1L;
     }
 
     public enum State {
@@ -816,8 +1063,54 @@ public final class SShapeVerticalCropMacro implements Macro {
 
     private enum CropStatus {
         READY,
+        INCOMPATIBLE,
         ABSENT,
         UNKNOWN
+    }
+
+    private enum ObstacleEvidence {
+        BLOCKED,
+        EXHAUSTED,
+        UNKNOWN
+    }
+
+    private record PendingSpatialScan(
+            long generation,
+            long phase,
+            Direction direction,
+            ScanAnchor anchor,
+            SpatialCaptureRequest request
+    ) {
+        private PendingSpatialScan {
+            if (generation <= 0L || phase <= 0L) {
+                throw new IllegalArgumentException("scan generation and phase must be positive");
+            }
+            Objects.requireNonNull(direction, "direction");
+            Objects.requireNonNull(anchor, "anchor");
+            Objects.requireNonNull(request, "request");
+        }
+    }
+
+    private record ScanAnchor(
+            BlockPosition grid,
+            RelativeFrame frame,
+            BodyFootprint footprint
+    ) {
+        private ScanAnchor {
+            Objects.requireNonNull(grid, "grid");
+            Objects.requireNonNull(frame, "frame");
+            Objects.requireNonNull(footprint, "footprint");
+        }
+    }
+
+    private record BodyFootprint(
+            int minX,
+            int maxX,
+            int minY,
+            int maxY,
+            int minZ,
+            int maxZ
+    ) {
     }
 
     private record Observed(

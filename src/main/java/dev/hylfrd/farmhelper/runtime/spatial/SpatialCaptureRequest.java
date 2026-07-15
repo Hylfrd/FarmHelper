@@ -4,7 +4,12 @@ import java.util.Objects;
 import java.util.Set;
 
 /** Explicitly bounded set of blocks that a client-thread adapter may observe without loading chunks. */
-public record SpatialCaptureRequest(long worldEpoch, BoxSnapshot bounds, Set<BlockPosition> blocks) {
+public record SpatialCaptureRequest(
+        long worldEpoch,
+        long requestToken,
+        BoxSnapshot bounds,
+        Set<BlockPosition> blocks
+) {
     public static final int MAX_BLOCKS = 8_192;
     public static final double MAX_AXIS_SPAN = 256.0D;
 
@@ -12,6 +17,9 @@ public record SpatialCaptureRequest(long worldEpoch, BoxSnapshot bounds, Set<Blo
         Objects.requireNonNull(bounds, "bounds");
         Objects.requireNonNull(blocks, "blocks");
         blocks = Set.copyOf(blocks);
+        if (requestToken < 0L) {
+            throw new IllegalArgumentException("request token must not be negative");
+        }
         if (!bounds.hasPositiveVolume()) {
             throw new IllegalArgumentException("bounds must have positive volume");
         }
@@ -27,5 +35,9 @@ public record SpatialCaptureRequest(long worldEpoch, BoxSnapshot bounds, Set<Blo
                 throw new IllegalArgumentException("requested block lies outside bounds: " + block);
             }
         }
+    }
+
+    public SpatialCaptureRequest(long worldEpoch, BoxSnapshot bounds, Set<BlockPosition> blocks) {
+        this(worldEpoch, 0L, bounds, blocks);
     }
 }

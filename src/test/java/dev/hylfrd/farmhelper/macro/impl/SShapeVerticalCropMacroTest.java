@@ -1,6 +1,11 @@
 package dev.hylfrd.farmhelper.macro.impl;
 
+import dev.hylfrd.farmhelper.client.control.TestClientRotationControllerAccess;
+import dev.hylfrd.farmhelper.client.platform.TestClientTickAdapterAccess;
+import dev.hylfrd.farmhelper.client.runtime.FarmHelperClientRuntime;
+import dev.hylfrd.farmhelper.client.runtime.TestFarmHelperClientRuntimeFactory;
 import dev.hylfrd.farmhelper.control.input.InputAction;
+import dev.hylfrd.farmhelper.control.rotation.RotationTerminalReason;
 import dev.hylfrd.farmhelper.macro.FarmingContext;
 import dev.hylfrd.farmhelper.macro.MacroDecision;
 import dev.hylfrd.farmhelper.macro.MacroSettings;
@@ -10,11 +15,14 @@ import dev.hylfrd.farmhelper.macro.MacroSpawnPose;
 import dev.hylfrd.farmhelper.macro.ServerResponsiveness;
 import dev.hylfrd.farmhelper.macro.VerticalCropMode;
 import dev.hylfrd.farmhelper.runtime.snapshot.MotionSnapshot;
+import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
+import dev.hylfrd.farmhelper.runtime.snapshot.ConnectionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.PositionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ResourceIdentifier;
 import dev.hylfrd.farmhelper.runtime.snapshot.RotationSnapshot;
+import dev.hylfrd.farmhelper.runtime.snapshot.WorldSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.BlockPosition;
 import dev.hylfrd.farmhelper.runtime.spatial.BlockStateSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.BoxSnapshot;
@@ -22,9 +30,13 @@ import dev.hylfrd.farmhelper.runtime.spatial.ChunkPosition;
 import dev.hylfrd.farmhelper.runtime.spatial.ChunkSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.CollisionShapeSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.RewarpPosition;
+import dev.hylfrd.farmhelper.runtime.spatial.RelativeFrame;
+import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialSnapshot;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,6 +52,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SShapeVerticalCropMacroTest {
     private static final long EPOCH = 4L;
     private static final PositionSnapshot START = new PositionSnapshot(0.5D, 1.0D, 0.5D);
+
+    @TempDir
+    Path temporaryDirectory;
 
     @Test
     void allMappedModesSelectTheirCropAndFrozenPitch() {
@@ -290,7 +305,117 @@ class SShapeVerticalCropMacroTest {
                 spatial(START, new CropFixture("sugar_cane", Map.of(), -38F), true)));
 
         assertTrue(mismatch.inputs().isEmpty());
+        assertEquals("crop-mode-incompatible", mismatch.status());
         assertEquals(MacroRotationDisposition.RELEASE, mismatch.rotationDisposition());
+        assertEquals(SShapeVerticalCropMacro.State.ALIGNING, macro.state());
+    }
+
+    @Test
+    void incompatibleMatureCropOutranksVoidAndObstacleFallbacks() {
+        CropFixture sugarCane = new CropFixture("sugar_cane", Map.of(), -38F);
+        PositionSnapshot high = new PositionSnapshot(0.5D, 66.0D, 0.5D);
+        SpatialSnapshot withKnownVoid = withBlock(spatial(high, sugarCane, true),
+                new BlockPosition(-1, 65, 0), Observation.present(air()));
+        SpatialSnapshot withKnownObstacle = withBlock(spatial(START, sugarCane, true),
+                new BlockPosition(-2, 1, 0), Observation.present(full()));
+
+        for (SpatialSnapshot evidence : List.of(withKnownVoid, withKnownObstacle)) {
+            SShapeVerticalCropMacro macro = macro(VerticalCropMode.SUNTZU);
+            PositionSnapshot position = evidence == withKnownVoid ? high : START;
+            MacroDecision decision = macro.tick(context(
+                    0L, position, 0.0D, -38.0F, evidence));
+
+            assertEquals("crop-mode-incompatible", decision.status());
+            assertEquals(MacroRotationDisposition.RELEASE, decision.rotationDisposition());
+            assertTrue(decision.inputs().isEmpty());
+            assertEquals(SShapeVerticalCropMacro.State.ALIGNING, macro.state());
+        }
+    }
+
+    @Test
+    void persistentIncompatibleCropCompletesEachRoundWithoutFalseStale() {
+        SShapeVerticalCropMacro macro = macro(VerticalCropMode.SUNTZU);
+        PlayerSnapshot player = player(START, 0.0F, -38.0F, 0.0D);
+        List<Boolean> expectedRightSide = List.of(true, false, true);
+
+        for (int tick = 0; tick < expectedRightSide.size(); tick++) {
+            SpatialCaptureRequest request = macro.spatialRequest(player, EPOCH).orElseThrow();
+            assertEquals(expectedRightSide.get(tick), request.blocks().stream()
+                    .anyMatch(block -> block.x() <= -179));
+            SpatialSnapshot snapshot = withBlock(captured(request, START, null),
+                    new BlockPosition(-1, 1, 0), Observation.present(crop(
+                            new CropFixture("sugar_cane", Map.of(), -38F))));
+
+            MacroDecision decision = macro.tick(context(
+                    tick, START, 0.0D, -38.0F, snapshot));
+            assertEquals("crop-mode-incompatible", decision.status());
+            assertEquals(MacroRotationDisposition.RELEASE, decision.rotationDisposition());
+            assertEquals(SShapeVerticalCropMacro.State.ALIGNING, macro.state());
+        }
+    }
+
+    @Test
+    void persistentAlignmentRotationCompletesRoundWithoutFalseStale() {
+        SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
+        PlayerSnapshot player = player(START, 30.0F, 2.8F, 0.0D);
+        List<Boolean> expectedRightSide = List.of(true, false, true);
+
+        for (int tick = 0; tick < expectedRightSide.size(); tick++) {
+            SpatialCaptureRequest request = macro.spatialRequest(player, EPOCH).orElseThrow();
+            assertEquals(expectedRightSide.get(tick), request.blocks().stream()
+                    .anyMatch(block -> block.x() <= -179));
+            MacroDecision decision = macro.tick(contextYaw(
+                    tick, START, 30.0F, 2.8F, captured(request, START, null)));
+
+            assertEquals("aligning", decision.status());
+            assertTrue(decision.rotation().isPresent());
+            assertEquals(MacroRotationDisposition.REPLACE, decision.rotationDisposition());
+            assertEquals(SShapeVerticalCropMacro.State.ALIGNING, macro.state());
+        }
+    }
+
+    @Test
+    void realAlignmentDecisionsKeepOneAdapterRotationLeaseUntilCompletion() {
+        SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
+        PlayerSnapshot player = player(START, 30.0F, 2.8F, 0.0D);
+        SpatialCaptureRequest right = macro.spatialRequest(player, EPOCH).orElseThrow();
+        MacroDecision first = macro.tick(contextYaw(
+                0L, START, 30.0F, 2.8F, captured(right, START, null)));
+        SpatialCaptureRequest left = macro.spatialRequest(player, EPOCH).orElseThrow();
+        MacroDecision second = macro.tick(contextYaw(
+                1L, START, 30.0F, 2.8F, captured(left, START, null)));
+        assertEquals(first.rotation(), second.rotation());
+
+        FarmHelperClientRuntime runtime = TestFarmHelperClientRuntimeFactory.create(
+                temporaryDirectory.resolve("real-align-lease.json"));
+        runtime.worldLoaded();
+        runtime.observeConnection(Observation.present(ConnectionSnapshot.multiplayer()));
+        ClientSnapshot adapterSnapshot = new ClientSnapshot(
+                Observation.present(player),
+                Observation.present(new WorldSnapshot(
+                        runtime.lifecycle().worldEpoch(), Observation.unknown())),
+                Observation.present(ConnectionSnapshot.multiplayer()), Observation.absent());
+
+        assertTrue(TestClientTickAdapterAccess.decisionBeforeRotation(
+                runtime, adapterSnapshot, first, () -> { }).isEmpty());
+        long revision = runtime.rotation().snapshot().revision();
+        assertTrue(TestClientTickAdapterAccess.decisionBeforeRotation(
+                runtime, adapterSnapshot, second, () -> { }).isEmpty());
+        assertEquals(revision, runtime.rotation().snapshot().revision());
+        assertEquals(first.rotation().orElseThrow().yaw(),
+                runtime.rotation().snapshot().targetYaw().orElseThrow());
+        assertEquals(first.rotation().orElseThrow().pitch(),
+                runtime.rotation().snapshot().targetPitch().orElseThrow());
+
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2L);
+        while (runtime.rotation().snapshot().progress() < 1.0F && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(revision, runtime.rotation().snapshot().revision());
+        TestClientRotationControllerAccess.tick(runtime.rotation());
+        assertFalse(runtime.rotation().rotating());
+        assertEquals(RotationTerminalReason.COMPLETED,
+                runtime.rotation().snapshot().terminalReason().orElseThrow());
     }
 
     @Test
@@ -589,6 +714,363 @@ class SShapeVerticalCropMacroTest {
         assertEquals(SShapeVerticalCropMacro.State.ALIGNING, macro.state());
     }
 
+    @Test
+    void phasedCaptureExhaustsFirstSideThenFindsSecondSideObstacle() {
+        SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
+        PlayerSnapshot player = player(START, 0.0F, 2.8F, 0.0D);
+
+        SpatialCaptureRequest right = macro.spatialRequest(player, EPOCH).orElseThrow();
+        assertTrue(right.requestToken() > 0L);
+        assertTrue(right.bounds().width() <= SpatialCaptureRequest.MAX_AXIS_SPAN);
+        assertTrue(right.blocks().stream().anyMatch(block -> block.x() <= -179));
+        MacroDecision first = macro.tick(context(0L, START, 0.0D, 2.8F,
+                captured(right, START, null)));
+        assertEquals("row-obstacle-scan-pending", first.status());
+        assertEquals(SShapeVerticalCropMacro.State.ALIGNING, macro.state());
+
+        SpatialCaptureRequest left = macro.spatialRequest(player, EPOCH).orElseThrow();
+        assertTrue(left.bounds().width() <= SpatialCaptureRequest.MAX_AXIS_SPAN);
+        assertTrue(left.blocks().stream().anyMatch(block -> block.x() >= 179));
+        assertFalse(right.requestToken() == left.requestToken());
+        MacroDecision second = macro.tick(context(1L, START, 0.0D, 2.8F,
+                captured(left, START, new BlockPosition(10, 1, 0))));
+
+        assertEquals("farming-right-obstacle", second.status());
+        assertEquals(Set.of(InputAction.RIGHT, InputAction.ATTACK), second.inputs());
+        assertEquals(SShapeVerticalCropMacro.State.FARMING, macro.state());
+    }
+
+    @Test
+    void longSideRequestsCaptureBodyAndSupportAtBothDistanceBounds() {
+        for (PositionSnapshot position : List.of(
+                START, new PositionSnapshot(0.71D, 1.0D, 0.71D))) {
+            for (float yaw : List.of(0.0F, 90.0F, 180.0F, 270.0F)) {
+                SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
+                SpatialCaptureRequest request = macro.spatialRequest(
+                        player(position, yaw, 2.8F, 0.0D), EPOCH).orElseThrow();
+                RelativeFrame frame = RelativeFrame.cardinal(yaw);
+                for (int distance : List.of(1, 179)) {
+                    BoxSnapshot body = new BoxSnapshot(
+                            position.x() - 0.3D, position.y(), position.z() - 0.3D,
+                            position.x() + 0.3D, position.y() + 1.8D, position.z() + 0.3D)
+                            .move(frame.rightX() * (double) distance, 0.0D,
+                                    frame.rightZ() * (double) distance);
+                    assertCaptured(request, body);
+                    assertCaptured(request, new BoxSnapshot(
+                            body.minX(), body.minY() - 0.01D, body.minZ(),
+                            body.maxX(), body.minY(), body.maxZ()));
+                }
+                assertTrue(request.blocks().size() <= SpatialCaptureRequest.MAX_BLOCKS);
+                assertTrue(request.bounds().width() <= SpatialCaptureRequest.MAX_AXIS_SPAN);
+                assertTrue(request.bounds().height() <= SpatialCaptureRequest.MAX_AXIS_SPAN);
+                assertTrue(request.bounds().depth() <= SpatialCaptureRequest.MAX_AXIS_SPAN);
+            }
+        }
+    }
+
+    @Test
+    void phasedCaptureFailsClosedAfterBothSidesExhaust() {
+        SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
+        PlayerSnapshot player = player(START, 0.0F, 2.8F, 0.0D);
+        SpatialCaptureRequest right = macro.spatialRequest(player, EPOCH).orElseThrow();
+        assertEquals("row-obstacle-scan-pending", macro.tick(context(
+                0L, START, 0.0D, 2.8F, captured(right, START, null))).status());
+        SpatialCaptureRequest left = macro.spatialRequest(player, EPOCH).orElseThrow();
+
+        MacroDecision unresolved = macro.tick(context(
+                1L, START, 0.0D, 2.8F, captured(left, START, null)));
+
+        assertEquals("row-direction-unresolved", unresolved.status());
+        assertEquals(MacroRotationDisposition.RELEASE, unresolved.rotationDisposition());
+        assertTrue(unresolved.inputs().isEmpty());
+        assertEquals(SShapeVerticalCropMacro.State.ALIGNING, macro.state());
+        SpatialCaptureRequest restarted = macro.spatialRequest(player, EPOCH).orElseThrow();
+        assertTrue(restarted.blocks().stream().anyMatch(block -> block.x() <= -179));
+    }
+
+    @Test
+    void unknownFirstSideStillAdvancesThenRestartsAfterReconciliation() {
+        SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
+        PlayerSnapshot player = player(START, 0.0F, 2.8F, 0.0D);
+        SpatialCaptureRequest right = macro.spatialRequest(player, EPOCH).orElseThrow();
+        SpatialSnapshot unknownRight = withBlock(captured(right, START, null),
+                new BlockPosition(-10, 1, 0), Observation.unknown());
+
+        assertEquals("row-obstacle-scan-pending", macro.tick(context(
+                0L, START, 0.0D, 2.8F, unknownRight)).status());
+        SpatialCaptureRequest left = macro.spatialRequest(player, EPOCH).orElseThrow();
+        assertTrue(left.blocks().stream().anyMatch(block -> block.x() >= 179));
+
+        MacroDecision reconciled = macro.tick(context(
+                1L, START, 0.0D, 2.8F, captured(left, START, null)));
+        assertEquals("row-obstacle-scan-unknown", reconciled.status());
+        assertEquals(MacroRotationDisposition.RELEASE, reconciled.rotationDisposition());
+        SpatialCaptureRequest restarted = macro.spatialRequest(player, EPOCH).orElseThrow();
+        assertTrue(restarted.blocks().stream().anyMatch(block -> block.x() <= -179));
+    }
+
+    @Test
+    void unknownAtAnyScanBoundaryNeverBecomesExhausted() {
+        PositionSnapshot scanPosition = new PositionSnapshot(0.29D, 1.0D, 0.5D);
+        PlayerSnapshot player = player(scanPosition, 0.0F, 2.8F, 0.0D);
+        for (int distance : List.of(1, 178, 179)) {
+            SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
+            SpatialCaptureRequest right = macro.spatialRequest(player, EPOCH).orElseThrow();
+            SpatialSnapshot unknown = withBlock(captured(right, scanPosition, null),
+                    new BlockPosition(-distance - 1, 1, 0), Observation.unknown());
+            assertEquals("row-obstacle-scan-pending", macro.tick(context(
+                    0L, scanPosition, 0.0D, 2.8F, unknown)).status(), "distance=" + distance);
+            SpatialCaptureRequest left = macro.spatialRequest(player, EPOCH).orElseThrow();
+            MacroDecision reconciled = macro.tick(context(
+                    1L, scanPosition, 0.0D, 2.8F, captured(left, scanPosition, null)));
+            assertEquals("row-obstacle-scan-unknown", reconciled.status(),
+                    "distance=" + distance);
+            assertTrue(reconciled.inputs().isEmpty());
+        }
+
+        SShapeVerticalCropMacro bothLastUnknown = macro(VerticalCropMode.NORMAL);
+        SpatialCaptureRequest right = bothLastUnknown.spatialRequest(player, EPOCH).orElseThrow();
+        bothLastUnknown.tick(context(0L, scanPosition, 0.0D, 2.8F,
+                withBlock(captured(right, scanPosition, null),
+                        new BlockPosition(-180, 1, 0), Observation.unknown())));
+        SpatialCaptureRequest left = bothLastUnknown.spatialRequest(player, EPOCH).orElseThrow();
+        MacroDecision finalDecision = bothLastUnknown.tick(context(
+                1L, scanPosition, 0.0D, 2.8F,
+                withBlock(captured(left, scanPosition, null),
+                        new BlockPosition(179, 1, 0), Observation.unknown())));
+        assertEquals("row-obstacle-scan-unknown", finalDecision.status());
+        assertEquals(MacroRotationDisposition.RELEASE, finalDecision.rotationDisposition());
+        assertTrue(finalDecision.inputs().isEmpty());
+        assertEquals(SShapeVerticalCropMacro.State.ALIGNING, bothLastUnknown.state());
+    }
+
+    @Test
+    void opaqueScanTokenRejectsStalePhaseAndRestartsFirstSide() {
+        SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
+        PlayerSnapshot player = player(START, 0.0F, 2.8F, 0.0D);
+        SpatialCaptureRequest request = macro.spatialRequest(player, EPOCH).orElseThrow();
+        SpatialSnapshot captured = captured(request, START, null);
+        SpatialSnapshot stale = new SpatialSnapshot(
+                captured.worldEpoch(), request.requestToken() + 1L, captured.bounds(),
+                captured.minY(), captured.maxY(), captured.playerBox(), captured.chunks());
+
+        MacroDecision rejected = macro.tick(context(0L, START, 0.0D, 2.8F, stale));
+
+        assertEquals("row-obstacle-scan-stale", rejected.status());
+        assertFalse(macro.spatialScanPending());
+        SpatialCaptureRequest restarted = macro.spatialRequest(player, EPOCH).orElseThrow();
+        assertTrue(restarted.blocks().stream().anyMatch(block -> block.x() <= -179));
+        assertFalse(request.requestToken() == restarted.requestToken());
+    }
+
+    @Test
+    void unknownCaptureAdvancesBothSidesButAbsentAndUnknownPlayerDoNot() {
+        PlayerSnapshot player = player(START, 0.0F, 2.8F, 0.0D);
+        SShapeVerticalCropMacro unknownCapture = macro(VerticalCropMode.NORMAL);
+        SpatialCaptureRequest right = unknownCapture.spatialRequest(player, EPOCH).orElseThrow();
+        assertEquals("spatial-unknown", unknownCapture.tick(contextSpatial(
+                0L, Observation.present(player), Observation.unknown())).status());
+        SpatialCaptureRequest left = unknownCapture.spatialRequest(player, EPOCH).orElseThrow();
+        assertFalse(right.requestToken() == left.requestToken());
+        assertTrue(left.blocks().stream().anyMatch(block -> block.x() >= 179));
+        MacroDecision secondUnknown = unknownCapture.tick(contextSpatial(
+                1L, Observation.present(player), Observation.unknown()));
+        assertEquals("row-obstacle-scan-unknown", secondUnknown.status());
+        assertEquals(MacroRotationDisposition.RELEASE, secondUnknown.rotationDisposition());
+        SpatialCaptureRequest restarted = unknownCapture.spatialRequest(player, EPOCH).orElseThrow();
+        assertTrue(restarted.blocks().stream().anyMatch(block -> block.x() <= -179));
+
+        SShapeVerticalCropMacro absentCapture = macro(VerticalCropMode.NORMAL);
+        SpatialCaptureRequest absentPending = absentCapture.spatialRequest(player, EPOCH).orElseThrow();
+        assertEquals("spatial-unknown", absentCapture.tick(contextSpatial(
+                0L, Observation.present(player), Observation.absent())).status());
+        assertEquals(absentPending.requestToken(), absentCapture
+                .spatialRequest(player, EPOCH).orElseThrow().requestToken());
+
+        SShapeVerticalCropMacro unknownPlayer = macro(VerticalCropMode.NORMAL);
+        SpatialCaptureRequest playerPending = unknownPlayer.spatialRequest(player, EPOCH).orElseThrow();
+        assertEquals("spatial-unknown", unknownPlayer.tick(contextSpatial(
+                0L, Observation.unknown(), Observation.unknown())).status());
+        SpatialCaptureRequest playerRestarted = unknownPlayer.spatialRequest(player, EPOCH).orElseThrow();
+        assertFalse(playerPending.requestToken() == playerRestarted.requestToken());
+        assertTrue(playerRestarted.blocks().stream().anyMatch(block -> block.x() <= -179));
+    }
+
+    @Test
+    void capturedSnapshotMustMatchPendingBoundsAndPlayerFootprint() {
+        PlayerSnapshot player = player(START, 0.0F, 2.8F, 0.0D);
+        SShapeVerticalCropMacro wrongBoundsMacro = macro(VerticalCropMode.NORMAL);
+        SpatialCaptureRequest boundsRequest = wrongBoundsMacro
+                .spatialRequest(player, EPOCH).orElseThrow();
+        SpatialSnapshot normal = captured(boundsRequest, START, null);
+        BoxSnapshot wrongBounds = new BoxSnapshot(
+                normal.bounds().minX(), normal.bounds().minY(), normal.bounds().minZ(),
+                normal.bounds().maxX(), normal.bounds().maxY(), normal.bounds().maxZ() + 1.0D);
+        SpatialSnapshot wrongBoundsSnapshot = new SpatialSnapshot(
+                normal.worldEpoch(), normal.requestToken(), wrongBounds,
+                normal.minY(), normal.maxY(), normal.playerBox(), normal.chunks());
+        assertEquals("row-obstacle-scan-stale", wrongBoundsMacro.tick(context(
+                0L, START, 0.0D, 2.8F, wrongBoundsSnapshot)).status());
+        assertTrue(wrongBoundsMacro.spatialRequest(player, EPOCH).orElseThrow()
+                .blocks().stream().anyMatch(block -> block.x() <= -179));
+
+        SShapeVerticalCropMacro wrongPlayerBoxMacro = macro(VerticalCropMode.NORMAL);
+        SpatialCaptureRequest playerBoxRequest = wrongPlayerBoxMacro
+                .spatialRequest(player, EPOCH).orElseThrow();
+        SpatialSnapshot normalPlayerBox = captured(playerBoxRequest, START, null);
+        SpatialSnapshot wrongPlayerBox = new SpatialSnapshot(
+                normalPlayerBox.worldEpoch(), normalPlayerBox.requestToken(),
+                normalPlayerBox.bounds(), normalPlayerBox.minY(), normalPlayerBox.maxY(),
+                normalPlayerBox.playerBox().move(1.0D, 0.0D, 0.0D), normalPlayerBox.chunks());
+        assertEquals("row-obstacle-scan-stale", wrongPlayerBoxMacro.tick(context(
+                0L, START, 0.0D, 2.8F, wrongPlayerBox)).status());
+
+        SShapeVerticalCropMacro productionShape = macro(VerticalCropMode.NORMAL);
+        SpatialCaptureRequest productionRequest = productionShape
+                .spatialRequest(player, EPOCH).orElseThrow();
+        assertEquals("row-obstacle-scan-pending", productionShape.tick(context(
+                0L, START, 0.0D, 2.8F,
+                captured(productionRequest, START, null))).status());
+    }
+
+    @Test
+    void staleWorldDoesNotAdvancePhaseAndHighCaptureStaysBounded() {
+        SShapeVerticalCropMacro staleMacro = macro(VerticalCropMode.NORMAL);
+        PlayerSnapshot player = player(START, 0.0F, 2.8F, 0.0D);
+        SpatialCaptureRequest request = staleMacro.spatialRequest(player, EPOCH).orElseThrow();
+        SpatialSnapshot captured = captured(request, START, null);
+        SpatialSnapshot staleWorld = new SpatialSnapshot(
+                EPOCH + 1L, captured.requestToken(), captured.bounds(), captured.minY(),
+                captured.maxY(), captured.playerBox(), captured.chunks());
+        assertEquals("row-obstacle-scan-stale", staleMacro.tick(context(
+                0L, START, 0.0D, 2.8F, staleWorld)).status());
+        SpatialCaptureRequest restarted = staleMacro.spatialRequest(player, EPOCH).orElseThrow();
+        assertTrue(restarted.blocks().stream().anyMatch(block -> block.x() <= -179));
+
+        PositionSnapshot high = new PositionSnapshot(0.5D, 319.0D, 0.5D);
+        SShapeVerticalCropMacro highMacro = macro(VerticalCropMode.NORMAL);
+        SpatialCaptureRequest highRequest = highMacro.spatialRequest(
+                player(high, 0.0F, 2.8F, 0.0D), EPOCH).orElseThrow();
+        assertTrue(highRequest.bounds().height() <= SpatialCaptureRequest.MAX_AXIS_SPAN);
+        MacroDecision highDecision = highMacro.tick(context(
+                0L, high, 0.0D, 2.8F, captured(highRequest, high, null)));
+        assertEquals(MacroRotationDisposition.RELEASE, highDecision.rotationDisposition());
+        assertTrue(highDecision.inputs().isEmpty());
+    }
+
+    @Test
+    void scanRoundAnchorAllowsStableEpsilonAndRejectsShapeOrFrameChanges() {
+        SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
+        SpatialCaptureRequest initial = macro.spatialRequest(
+                player(START, 0.0F, 2.8F, 0.0D), EPOCH).orElseThrow();
+        long initialGeneration = macro.spatialScanGeneration();
+
+        PositionSnapshot epsilon = new PositionSnapshot(
+                START.x() + 0.000_001D, START.y(), START.z());
+        assertEquals(initial.requestToken(), macro.spatialRequest(
+                player(epsilon, 0.0F, 2.8F, 0.0D), EPOCH).orElseThrow().requestToken());
+        assertEquals(initialGeneration, macro.spatialScanGeneration());
+
+        PositionSnapshot footprintBoundary = new PositionSnapshot(0.71D, 1.0D, 0.5D);
+        SpatialCaptureRequest shifted = macro.spatialRequest(
+                player(footprintBoundary, 0.0F, 2.8F, 0.0D), EPOCH).orElseThrow();
+        assertFalse(initial.requestToken() == shifted.requestToken());
+        assertTrue(macro.spatialScanGeneration() > initialGeneration);
+        assertTrue(shifted.blocks().stream().anyMatch(block -> block.x() <= -179));
+
+        PositionSnapshot nextBlock = new PositionSnapshot(1.5D, 1.0D, 0.5D);
+        SpatialCaptureRequest moved = macro.spatialRequest(
+                player(nextBlock, 0.0F, 2.8F, 0.0D), EPOCH).orElseThrow();
+        assertFalse(shifted.requestToken() == moved.requestToken());
+
+        SpatialCaptureRequest rotated = macro.spatialRequest(
+                player(nextBlock, 90.0F, 2.8F, 0.0D), EPOCH).orElseThrow();
+        assertFalse(moved.requestToken() == rotated.requestToken());
+        assertTrue(rotated.blocks().stream().anyMatch(block -> block.z() <= -179));
+    }
+
+    @Test
+    void secondPhaseNeverCombinesEvidenceFromAnotherAnchor() {
+        SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
+        PlayerSnapshot initialPlayer = player(START, 0.0F, 2.8F, 0.0D);
+        SpatialCaptureRequest first = macro.spatialRequest(initialPlayer, EPOCH).orElseThrow();
+        assertEquals("row-obstacle-scan-pending", macro.tick(context(
+                0L, START, 0.0D, 2.8F, captured(first, START, null))).status());
+        long cachedGeneration = macro.spatialScanGeneration();
+
+        PositionSnapshot moved = new PositionSnapshot(1.5D, 1.0D, 0.5D);
+        SpatialCaptureRequest restarted = macro.spatialRequest(
+                player(moved, 0.0F, 2.8F, 0.0D), EPOCH).orElseThrow();
+
+        assertTrue(macro.spatialScanGeneration() > cachedGeneration);
+        assertTrue(restarted.blocks().stream().anyMatch(block -> block.x() <= -178));
+        MacroDecision newFirstSide = macro.tick(context(
+                1L, moved, 0.0D, 2.8F, captured(restarted, moved, null)));
+        assertEquals("row-obstacle-scan-pending", newFirstSide.status());
+        assertEquals(SShapeVerticalCropMacro.State.ALIGNING, macro.state());
+    }
+
+    @Test
+    void resumeAndTerminalBoundariesInvalidateTheWholeScanRound() {
+        SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
+        PlayerSnapshot player = player(START, 0.0F, 2.8F, 0.0D);
+        SpatialCaptureRequest beforePause = macro.spatialRequest(player, EPOCH).orElseThrow();
+        long beforeGeneration = macro.spatialScanGeneration();
+        macro.onPause(Set.of(dev.hylfrd.farmhelper.macro.MacroPauseCause.FEATURE), 10L);
+        macro.onResume(20L);
+
+        PositionSnapshot movedDuringPause = new PositionSnapshot(1.5D, 1.0D, 0.5D);
+        SpatialCaptureRequest afterResume = macro.spatialRequest(
+                player(movedDuringPause, 90.0F, 2.8F, 0.0D), EPOCH).orElseThrow();
+        assertFalse(beforePause.requestToken() == afterResume.requestToken());
+        assertTrue(macro.spatialScanGeneration() > beforeGeneration);
+        assertTrue(afterResume.blocks().stream().anyMatch(block -> block.z() <= -179));
+        assertEquals("row-obstacle-scan-stale", macro.tick(contextYaw(
+                21L, movedDuringPause, 90.0F, 2.8F,
+                captured(beforePause, START, null))).status());
+
+        long beforeStop = macro.spatialScanGeneration();
+        macro.onStop(dev.hylfrd.farmhelper.macro.MacroTerminalReason.DISCONNECT);
+        assertFalse(macro.spatialScanPending());
+        assertTrue(macro.spatialScanGeneration() > beforeStop);
+        macro.onStart();
+        SpatialCaptureRequest afterStart = macro.spatialRequest(player, EPOCH).orElseThrow();
+        assertTrue(afterStart.blocks().stream().anyMatch(block -> block.x() <= -179));
+    }
+
+    @Test
+    void rowRecoveryAndRewarpInvalidateTheWholeScanRound() {
+        SShapeVerticalCropMacro farming = macro(VerticalCropMode.NORMAL);
+        PlayerSnapshot player = player(START, 0.0F, 2.8F, 0.0D);
+        SpatialCaptureRequest rowRequest = farming.spatialRequest(player, EPOCH).orElseThrow();
+        SpatialSnapshot rowCapture = withBlock(captured(rowRequest, START, null),
+                new BlockPosition(-1, 1, 0), Observation.present(crop(wheat())));
+        long beforeRow = farming.spatialScanGeneration();
+        assertEquals("farming-right", farming.tick(context(
+                0L, START, 0.0D, 2.8F, rowCapture)).status());
+        assertTrue(farming.spatialScanGeneration() > beforeRow);
+        assertFalse(farming.spatialScanPending());
+
+        long beforeRecovery = farming.spatialScanGeneration();
+        SpatialSnapshot activeRow = spatial(START, wheat(), true);
+        farming.tick(context(TimeUnit.MILLISECONDS.toNanos(500L),
+                START, 0.0D, 2.8F, activeRow));
+        farming.tick(context(TimeUnit.MILLISECONDS.toNanos(1_000L),
+                START, 0.0D, 2.8F, activeRow));
+        assertEquals("row-recovery", farming.tick(context(TimeUnit.MILLISECONDS.toNanos(1_500L),
+                START, 0.0D, 2.8F, activeRow)).status());
+        assertTrue(farming.spatialScanGeneration() > beforeRecovery);
+
+        SShapeVerticalCropMacro rewarp = new SShapeVerticalCropMacro(warpSettings(), () -> 0.0D);
+        rewarp.onStart();
+        SpatialCaptureRequest warpRequest = rewarp.spatialRequest(player, EPOCH).orElseThrow();
+        long beforeWarp = rewarp.spatialScanGeneration();
+        assertEquals("rewarp-dwell", rewarp.tick(context(
+                0L, START, 0.0D, 2.8F, captured(warpRequest, START, null))).status());
+        assertTrue(rewarp.spatialScanGeneration() > beforeWarp);
+        assertFalse(rewarp.spatialScanPending());
+    }
+
     private static void assertRowDelay(double delayDraw, long beforeMillis, long atMillis) {
         double[] draws = {0.0D, 0.0D, delayDraw};
         AtomicInteger index = new AtomicInteger();
@@ -668,6 +1150,28 @@ class SShapeVerticalCropMacroTest {
                 ServerResponsiveness.RESPONSIVE);
     }
 
+    private static FarmingContext contextYaw(
+            long now,
+            PositionSnapshot position,
+            float yaw,
+            float pitch,
+            SpatialSnapshot spatial
+    ) {
+        return new FarmingContext(now, EPOCH,
+                Observation.present(player(position, yaw, pitch, 0.0D)),
+                Observation.present(spatial), Observation.present(true), false,
+                ServerResponsiveness.RESPONSIVE);
+    }
+
+    private static FarmingContext contextSpatial(
+            long now,
+            Observation<PlayerSnapshot> player,
+            Observation<SpatialSnapshot> spatial
+    ) {
+        return new FarmingContext(now, EPOCH, player, spatial,
+                Observation.present(true), false, ServerResponsiveness.RESPONSIVE);
+    }
+
     private static FarmingContext context(
             long now,
             PositionSnapshot position,
@@ -730,6 +1234,46 @@ class SShapeVerticalCropMacroTest {
                         player.x() + 0.3D, player.y() + 1.8D, player.z() + 0.3D), chunks);
     }
 
+    /** Mirrors the production capture shape by observing exactly the request's bounded block set. */
+    private static SpatialSnapshot captured(
+            SpatialCaptureRequest request,
+            PositionSnapshot player,
+            BlockPosition obstacle
+    ) {
+        Map<ChunkPosition, Map<BlockPosition, Observation<BlockStateSnapshot>>> grouped = new HashMap<>();
+        int groundY = (int) Math.floor(player.y()) - 1;
+        for (BlockPosition position : request.blocks()) {
+            BlockStateSnapshot state = position.y() == groundY ? full() : air();
+            if (position.equals(obstacle)) {
+                state = full();
+            }
+            grouped.computeIfAbsent(position.chunk(), ignored -> new LinkedHashMap<>())
+                    .put(position, Observation.present(state));
+        }
+        Map<ChunkPosition, ChunkSnapshot> chunks = new HashMap<>();
+        grouped.forEach((position, values) -> chunks.put(position,
+                new ChunkSnapshot(position, true, values)));
+        return new SpatialSnapshot(
+                request.worldEpoch(), request.requestToken(), request.bounds(), -64, 320,
+                new BoxSnapshot(player.x() - 0.3D, player.y(), player.z() - 0.3D,
+                        player.x() + 0.3D, player.y() + 1.8D, player.z() + 0.3D),
+                chunks);
+    }
+
+    private static void assertCaptured(SpatialCaptureRequest request, BoxSnapshot box) {
+        for (int x = (int) Math.floor(box.minX());
+                x <= (int) Math.floor(Math.nextDown(box.maxX())); x++) {
+            for (int y = (int) Math.floor(box.minY());
+                    y <= (int) Math.floor(Math.nextDown(box.maxY())); y++) {
+                for (int z = (int) Math.floor(box.minZ());
+                        z <= (int) Math.floor(Math.nextDown(box.maxZ())); z++) {
+                    assertTrue(request.blocks().contains(new BlockPosition(x, y, z)),
+                            "missing requested cell " + new BlockPosition(x, y, z));
+                }
+            }
+        }
+    }
+
     private static SpatialSnapshot withBlock(
             SpatialSnapshot snapshot,
             BlockPosition position,
@@ -740,8 +1284,8 @@ class SShapeVerticalCropMacroTest {
         Map<BlockPosition, Observation<BlockStateSnapshot>> blocks = new HashMap<>(original.blocks());
         blocks.put(position, value);
         chunks.put(position.chunk(), new ChunkSnapshot(position.chunk(), true, blocks));
-        return new SpatialSnapshot(snapshot.worldEpoch(), snapshot.bounds(), snapshot.minY(),
-                snapshot.maxY(), snapshot.playerBox(), chunks);
+        return new SpatialSnapshot(snapshot.worldEpoch(), snapshot.requestToken(), snapshot.bounds(),
+                snapshot.minY(), snapshot.maxY(), snapshot.playerBox(), chunks);
     }
 
     private static BlockStateSnapshot crop(CropFixture fixture) {

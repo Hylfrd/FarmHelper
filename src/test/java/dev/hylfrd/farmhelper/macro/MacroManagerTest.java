@@ -6,7 +6,14 @@ import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.PositionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.RotationSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.BlockPosition;
+import dev.hylfrd.farmhelper.runtime.spatial.BoxSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
 import org.junit.jupiter.api.Test;
+
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -111,6 +118,78 @@ class MacroManagerTest {
                 0L, 0L, Observation.present(player()), Observation.unknown(),
                 Observation.present(true), false, ServerResponsiveness.RESPONSIVE));
         assertFalse(production.lastStatus().contains("[DEV WORLD]"));
+    }
+
+    @Test
+    void spatialCaptureDelegatesOnlyWhileLifecycleIsRunning() {
+        AtomicInteger requests = new AtomicInteger();
+        Macro macro = new Macro() {
+            @Override public String id() { return "capture-counting"; }
+            @Override public void onStart() { }
+            @Override public void onStop() { }
+            @Override public Optional<SpatialCaptureRequest> spatialRequest(
+                    PlayerSnapshot player, long worldEpoch) {
+                requests.incrementAndGet();
+                return Optional.of(new SpatialCaptureRequest(
+                        worldEpoch, new BoxSnapshot(0, 0, 0, 1, 1, 1),
+                        Set.of(new BlockPosition(0, 0, 0))));
+            }
+        };
+        MacroManager manager = new MacroManager(macro, () -> { });
+
+        assertTrue(manager.spatialRequest(player(), 1L).isEmpty());
+        assertEquals(0, requests.get());
+        manager.start();
+        long generation = manager.generation();
+        assertTrue(manager.spatialRequest(player(), 1L).isPresent());
+        assertEquals(1, requests.get());
+
+        manager.manualPause();
+        assertTrue(manager.spatialRequest(player(), 1L).isEmpty());
+        manager.manualResume();
+        assertTrue(manager.spatialRequest(player(), 1L).isPresent());
+
+        manager.observeScreen(true);
+        assertTrue(manager.spatialRequest(player(), 1L).isEmpty());
+        manager.observeScreen(false);
+        assertTrue(manager.spatialRequest(player(), 1L).isPresent());
+
+        manager.tick(ClientSnapshot.unknown(), context(Observation.absent()));
+        assertTrue(manager.pauseCauses().contains(MacroPauseCause.ENVIRONMENT));
+        assertTrue(manager.spatialRequest(player(), 1L).isEmpty());
+        ClientSnapshot observed = new ClientSnapshot(
+                Observation.present(player()), Observation.unknown(),
+                Observation.unknown(), Observation.absent());
+        manager.tick(observed, context(Observation.present(player())));
+        assertTrue(manager.spatialRequest(player(), 1L).isPresent());
+
+        FeatureSuspension first = manager.suspendForFeature("first");
+        FeatureSuspension second = manager.suspendForFeature("second");
+        assertTrue(manager.spatialRequest(player(), 1L).isEmpty());
+        first.close();
+        assertTrue(manager.spatialRequest(player(), 1L).isEmpty());
+        second.close();
+        assertTrue(manager.spatialRequest(player(), 1L).isPresent());
+        assertEquals(generation, manager.generation());
+
+        manager.stop(MacroTerminalReason.MANUAL_STOP);
+        assertTrue(manager.spatialRequest(player(), 1L).isEmpty());
+        assertEquals(5, requests.get());
+    }
+
+    @Test
+    void resumedSpatialCaptureRestoresSameGenerationRequests() {
+        MacroManager manager = new MacroManager();
+        manager.start();
+        long generation = manager.generation();
+        assertTrue(manager.spatialRequest(player(), 4L).isPresent());
+
+        manager.manualPause();
+        assertTrue(manager.spatialRequest(player(), 4L).isEmpty());
+        manager.manualResume();
+        assertTrue(manager.spatialRequest(player(), 4L).isPresent());
+
+        assertEquals(generation, manager.generation());
     }
 
     private static FarmingContext context(Observation<PlayerSnapshot> player) {

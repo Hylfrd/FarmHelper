@@ -129,6 +129,10 @@ class FarmHelperCommandTreeTest {
                 .toList());
 
         for (String root : List.of("farmhelper", "fh")) {
+            assertEquals(List.of("get", "open", "reset", "set"), dispatcher
+                    .getCompletionSuggestions(dispatcher.parse(root + " config ", "source"))
+                    .join().getList().stream().map(suggestion -> suggestion.getText())
+                    .sorted().toList());
             assertEquals(List.of("mode", "pause", "resume", "start", "stop"), dispatcher
                     .getCompletionSuggestions(dispatcher.parse(root + " macro ", "source"))
                     .join().getList().stream().map(suggestion -> suggestion.getText())

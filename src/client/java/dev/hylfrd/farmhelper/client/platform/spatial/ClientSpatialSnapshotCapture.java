@@ -60,16 +60,25 @@ public final class ClientSpatialSnapshotCapture implements SpatialSnapshotCaptur
             for (Map.Entry<ChunkPosition, List<BlockPosition>> entry : requestedByChunk.entrySet()) {
                 chunks.put(entry.getKey(), captureChunk(level, collisionContext, entry.getKey(), entry.getValue()));
             }
-            return Observation.present(new SpatialSnapshot(
-                    request.worldEpoch(),
-                    request.bounds(),
-                    level.getMinY(),
-                    level.getMaxY(),
-                    box(client.player.getBoundingBox()),
-                    chunks));
+            return Observation.present(capturedSnapshot(
+                    request, level.getMinY(), level.getMaxY(),
+                    box(client.player.getBoundingBox()), chunks));
         } catch (RuntimeException exception) {
             return Observation.unknown();
         }
+    }
+
+    static SpatialSnapshot capturedSnapshot(
+            SpatialCaptureRequest request,
+            int minY,
+            int maxY,
+            BoxSnapshot playerBox,
+            Map<ChunkPosition, ChunkSnapshot> chunks
+    ) {
+        Objects.requireNonNull(request, "request");
+        return new SpatialSnapshot(
+                request.worldEpoch(), request.requestToken(), request.bounds(),
+                minY, maxY, playerBox, chunks);
     }
 
     private static ChunkSnapshot captureChunk(

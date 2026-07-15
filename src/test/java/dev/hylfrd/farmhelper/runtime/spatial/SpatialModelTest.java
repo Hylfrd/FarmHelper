@@ -70,6 +70,10 @@ class SpatialModelTest {
         assertTrue(shape.boxes().isEmpty());
         assertTrue(block.properties().isEmpty());
         assertEquals(1, request.blocks().size());
+        assertEquals(0L, request.requestToken());
+        SpatialCaptureRequest tagged = new SpatialCaptureRequest(
+                EPOCH, 19L, request.bounds(), request.blocks());
+        assertEquals(19L, tagged.requestToken());
         assertThrows(UnsupportedOperationException.class,
                 () -> request.blocks().add(new BlockPosition(1, 1, 1)));
     }
@@ -94,6 +98,8 @@ class SpatialModelTest {
 
     @Test
     void captureRequestRejectsUnboundedOrOutOfBoundsWork() {
+        assertThrows(IllegalArgumentException.class, () -> new SpatialCaptureRequest(
+                EPOCH, -1L, new BoxSnapshot(0, 0, 0, 1, 1, 1), Set.of()));
         assertThrows(IllegalArgumentException.class, () -> new SpatialCaptureRequest(EPOCH,
                 new BoxSnapshot(0, 0, 0, 257, 1, 1), Set.of()));
         assertThrows(IllegalArgumentException.class, () -> new SpatialCaptureRequest(EPOCH,

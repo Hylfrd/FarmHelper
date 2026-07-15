@@ -1,6 +1,7 @@
 package dev.hylfrd.farmhelper.client.platform;
 
 import dev.hylfrd.farmhelper.client.runtime.FarmHelperClientRuntime;
+import dev.hylfrd.farmhelper.control.RotationTask;
 import dev.hylfrd.farmhelper.control.input.ReleaseReason;
 import dev.hylfrd.farmhelper.control.rotation.RotationCancelReason;
 import dev.hylfrd.farmhelper.macro.FarmingContext;
@@ -152,14 +153,7 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
 
     @Override
     public void deliverRuntimeTick(ClientSnapshot snapshot, GameStateParseResult gameState) {
-        Observation<SpatialSnapshot> spatial = Observation.unknown();
-        if (snapshot.player().isPresent()) {
-            Optional<SpatialCaptureRequest> request = runtime.core().macroManager()
-                    .spatialRequest(snapshot.player().get(), runtime.lifecycle().worldEpoch());
-            if (request.isPresent()) {
-                spatial = runtime.spatialSnapshots().capture(request.orElseThrow());
-            }
-        }
+        Observation<SpatialSnapshot> spatial = captureMacroSpatial(runtime, snapshot);
         boolean developmentGarden = developmentGarden();
         Observation<Boolean> inGarden = developmentGarden
                 ? Observation.present(true)
@@ -178,9 +172,25 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         applyDecision(snapshot, decision);
     }
 
+    static Observation<SpatialSnapshot> captureMacroSpatial(
+            FarmHelperClientRuntime runtime,
+            ClientSnapshot snapshot
+    ) {
+        Objects.requireNonNull(runtime, "runtime");
+        Objects.requireNonNull(snapshot, "snapshot");
+        if (!snapshot.player().isPresent()) {
+            return Observation.unknown();
+        }
+        Optional<SpatialCaptureRequest> request = runtime.core().macroManager()
+                .spatialRequest(snapshot.player().get(), runtime.lifecycle().worldEpoch());
+        return request.isPresent()
+                ? runtime.spatialSnapshots().capture(request.orElseThrow())
+                : Observation.unknown();
+    }
+
     private void applyDecision(ClientSnapshot snapshot, MacroDecision decision) {
         applyManagedDecision(runtime, decision);
-        decision.rotation().ifPresent(rotation -> startRotation(snapshot, rotation));
+        decision.rotation().ifPresent(rotation -> startRotation(runtime, snapshot, rotation));
         decision.warp().ifPresent(request -> {
             if (client.getConnection() == null) {
                 throw new IllegalStateException("Cannot warp without a client connection");
@@ -217,10 +227,29 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         }
     }
 
-    private void startRotation(ClientSnapshot snapshot, MacroRotationRequest request) {
-        if (runtime.rotation().rotating() || !snapshot.player().isPresent()
-                || !snapshot.player().get().rotation().isPresent()) {
+    static void startRotation(
+            FarmHelperClientRuntime runtime,
+            ClientSnapshot snapshot,
+            MacroRotationRequest request
+    ) {
+        Objects.requireNonNull(runtime, "runtime");
+        Objects.requireNonNull(snapshot, "snapshot");
+        Objects.requireNonNull(request, "request");
+        if (!snapshot.player().isPresent() || !snapshot.player().get().rotation().isPresent()) {
             return;
+        }
+        if (runtime.rotation().rotating()) {
+            var active = runtime.rotation().snapshot();
+            if (active.owner().filter(owner -> !MacroControlOwner.S_SHAPE.equals(owner)).isPresent()) {
+                return;
+            }
+            float normalizedTargetYaw = RotationTask.normalizeYaw(request.yaw());
+            if (active.targetYaw().filter(target -> Float.compare(target, normalizedTargetYaw) == 0)
+                    .isPresent()
+                    && active.targetPitch().filter(target -> Float.compare(target, request.pitch()) == 0)
+                    .isPresent()) {
+                return;
+            }
         }
         RotationSnapshot current = snapshot.player().get().rotation().get();
         runtime.rotation().start(MacroControlOwner.S_SHAPE, current.yaw(), current.pitch(),

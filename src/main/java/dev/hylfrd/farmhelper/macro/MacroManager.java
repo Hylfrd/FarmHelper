@@ -113,6 +113,9 @@ public final class MacroManager implements MacroLifecycleTarget {
             dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot player,
             long worldEpoch
     ) {
+        if (!lifecycle.running()) {
+            return Optional.empty();
+        }
         return activeMacro.spatialRequest(player, worldEpoch);
     }
 

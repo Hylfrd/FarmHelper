@@ -61,25 +61,31 @@ public final class FarmHelperClientRuntime {
 
     public FarmHelperClientRuntime() {
         this(FabricLoader.getInstance().getConfigDir().resolve(FarmHelper.MOD_ID + ".json"),
-                Minecraft.getInstance(), null, null);
+                Minecraft.getInstance(), null, null, null);
     }
 
     FarmHelperClientRuntime(Path configPath) {
-        this(configPath, null, UnavailableInventoryPort.INSTANCE, defaultDiagnostics());
+        this(configPath, null, UnavailableInventoryPort.INSTANCE, defaultDiagnostics(), null);
     }
 
     FarmHelperClientRuntime(
             Path configPath,
             InventoryPort inventoryPort,
             Consumer<InventoryDiagnostic> diagnostics) {
-        this(configPath, null, inventoryPort, diagnostics);
+        this(configPath, null, inventoryPort, diagnostics, null);
+    }
+
+    FarmHelperClientRuntime(Path configPath, SpatialSnapshotCapturePort spatialSnapshots) {
+        this(configPath, null, UnavailableInventoryPort.INSTANCE, defaultDiagnostics(),
+                spatialSnapshots);
     }
 
     private FarmHelperClientRuntime(
             Path configPath,
             Minecraft client,
             InventoryPort suppliedInventoryPort,
-            Consumer<InventoryDiagnostic> suppliedDiagnostics) {
+            Consumer<InventoryDiagnostic> suppliedDiagnostics,
+            SpatialSnapshotCapturePort suppliedSpatialSnapshots) {
         attachedClient = client;
         configStore = new FarmHelperConfigStore(configPath);
         configLoadResult = configStore.load();
@@ -108,9 +114,11 @@ public final class FarmHelperClientRuntime {
                 ignored -> core.taskQueue().cancelAll(),
                 this::resetServerHeartbeat);
         lifecycle = new ClientRuntimeLifecycle(this::cancelOwnership);
-        spatialSnapshots = client == null
-                ? request -> Observation.unknown()
-                : new ClientSpatialSnapshotCapture(client, lifecycle::worldEpoch);
+        spatialSnapshots = suppliedSpatialSnapshots != null
+                ? suppliedSpatialSnapshots
+                : client == null
+                        ? request -> Observation.unknown()
+                        : new ClientSpatialSnapshotCapture(client, lifecycle::worldEpoch);
         logConfigLoadResult(configLoadResult);
     }
 
@@ -168,6 +176,10 @@ public final class FarmHelperClientRuntime {
     }
 
     public boolean resetConfig() {
+        requireAttachedClientThread();
+        if (core.macroManager().enabled()) {
+            return false;
+        }
         return updateMacroConfig(FarmHelperConfig::reset);
     }
 
@@ -176,6 +188,7 @@ public final class FarmHelperClientRuntime {
     }
 
     public boolean setMacroMode(int code) {
+        requireAttachedClientThread();
         if (core.macroManager().enabled()) {
             return false;
         }

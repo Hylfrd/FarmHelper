@@ -8,6 +8,7 @@ import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.gamestate.GameStateParseResult;
 import dev.hylfrd.farmhelper.runtime.gamestate.RawGameTextSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.SpatialSnapshot;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -36,6 +37,23 @@ public final class TestClientTickAdapterAccess {
             MacroDecision decision
     ) {
         ClientTickAdapter.applyManagedDecision(runtime, decision);
+    }
+
+    public static void applyDecision(
+            FarmHelperClientRuntime runtime,
+            ClientSnapshot snapshot,
+            MacroDecision decision
+    ) {
+        ClientTickAdapter.applyManagedDecision(runtime, decision);
+        decision.rotation().ifPresent(request ->
+                ClientTickAdapter.startRotation(runtime, snapshot, request));
+    }
+
+    public static Observation<SpatialSnapshot> captureMacroSpatial(
+            FarmHelperClientRuntime runtime,
+            ClientSnapshot snapshot
+    ) {
+        return ClientTickAdapter.captureMacroSpatial(runtime, snapshot);
     }
 
     /** Executes the complete production stage order while delegating adapter-owned tail actions. */
@@ -130,7 +148,7 @@ public final class TestClientTickAdapterAccess {
             @Override public void advanceTaskQueue() { }
             @Override public void deliverRuntimeTick(
                     ClientSnapshot observed, GameStateParseResult gameState) {
-                ClientTickAdapter.applyManagedDecision(runtime, decision);
+                applyDecision(runtime, observed, decision);
             }
             @Override public void tickRotation() { rotationStage.run(); }
             @Override public void enforceInputSafety(ClientSnapshot observed) { }

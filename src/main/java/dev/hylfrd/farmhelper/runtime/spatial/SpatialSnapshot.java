@@ -8,6 +8,7 @@ import java.util.Objects;
 /** Immutable, bounded spatial observation for one caller-managed world epoch. maxY is exclusive. */
 public record SpatialSnapshot(
         long worldEpoch,
+        long requestToken,
         BoxSnapshot bounds,
         int minY,
         int maxY,
@@ -18,6 +19,9 @@ public record SpatialSnapshot(
         Objects.requireNonNull(bounds, "bounds");
         Objects.requireNonNull(playerBox, "playerBox");
         Objects.requireNonNull(chunks, "chunks");
+        if (requestToken < 0L) {
+            throw new IllegalArgumentException("request token must not be negative");
+        }
         if (!bounds.hasPositiveVolume()) {
             throw new IllegalArgumentException("bounds must have positive volume");
         }
@@ -57,6 +61,17 @@ public record SpatialSnapshot(
             }
         }
         chunks = Map.copyOf(chunks);
+    }
+
+    public SpatialSnapshot(
+            long worldEpoch,
+            BoxSnapshot bounds,
+            int minY,
+            int maxY,
+            BoxSnapshot playerBox,
+            Map<ChunkPosition, ChunkSnapshot> chunks
+    ) {
+        this(worldEpoch, 0L, bounds, minY, maxY, playerBox, chunks);
     }
 
     public Observation<BlockStateSnapshot> block(long expectedWorldEpoch, BlockPosition position) {

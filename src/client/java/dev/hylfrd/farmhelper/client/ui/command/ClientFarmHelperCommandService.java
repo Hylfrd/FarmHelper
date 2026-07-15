@@ -152,6 +152,9 @@ public final class ClientFarmHelperCommandService implements FarmHelperCommandSe
 
     @Override
     public CommandActionResult resetConfig() {
+        if (runtime.core().macroManager().enabled()) {
+            return CommandActionResult.failure("Stop the macro before resetting configuration.");
+        }
         boolean saved = runtime.resetConfig();
         return saved
                 ? CommandActionResult.success("Configuration reset to defaults.")

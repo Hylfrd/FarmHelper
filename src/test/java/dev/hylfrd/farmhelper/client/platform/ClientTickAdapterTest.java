@@ -2,6 +2,7 @@ package dev.hylfrd.farmhelper.client.platform;
 
 import dev.hylfrd.farmhelper.client.runtime.FarmHelperClientRuntime;
 import dev.hylfrd.farmhelper.client.runtime.TestFarmHelperClientRuntimeFactory;
+import dev.hylfrd.farmhelper.client.control.TestClientRotationControllerAccess;
 import dev.hylfrd.farmhelper.control.input.ControlOwner;
 import dev.hylfrd.farmhelper.control.input.HotbarSelection;
 import dev.hylfrd.farmhelper.control.input.InputAction;
@@ -10,13 +11,18 @@ import dev.hylfrd.farmhelper.control.input.ReleaseReason;
 import dev.hylfrd.farmhelper.control.rotation.RotationTerminalReason;
 import dev.hylfrd.farmhelper.macro.MacroWarpRequest;
 import dev.hylfrd.farmhelper.macro.MacroDecision;
+import dev.hylfrd.farmhelper.macro.MacroRotationRequest;
 import dev.hylfrd.farmhelper.macro.MacroSpawnPose;
 import dev.hylfrd.farmhelper.macro.MacroControlOwner;
 import dev.hylfrd.farmhelper.macro.FeatureSuspension;
+import dev.hylfrd.farmhelper.macro.FarmingContext;
+import dev.hylfrd.farmhelper.macro.ServerResponsiveness;
 import dev.hylfrd.farmhelper.runtime.snapshot.ConnectionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
+import dev.hylfrd.farmhelper.runtime.snapshot.PositionSnapshot;
+import dev.hylfrd.farmhelper.runtime.snapshot.RotationSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.WorldSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.RewarpPosition;
@@ -26,6 +32,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -127,6 +134,67 @@ class ClientTickAdapterTest {
     }
 
     @Test
+    void productionSpatialCaptureRunsOnlyForRunningMacroLifecycle() {
+        AtomicInteger captures = new AtomicInteger();
+        FarmHelperClientRuntime runtime = TestFarmHelperClientRuntimeFactory.create(
+                temporaryDirectory.resolve("capture-lifecycle.json"), request -> {
+                    captures.incrementAndGet();
+                    return Observation.unknown();
+                });
+        runtime.worldLoaded();
+        runtime.observeConnection(Observation.present(ConnectionSnapshot.multiplayer()));
+        ClientSnapshot snapshot = rotationSnapshot();
+
+        TestClientTickAdapterAccess.captureMacroSpatial(runtime, snapshot);
+        assertEquals(0, captures.get());
+        assertTrue(runtime.startMacro());
+        long generation = runtime.core().macroManager().generation();
+        TestClientTickAdapterAccess.captureMacroSpatial(runtime, snapshot);
+        assertEquals(1, captures.get());
+
+        runtime.core().macroManager().manualPause();
+        TestClientTickAdapterAccess.captureMacroSpatial(runtime, snapshot);
+        assertEquals(1, captures.get());
+        runtime.core().macroManager().manualResume();
+        TestClientTickAdapterAccess.captureMacroSpatial(runtime, snapshot);
+        assertEquals(2, captures.get());
+
+        runtime.core().macroManager().observeScreen(true);
+        TestClientTickAdapterAccess.captureMacroSpatial(runtime, snapshot);
+        assertEquals(2, captures.get());
+        runtime.core().macroManager().observeScreen(false);
+        TestClientTickAdapterAccess.captureMacroSpatial(runtime, snapshot);
+        assertEquals(3, captures.get());
+
+        runtime.core().macroManager().tick(ClientSnapshot.unknown(), new FarmingContext(
+                0L, runtime.lifecycle().worldEpoch(), Observation.absent(), Observation.unknown(),
+                Observation.present(true), false, ServerResponsiveness.RESPONSIVE));
+        TestClientTickAdapterAccess.captureMacroSpatial(runtime, snapshot);
+        assertEquals(3, captures.get());
+        runtime.core().macroManager().tick(snapshot, new FarmingContext(
+                1L, runtime.lifecycle().worldEpoch(), snapshot.player(), Observation.unknown(),
+                Observation.present(true), false, ServerResponsiveness.RESPONSIVE));
+        TestClientTickAdapterAccess.captureMacroSpatial(runtime, snapshot);
+        assertEquals(4, captures.get());
+
+        FeatureSuspension first = runtime.core().macroManager().suspendForFeature("first");
+        FeatureSuspension second = runtime.core().macroManager().suspendForFeature("second");
+        TestClientTickAdapterAccess.captureMacroSpatial(runtime, snapshot);
+        assertEquals(4, captures.get());
+        first.close();
+        TestClientTickAdapterAccess.captureMacroSpatial(runtime, snapshot);
+        assertEquals(4, captures.get());
+        second.close();
+        TestClientTickAdapterAccess.captureMacroSpatial(runtime, snapshot);
+        assertEquals(5, captures.get());
+        assertEquals(generation, runtime.core().macroManager().generation());
+
+        assertTrue(runtime.stopMacro());
+        TestClientTickAdapterAccess.captureMacroSpatial(runtime, snapshot);
+        assertEquals(5, captures.get());
+    }
+
+    @Test
     void everyUnknownMacroDecisionCancelsOnlyMacroRotationBeforeFrame() {
         for (String status : List.of(
                 "garden-unknown", "server-unknown", "spatial-unknown",
@@ -169,6 +237,86 @@ class ClientTickAdapterTest {
         assertTrue(runtime.rotation().rotating());
         assertEquals(MacroControlOwner.S_SHAPE,
                 runtime.rotation().snapshot().owner().orElseThrow());
+    }
+
+    @Test
+    void rotationDispositionReplacesOnlyTheMacroOwner() {
+        FarmHelperClientRuntime runtime = runtime("rotation-replace.json");
+        var oldHandle = runtime.rotation().start(MacroControlOwner.S_SHAPE,
+                0F, 0F, 45F, 5F, 1_000L);
+        long beforeRevision = runtime.rotation().snapshot().revision();
+        MacroDecision replace = new MacroDecision(
+                java.util.Set.of(),
+                Optional.of(new MacroRotationRequest(90F, -10F, 700L)),
+                Optional.empty(), "replace-rotation");
+
+        assertTrue(TestClientTickAdapterAccess.decisionBeforeRotation(
+                runtime, rotationSnapshot(), replace, () -> {
+                    assertEquals(90F, runtime.rotation().snapshot().targetYaw().orElseThrow());
+                    assertEquals(MacroControlOwner.S_SHAPE,
+                            runtime.rotation().snapshot().owner().orElseThrow());
+                }).isEmpty());
+
+        assertTrue(runtime.rotation().rotating());
+        assertEquals(MacroControlOwner.S_SHAPE,
+                runtime.rotation().snapshot().owner().orElseThrow());
+        assertEquals(90F, runtime.rotation().snapshot().targetYaw().orElseThrow());
+        assertEquals(-10F, runtime.rotation().snapshot().targetPitch().orElseThrow());
+        assertEquals(700L, runtime.rotation().task().orElseThrow().durationMs());
+        assertEquals(beforeRevision + 2L, runtime.rotation().snapshot().revision());
+        assertTrue(runtime.rotation().snapshot().terminalReason().isEmpty());
+        assertFalse(oldHandle.cancel());
+
+        var kept = runtime.rotation().snapshot();
+        assertTrue(TestClientTickAdapterAccess.decisionBeforeRotation(
+                runtime, rotationSnapshot(), MacroDecision.idle("keep-rotation"), () -> { }).isEmpty());
+        assertEquals(kept.owner(), runtime.rotation().snapshot().owner());
+        assertEquals(kept.targetYaw(), runtime.rotation().snapshot().targetYaw());
+        assertEquals(kept.targetPitch(), runtime.rotation().snapshot().targetPitch());
+        assertEquals(kept.revision(), runtime.rotation().snapshot().revision());
+
+        ControlOwner feature = new ControlOwner("feature-rotation");
+        runtime.rotation().cancel(dev.hylfrd.farmhelper.control.rotation.RotationCancelReason.STOPPED);
+        runtime.rotation().start(feature, 0F, 0F, 15F, 3F, 900L);
+        var featureBefore = runtime.rotation().snapshot();
+        assertTrue(TestClientTickAdapterAccess.decisionBeforeRotation(
+                runtime, rotationSnapshot(), replace, () -> { }).isEmpty());
+        assertEquals(featureBefore.owner(), runtime.rotation().snapshot().owner());
+        assertEquals(featureBefore.targetYaw(), runtime.rotation().snapshot().targetYaw());
+        assertEquals(featureBefore.targetPitch(), runtime.rotation().snapshot().targetPitch());
+        assertEquals(featureBefore.revision(), runtime.rotation().snapshot().revision());
+    }
+
+    @Test
+    void repeatedSameMacroTargetKeepsLeaseTimerAndCompletes() {
+        FarmHelperClientRuntime runtime = runtime("rotation-deduplicate.json");
+        MacroDecision aligning = new MacroDecision(
+                java.util.Set.of(),
+                Optional.of(new MacroRotationRequest(90F, -10F, 10L)),
+                Optional.empty(), "aligning");
+
+        assertTrue(TestClientTickAdapterAccess.decisionBeforeRotation(
+                runtime, rotationSnapshot(), aligning, () -> { }).isEmpty());
+        long revision = runtime.rotation().snapshot().revision();
+        float initialProgress = runtime.rotation().snapshot().progress();
+        for (int tick = 0; tick < 3; tick++) {
+            assertTrue(TestClientTickAdapterAccess.decisionBeforeRotation(
+                    runtime, rotationSnapshot(), aligning, () -> { }).isEmpty());
+            assertEquals(revision, runtime.rotation().snapshot().revision());
+        }
+
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(1L);
+        while (runtime.rotation().snapshot().progress() < 1.0F && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertTrue(runtime.rotation().snapshot().progress() > initialProgress);
+        assertEquals(revision, runtime.rotation().snapshot().revision());
+        TestClientRotationControllerAccess.tick(runtime.rotation());
+
+        assertFalse(runtime.rotation().rotating());
+        assertEquals(RotationTerminalReason.COMPLETED,
+                runtime.rotation().snapshot().terminalReason().orElseThrow());
+        assertEquals(revision + 1L, runtime.rotation().snapshot().revision());
     }
 
     @Test
@@ -226,6 +374,18 @@ class ClientTickAdapterTest {
         return snapshot(
                 Observation.present(new WorldSnapshot(1L, Observation.unknown())),
                 Observation.present(ConnectionSnapshot.multiplayer()), screen);
+    }
+
+    private static ClientSnapshot rotationSnapshot() {
+        return new ClientSnapshot(
+                Observation.present(new PlayerSnapshot(
+                        Observation.present(new PositionSnapshot(0.5D, 70.0D, 0.5D)),
+                        Observation.unknown(),
+                        Observation.present(new RotationSnapshot(10F, 2F)),
+                        Observation.unknown(), Observation.unknown())),
+                Observation.present(new WorldSnapshot(1L, Observation.unknown())),
+                Observation.present(ConnectionSnapshot.multiplayer()),
+                Observation.absent());
     }
 
     private static ClientSnapshot snapshot(

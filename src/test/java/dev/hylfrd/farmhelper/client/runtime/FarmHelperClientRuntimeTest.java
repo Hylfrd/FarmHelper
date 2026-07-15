@@ -3,6 +3,7 @@ package dev.hylfrd.farmhelper.client.runtime;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.hylfrd.farmhelper.config.FarmHelperConfigKey;
+import dev.hylfrd.farmhelper.config.MacroLocationConfig;
 import dev.hylfrd.farmhelper.client.platform.ClientCommandScreenCloseGuard;
 import dev.hylfrd.farmhelper.client.platform.TestClientTickAdapterAccess;
 import dev.hylfrd.farmhelper.client.ui.command.ClientFarmHelperCommandService;
@@ -113,6 +114,47 @@ class FarmHelperClientRuntimeTest {
         ClientFarmHelperCommandService service = new ClientFarmHelperCommandService(
                 runtime, () -> false, new ClientCommandScreenCloseGuard());
         assertEquals("Stop the macro before changing mode.", service.setMacroMode(6).message());
+    }
+
+    @Test
+    void activeConfigResetIsRejectedBeforeEveryMutation() {
+        Path configPath = temporaryDirectory.resolve("active-reset.json");
+        FarmHelperClientRuntime runtime = TestFarmHelperClientRuntimeFactory.create(configPath);
+        MacroLocationConfig spawn = new MacroLocationConfig(10, 72, -4, 91.5F, -12.25F, 7);
+        MacroLocationConfig rewarp = new MacroLocationConfig(14, 72, -4, 0F, 0F, 7);
+        assertTrue(runtime.setMacroMode(5));
+        assertTrue(runtime.setMacroSpawn(spawn));
+        assertTrue(runtime.addMacroRewarp(rewarp));
+        ready(runtime);
+        assertTrue(runtime.startMacro());
+        long generation = runtime.core().macroManager().generation();
+        MacroState state = runtime.core().macroManager().state();
+
+        assertFalse(runtime.resetConfig());
+        assertEquals(generation, runtime.core().macroManager().generation());
+        assertEquals(state, runtime.core().macroManager().state());
+        assertMacroLocations(runtime, 5, spawn, rewarp);
+        assertMacroLocations(TestFarmHelperClientRuntimeFactory.create(configPath),
+                5, spawn, rewarp);
+
+        ClientFarmHelperCommandService commands = new ClientFarmHelperCommandService(
+                runtime, () -> false, new ClientCommandScreenCloseGuard());
+        List<String> feedback = new ArrayList<>();
+        CommandDispatcher<String> dispatcher = new CommandDispatcher<>();
+        var root = dispatcher.register(FarmHelperCommandTree.root(
+                "farmhelper", commands, (source, message) -> feedback.add(message)));
+        dispatcher.register(FarmHelperCommandTree.alias(
+                "fh", root, commands, (source, message) -> feedback.add(message)));
+
+        for (String command : List.of("farmhelper config reset", "fh config reset")) {
+            assertEquals(0, execute(dispatcher, command));
+            assertEquals("Stop the macro before resetting configuration.", feedback.getLast());
+            assertEquals(generation, runtime.core().macroManager().generation());
+            assertEquals(state, runtime.core().macroManager().state());
+            assertMacroLocations(runtime, 5, spawn, rewarp);
+            assertMacroLocations(TestFarmHelperClientRuntimeFactory.create(configPath),
+                    5, spawn, rewarp);
+        }
     }
 
     @Test
@@ -586,6 +628,28 @@ class FarmHelperClientRuntimeTest {
     private static String status(FarmHelperClientRuntime runtime) {
         return new ClientFarmHelperCommandService(runtime, () -> false,
                 new ClientCommandScreenCloseGuard()).status().getFirst();
+    }
+
+    private static void assertMacroLocations(
+            FarmHelperClientRuntime runtime,
+            int mode,
+            MacroLocationConfig spawn,
+            MacroLocationConfig rewarp
+    ) {
+        assertEquals(mode, runtime.core().config().macroMode());
+        assertEquals(mode, runtime.core().macroManager().settings().mode().code());
+        assertEquals(spawn, runtime.core().config().macroSpawn().orElseThrow());
+        assertEquals(spawn.x(), runtime.core().macroManager().settings()
+                .spawn().orElseThrow().position().x());
+        assertEquals(spawn.yaw(), runtime.core().macroManager().settings()
+                .spawn().orElseThrow().yaw());
+        assertEquals(spawn.pitch(), runtime.core().macroManager().settings()
+                .spawn().orElseThrow().pitch());
+        assertEquals(spawn.plot(), runtime.core().macroManager().settings()
+                .spawn().orElseThrow().plot());
+        assertEquals(List.of(rewarp), runtime.core().config().macroRewarps());
+        assertEquals(rewarp.x(), runtime.core().macroManager().settings()
+                .rewarps().getFirst().x());
     }
 
     private static InventoryOperation operation(ControlOwner owner, long identityValue) {
