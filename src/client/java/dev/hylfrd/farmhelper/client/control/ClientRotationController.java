@@ -105,11 +105,17 @@ public final class ClientRotationController {
     }
 
     public void tick(Minecraft client) {
-        tick(new MinecraftRotationView(client));
+        Objects.requireNonNull(client, "client");
+        tick(new MinecraftRotationView(client), () -> requireClientThread(client));
     }
 
     void tick(RotationView view) {
+        tick(view, () -> { });
+    }
+
+    void tick(RotationView view, Runnable clientThreadGuard) {
         Objects.requireNonNull(view, "view");
+        Objects.requireNonNull(clientThreadGuard, "clientThreadGuard").run();
         if (!controller.rotating()) {
             return;
         }
@@ -167,6 +173,7 @@ public final class ClientRotationController {
 
         @Override
         public void apply(float yaw, float pitch) {
+            requireClientThread(client);
             client.player.setYRot(yaw);
             client.player.setXRot(pitch);
             client.player.setYHeadRot(yaw);

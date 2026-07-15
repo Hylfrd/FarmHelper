@@ -5,6 +5,7 @@ import dev.hylfrd.farmhelper.macro.MacroManager;
 import dev.hylfrd.farmhelper.runtime.gamestate.GameStateParseResult;
 import dev.hylfrd.farmhelper.runtime.gamestate.GameStateParser;
 import dev.hylfrd.farmhelper.runtime.gamestate.RawGameTextSnapshot;
+import dev.hylfrd.farmhelper.runtime.lifecycle.ClientOwnershipFence;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
 import dev.hylfrd.farmhelper.runtime.time.ClientTaskQueue;
 import dev.hylfrd.farmhelper.runtime.time.MonotonicClock;
@@ -31,27 +32,38 @@ public final class FarmHelperRuntime {
 
     public FarmHelperRuntime(FarmHelperConfig config, Runnable acquisitionGuard) {
         this(config, new MacroManager(acquisitionGuard), SystemMonotonicClock.INSTANCE,
-                acquisitionGuard);
+                acquisitionGuard, Runnable::run);
+    }
+
+    public FarmHelperRuntime(FarmHelperConfig config, ClientOwnershipFence ownershipFence) {
+        this(config,
+                new MacroManager(Objects.requireNonNull(
+                        ownershipFence, "ownershipFence")::requireAcquisitionAllowed),
+                SystemMonotonicClock.INSTANCE,
+                ownershipFence::requireAcquisitionAllowed,
+                ownershipFence::runTaskCallback);
     }
 
     FarmHelperRuntime(FarmHelperConfig config, MacroManager macroManager) {
-        this(config, macroManager, SystemMonotonicClock.INSTANCE, () -> { });
+        this(config, macroManager, SystemMonotonicClock.INSTANCE, () -> { }, Runnable::run);
     }
 
     FarmHelperRuntime(FarmHelperConfig config, MacroManager macroManager, MonotonicClock clock) {
-        this(config, macroManager, clock, () -> { });
+        this(config, macroManager, clock, () -> { }, Runnable::run);
     }
 
     FarmHelperRuntime(
             FarmHelperConfig config,
             MacroManager macroManager,
             MonotonicClock clock,
-            Runnable acquisitionGuard) {
+            Runnable acquisitionGuard,
+            java.util.function.Consumer<Runnable> callbackRunner) {
         this.config = config;
         this.macroManager = macroManager;
         taskQueue = new ClientTaskQueue(
                 Objects.requireNonNull(clock, "clock"),
-                Objects.requireNonNull(acquisitionGuard, "acquisitionGuard"));
+                Objects.requireNonNull(acquisitionGuard, "acquisitionGuard"),
+                Objects.requireNonNull(callbackRunner, "callbackRunner"));
         gameStateParser = new GameStateParser();
     }
 

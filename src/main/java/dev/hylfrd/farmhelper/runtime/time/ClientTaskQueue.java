@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * A threadless delayed task queue intended to be advanced explicitly by the client thread.
@@ -20,6 +21,7 @@ public final class ClientTaskQueue {
 
     private final MonotonicClock clock;
     private final Runnable acquisitionGuard;
+    private final Consumer<Runnable> callbackRunner;
     private final PriorityQueue<Entry> entries = new PriorityQueue<>(ENTRY_ORDER);
     private final Map<TaskOwner, Set<TaskHandle>> pendingByOwner = new HashMap<>();
     private long lastClockNanos;
@@ -28,12 +30,20 @@ public final class ClientTaskQueue {
     private boolean advancing;
 
     public ClientTaskQueue(MonotonicClock clock) {
-        this(clock, () -> { });
+        this(clock, () -> { }, Runnable::run);
     }
 
     public ClientTaskQueue(MonotonicClock clock, Runnable acquisitionGuard) {
+        this(clock, acquisitionGuard, Runnable::run);
+    }
+
+    public ClientTaskQueue(
+            MonotonicClock clock,
+            Runnable acquisitionGuard,
+            Consumer<Runnable> callbackRunner) {
         this.clock = Objects.requireNonNull(clock, "clock");
         this.acquisitionGuard = Objects.requireNonNull(acquisitionGuard, "acquisitionGuard");
+        this.callbackRunner = Objects.requireNonNull(callbackRunner, "callbackRunner");
         lastClockNanos = clock.nowNanos();
     }
 
@@ -125,7 +135,7 @@ public final class ClientTaskQueue {
                 removeFromOwner(handle);
                 handle.state(TaskHandle.State.RUNNING);
                 try {
-                    entry.task().run();
+                    callbackRunner.accept(entry.task());
                     executed++;
                 } finally {
                     handle.state(TaskHandle.State.COMPLETED);

@@ -78,7 +78,7 @@ public final class FarmHelperClientRuntime {
         configStore = new FarmHelperConfigStore(configPath);
         configLoadResult = configStore.load();
         ownershipFence = new ClientOwnershipFence();
-        core = new FarmHelperRuntime(configLoadResult.config(), ownershipFence::requireAcquisitionAllowed);
+        core = new FarmHelperRuntime(configLoadResult.config(), ownershipFence);
         input = client == null
                 ? ClientInputController.detached(ownershipFence::requireAcquisitionAllowed)
                 : new ClientInputController(ownershipFence::requireAcquisitionAllowed);

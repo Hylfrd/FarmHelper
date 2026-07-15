@@ -116,10 +116,10 @@ public final class GameStateParser {
             Observation<List<GameChatSignal>> signals,
             Context context
     ) {
-        if (client.connection().isUnknown() || client.player().isUnknown() || client.world().isUnknown()) {
+        if (client.connection().isUnknown()) {
             return Observation.unknown();
         }
-        if (client.connection().isAbsent() || client.player().isAbsent() || client.world().isAbsent()) {
+        if (client.connection().isAbsent()) {
             return Observation.absent();
         }
         if (client.connection().get().mode() == ConnectionSnapshot.Mode.SINGLEPLAYER) {
@@ -128,12 +128,21 @@ public final class GameStateParser {
 
         boolean limboChat = signals.isPresent() && signals.get().stream()
                 .anyMatch(signal -> signal.type() == GameChatSignalType.LIMBO_ENTERED);
-        if (limboChat || completeLimboEvidence(client, raw)) {
+        if (limboChat) {
             return Observation.present(SemanticLocation.LIMBO);
         }
         if (raw.worldTransition().isPresent()
                 && raw.worldTransition().get() == WorldTransition.CHANGING) {
             return Observation.present(SemanticLocation.TELEPORTING);
+        }
+        if (client.player().isUnknown() || client.world().isUnknown()) {
+            return Observation.unknown();
+        }
+        if (client.player().isAbsent() || client.world().isAbsent()) {
+            return Observation.absent();
+        }
+        if (completeLimboEvidence(client, raw)) {
+            return Observation.present(SemanticLocation.LIMBO);
         }
 
         Observation<SemanticLocation> area = resolve(raw.tabLines(), "location.area", line -> {

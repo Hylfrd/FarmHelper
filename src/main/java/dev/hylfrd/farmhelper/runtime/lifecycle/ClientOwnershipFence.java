@@ -8,6 +8,7 @@ package dev.hylfrd.farmhelper.runtime.lifecycle;
  * never re-enters the fanout.</p>
  */
 public final class ClientOwnershipFence {
+    private final ThreadLocal<Long> callbackGeneration = new ThreadLocal<>();
     private boolean automationReady;
     private boolean cancelling;
     private long generation;
@@ -39,7 +40,9 @@ public final class ClientOwnershipFence {
     }
 
     public synchronized boolean acquisitionAllowed() {
-        return automationReady && !cancelling;
+        Long boundGeneration = callbackGeneration.get();
+        return automationReady && !cancelling
+                && (boundGeneration == null || boundGeneration == generation);
     }
 
     public synchronized boolean cancelling() {
@@ -53,6 +56,25 @@ public final class ClientOwnershipFence {
     public void requireAcquisitionAllowed() {
         if (!acquisitionAllowed()) {
             throw new IllegalStateException("client transient ownership is fenced");
+        }
+    }
+
+    /** Runs one task callback bound to the generation in which it began executing. */
+    public void runTaskCallback(Runnable callback) {
+        if (callback == null) {
+            throw new NullPointerException("callback");
+        }
+        Long previous = callbackGeneration.get();
+        long boundGeneration = previous == null ? generation() : previous;
+        callbackGeneration.set(boundGeneration);
+        try {
+            callback.run();
+        } finally {
+            if (previous == null) {
+                callbackGeneration.remove();
+            } else {
+                callbackGeneration.set(previous);
+            }
         }
     }
 

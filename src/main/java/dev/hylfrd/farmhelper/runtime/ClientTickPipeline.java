@@ -80,7 +80,9 @@ public final class ClientTickPipeline {
             try {
                 actions.onFailure(failure);
             } catch (RuntimeException | Error cancellationFailure) {
-                exception.addSuppressed(cancellationFailure);
+                if (exception != cancellationFailure) {
+                    exception.addSuppressed(cancellationFailure);
+                }
             }
             return Optional.of(failure);
         }
