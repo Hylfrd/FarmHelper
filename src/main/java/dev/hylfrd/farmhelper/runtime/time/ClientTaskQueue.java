@@ -77,6 +77,21 @@ public final class ClientTaskQueue {
         return cancelled;
     }
 
+    /** Cancels every pending callback, regardless of owner, at a client lifecycle boundary. */
+    public int cancelAll() {
+        int cancelled = 0;
+        for (Set<TaskHandle> handles : pendingByOwner.values()) {
+            for (TaskHandle handle : handles) {
+                if (handle.state() == TaskHandle.State.PENDING) {
+                    handle.state(TaskHandle.State.CANCELLED);
+                    cancelled++;
+                }
+            }
+        }
+        pendingByOwner.clear();
+        return cancelled;
+    }
+
     /** Runs due callbacks and returns their count. This method never waits for time to pass. */
     public int advance() {
         if (advancing) {

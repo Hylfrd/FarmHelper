@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "dev.hylfrd.farmhelper.client.platform.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "PlayerTabOverlayAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

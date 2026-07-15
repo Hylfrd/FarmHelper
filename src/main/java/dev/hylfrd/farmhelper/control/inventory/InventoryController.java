@@ -90,6 +90,16 @@ public final class InventoryController {
         return true;
     }
 
+    /** Cancels the current operation at a global lifecycle boundary, if one exists. */
+    public synchronized boolean cancelActive(InventoryCancelReason reason) {
+        Objects.requireNonNull(reason, "reason");
+        if (active == null) {
+            return false;
+        }
+        cancelActive(active, reason, "operation cancelled by client lifecycle", null);
+        return true;
+    }
+
     /** Atomically closes only the screen identity currently bound to this operation. */
     public synchronized boolean closeScreen(InventoryOperationToken token) {
         Objects.requireNonNull(token, "token");

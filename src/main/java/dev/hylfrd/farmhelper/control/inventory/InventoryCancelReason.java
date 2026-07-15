@@ -3,6 +3,10 @@ package dev.hylfrd.farmhelper.control.inventory;
 /** Closed fail-closed terminal and rejection reasons for inventory work. */
 public enum InventoryCancelReason {
     REQUESTED,
+    SCREEN_OPEN,
+    WORLD_CHANGED,
+    DISCONNECTED,
+    CLIENT_SHUTDOWN,
     TIMEOUT,
     OWNER_CONFLICT,
     STALE_TOKEN,
