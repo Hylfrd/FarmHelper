@@ -70,6 +70,25 @@ public final class ClientRuntimeLifecycle {
         }
     }
 
+    /**
+     * Consumes one exact, already-observed present-screen to absent transition without emitting a
+     * cancellation boundary. Client adapters use this only for a command's expected chat close.
+     */
+    public boolean observeExpectedScreenClose(
+            long expectedIdentity,
+            Observation<ScreenSnapshot> screen
+    ) {
+        Objects.requireNonNull(screen, "screen");
+        if (!screenObserved
+                || this.screen.state() != Observation.State.PRESENT
+                || this.screen.identity() != expectedIdentity
+                || !screen.isAbsent()) {
+            return false;
+        }
+        this.screen = ScreenIdentity.from(screen);
+        return true;
+    }
+
     /** Emits a boundary when a connection becomes absent/unknown, including first observation. */
     public void observeConnection(Observation<?> connection) {
         Objects.requireNonNull(connection, "connection");

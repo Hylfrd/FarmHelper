@@ -1,6 +1,7 @@
 package dev.hylfrd.farmhelper.client;
 
 import dev.hylfrd.farmhelper.client.platform.ClientTickAdapter;
+import dev.hylfrd.farmhelper.client.platform.ClientCommandScreenCloseGuard;
 import dev.hylfrd.farmhelper.client.runtime.FarmHelperClientRuntime;
 import dev.hylfrd.farmhelper.client.ui.command.FarmHelperCommands;
 import dev.hylfrd.farmhelper.client.ui.settings.FarmHelperSettingsController;
@@ -11,9 +12,10 @@ public final class FarmHelperClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         FarmHelperClientRuntime runtime = new FarmHelperClientRuntime();
+        ClientCommandScreenCloseGuard commandScreenClose = new ClientCommandScreenCloseGuard();
         FarmHelperSettingsController settings = FarmHelperSettingsController.register(runtime);
-        FarmHelperCommands.register(runtime, settings);
-        ClientTickAdapter.register(runtime);
+        FarmHelperCommands.register(runtime, settings, commandScreenClose);
+        ClientTickAdapter.register(runtime, commandScreenClose);
         FarmHelper.LOGGER.info("FarmHelper client initialized.");
     }
 }

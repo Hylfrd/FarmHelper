@@ -1,6 +1,7 @@
 package dev.hylfrd.farmhelper.client.ui.command;
 
 import dev.hylfrd.farmhelper.client.runtime.FarmHelperClientRuntime;
+import dev.hylfrd.farmhelper.client.platform.ClientCommandScreenCloseGuard;
 import dev.hylfrd.farmhelper.platform.FarmHelper;
 import dev.hylfrd.farmhelper.ui.command.FarmHelperCommandService;
 import dev.hylfrd.farmhelper.ui.command.FarmHelperCommandTree;
@@ -13,12 +14,13 @@ public final class FarmHelperCommands {
     private FarmHelperCommands() {
     }
 
-    public static void register(FarmHelperClientRuntime runtime) {
-        register(runtime, SettingsScreenOpener.unavailable());
-    }
-
-    public static void register(FarmHelperClientRuntime runtime, SettingsScreenOpener settingsScreenOpener) {
-        FarmHelperCommandService service = new ClientFarmHelperCommandService(runtime, settingsScreenOpener);
+    public static void register(
+            FarmHelperClientRuntime runtime,
+            SettingsScreenOpener settingsScreenOpener,
+            ClientCommandScreenCloseGuard commandScreenClose
+    ) {
+        FarmHelperCommandService service = new ClientFarmHelperCommandService(
+                runtime, settingsScreenOpener, commandScreenClose);
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             var root = dispatcher.register(FarmHelperCommandTree.root(
                     "farmhelper",

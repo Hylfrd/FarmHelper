@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClientRotationControllerTest {
@@ -134,6 +135,23 @@ class ClientRotationControllerTest {
                 controller.snapshot().terminalReason().orElseThrow());
     }
 
+    @Test
+    void offClientThreadTickFailsBeforeReadingOrMutatingAnyPlayerRotationState() {
+        MutableClock clock = new MutableClock();
+        ClientRotationController controller = new ClientRotationController(clock);
+        TestView initialView = new TestView();
+        assertTrue(controller.start(initialView, 90.0F, 30.0F, 100L));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> controller.tick(new UntouchableView(), () -> {
+                    throw new IllegalStateException("not on client thread");
+                }));
+
+        assertEquals("not on client thread", failure.getMessage());
+        assertEquals(0, initialView.applications);
+        assertTrue(controller.rotating());
+    }
+
     private static final class MutableClock implements MonotonicClock {
         private long nowNanos;
 
@@ -179,6 +197,33 @@ class ClientRotationControllerTest {
             this.yaw = yaw;
             this.pitch = pitch;
             applications++;
+        }
+    }
+
+    private static final class UntouchableView implements ClientRotationController.RotationView {
+        @Override
+        public boolean playerPresent() {
+            throw new AssertionError("player state read before client-thread guard");
+        }
+
+        @Override
+        public boolean screenOpen() {
+            throw new AssertionError("screen state read before client-thread guard");
+        }
+
+        @Override
+        public float yaw() {
+            throw new AssertionError("yaw read before client-thread guard");
+        }
+
+        @Override
+        public float pitch() {
+            throw new AssertionError("pitch read before client-thread guard");
+        }
+
+        @Override
+        public void apply(float yaw, float pitch) {
+            throw new AssertionError("rotation mutated before client-thread guard");
         }
     }
 }

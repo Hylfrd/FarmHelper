@@ -1,6 +1,9 @@
 package dev.hylfrd.farmhelper.client.runtime;
 
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.hylfrd.farmhelper.config.FarmHelperConfigKey;
+import dev.hylfrd.farmhelper.client.platform.ClientCommandScreenCloseGuard;
 import dev.hylfrd.farmhelper.client.ui.command.ClientFarmHelperCommandService;
 import dev.hylfrd.farmhelper.control.input.ControlOwner;
 import dev.hylfrd.farmhelper.control.input.InputAction;
@@ -25,6 +28,7 @@ import dev.hylfrd.farmhelper.runtime.snapshot.ConnectionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.time.TaskHandle;
 import dev.hylfrd.farmhelper.runtime.time.TaskOwner;
+import dev.hylfrd.farmhelper.ui.command.FarmHelperCommandTree;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -115,7 +119,7 @@ class FarmHelperClientRuntimeTest {
                 temporaryDirectory.resolve("farmhelper.json"));
         ready(runtime);
         ClientFarmHelperCommandService commands = new ClientFarmHelperCommandService(
-                runtime, () -> false);
+                runtime, () -> false, new ClientCommandScreenCloseGuard());
         ControlOwner owner = new ControlOwner("manual-toggle");
         assertEquals("Macro enabled.", commands.toggle().message());
         TaskHandle task = runtime.core().taskQueue().schedule(
@@ -139,6 +143,63 @@ class FarmHelperClientRuntimeTest {
         assertTrue(runtime.input().snapshot().emptyState());
         assertEquals(ReleaseReason.STOP,
                 runtime.input().snapshot().releaseReason().orElseThrow());
+    }
+
+    @Test
+    void taskCallbackManualStopFencesEveryReacquisitionAndLeavesNoSurvivingTask() {
+        FarmHelperClientRuntime runtime = new FarmHelperClientRuntime(
+                temporaryDirectory.resolve("farmhelper.json"));
+        ready(runtime);
+        ClientFarmHelperCommandService commands = new ClientFarmHelperCommandService(
+                runtime, () -> false, new ClientCommandScreenCloseGuard());
+        List<String> feedback = new ArrayList<>();
+        CommandDispatcher<String> dispatcher = new CommandDispatcher<>();
+        dispatcher.register(FarmHelperCommandTree.root(
+                "farmhelper", commands, (source, message) -> feedback.add(message)));
+        ControlOwner owner = new ControlOwner("callback-manual-stop");
+        assertEquals(1, execute(dispatcher, "farmhelper toggle"));
+        assertEquals("Macro enabled.", feedback.getLast());
+        runtime.input().hold(owner, InputAction.FORWARD);
+        runtime.rotation().start(owner, 0F, 0F, 30F, 5F, 1_000L);
+
+        List<RuntimeException> blocked = new ArrayList<>();
+        TaskHandle stoppingTask = runtime.core().taskQueue().schedule(
+                new TaskOwner("manual-stop-callback"), 0L, () -> {
+                    assertEquals(1, execute(dispatcher, "farmhelper toggle"));
+                    assertEquals("Macro disabled.", feedback.getLast());
+                    captureBlocked(blocked, runtime::toggle);
+                    captureBlocked(blocked, () -> runtime.core().taskQueue().schedule(
+                            new TaskOwner("reacquired-task"), 0L, () -> { }));
+                    captureBlocked(blocked, () -> runtime.inventory().start(
+                            operation(owner, 21L), ignored -> { }));
+                    captureBlocked(blocked, () -> runtime.input().hold(owner, InputAction.USE));
+                    captureBlocked(blocked, () -> runtime.rotation().start(
+                            owner, 0F, 0F, 90F, 0F, 1_000L));
+                });
+        runtime.inventory().start(operation(owner, 20L), ignored -> { });
+        TaskHandle pendingTask = runtime.core().taskQueue().schedule(
+                new TaskOwner("must-be-cancelled"), 0L, () -> {
+                    throw new AssertionError("task survived MANUAL_STOP");
+                });
+        TaskHandle deferredTask = runtime.core().taskQueue().schedule(
+                new TaskOwner("deferred-must-be-cancelled"), 1_000_000L, () -> {
+                    throw new AssertionError("deferred task survived MANUAL_STOP");
+                });
+
+        assertEquals(1, runtime.core().taskQueue().advance());
+
+        assertEquals(5, blocked.size());
+        assertTrue(blocked.stream().allMatch(failure ->
+                "client transient ownership is fenced".equals(failure.getMessage())));
+        assertTrue(stoppingTask.done());
+        assertFalse(stoppingTask.cancelled());
+        assertTrue(pendingTask.cancelled());
+        assertTrue(deferredTask.cancelled());
+        assertEquals(0, runtime.core().taskQueue().pendingTaskCount());
+        assertFalse(runtime.core().macroManager().enabled());
+        assertTrue(runtime.inventory().activeToken().isEmpty());
+        assertFalse(runtime.rotation().rotating());
+        assertTrue(runtime.input().snapshot().emptyState());
     }
 
     @Test
@@ -217,6 +278,14 @@ class FarmHelperClientRuntimeTest {
             action.run();
         } catch (RuntimeException failure) {
             failures.add(failure);
+        }
+    }
+
+    private static int execute(CommandDispatcher<String> dispatcher, String command) {
+        try {
+            return dispatcher.execute(command, "test-source");
+        } catch (CommandSyntaxException exception) {
+            throw new AssertionError("command did not parse: " + command, exception);
         }
     }
 

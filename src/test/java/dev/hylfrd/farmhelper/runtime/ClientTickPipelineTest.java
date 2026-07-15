@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -53,6 +55,39 @@ class ClientTickPipelineTest {
 
         assertEquals(ClientTickPipeline.Stage.TASK_QUEUE, failure.stage());
         assertEquals("boom", failure.cause().getMessage());
+        assertEquals(List.of("lifecycle", "snapshot", "snapshot-lifecycle", "text", "parse",
+                "tasks", "failure"), order);
+    }
+
+    @Test
+    void failureHandlerRethrowingTheSameCauseDoesNotSelfSuppressOrMaskIt() {
+        List<String> order = new ArrayList<>();
+        IllegalStateException cause = new IllegalStateException("same cause");
+        int[] handlerCalls = new int[1];
+
+        var result = assertDoesNotThrow(() -> new ClientTickPipeline().tick(new Actions(order) {
+            @Override
+            public void advanceTaskQueue() {
+                order.add("tasks");
+                throw cause;
+            }
+
+            @Override
+            public void onFailure(ClientTickPipeline.Failure observed) {
+                order.add("failure");
+                handlerCalls[0]++;
+                assertSame(cause, observed.cause());
+                throw cause;
+            }
+        }));
+        ClientTickPipeline.Failure failure = result.orElseThrow();
+
+        assertSame(cause, failure.cause());
+        assertEquals(0, cause.getSuppressed().length);
+        assertEquals(1, handlerCalls[0]);
+        assertFalse(order.contains("runtime"));
+        assertFalse(order.contains("rotation"));
+        assertFalse(order.contains("input"));
         assertEquals(List.of("lifecycle", "snapshot", "snapshot-lifecycle", "text", "parse",
                 "tasks", "failure"), order);
     }

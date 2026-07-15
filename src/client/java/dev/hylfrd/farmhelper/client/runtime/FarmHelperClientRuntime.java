@@ -52,6 +52,7 @@ public final class FarmHelperClientRuntime {
     private final ClientCancellationFanout cancellationFanout;
     private final ClientRuntimeLifecycle lifecycle;
     private final SpatialSnapshotCapturePort spatialSnapshots;
+    private boolean disconnectLatched;
 
     public FarmHelperClientRuntime() {
         this(FabricLoader.getInstance().getConfigDir().resolve(FarmHelper.MOD_ID + ".json"),
@@ -130,6 +131,11 @@ public final class FarmHelperClientRuntime {
         return lifecycle;
     }
 
+    /** Current transient-owner generation, used to validate one-shot platform boundaries. */
+    public long ownershipGeneration() {
+        return ownershipFence.generation();
+    }
+
     public ConfigLoadResult configLoadResult() {
         return configLoadResult;
     }
@@ -204,6 +210,7 @@ public final class FarmHelperClientRuntime {
     public void worldLoaded() {
         requireAttachedClientThread();
         ownershipFence.setAutomationReady(false);
+        disconnectLatched = false;
         lifecycle.worldLoaded();
     }
 
@@ -215,12 +222,14 @@ public final class FarmHelperClientRuntime {
 
     public void disconnected() {
         requireAttachedClientThread();
+        disconnectLatched = true;
         ownershipFence.setAutomationReady(false);
         lifecycle.disconnected();
     }
 
     public void clientStopping() {
         requireAttachedClientThread();
+        disconnectLatched = true;
         ownershipFence.setAutomationReady(false);
         lifecycle.clientStopping();
     }
@@ -235,7 +244,7 @@ public final class FarmHelperClientRuntime {
     public void observeConnection(Observation<?> connection) {
         requireAttachedClientThread();
         Objects.requireNonNull(connection, "connection");
-        ownershipFence.setAutomationReady(connection.isPresent());
+        ownershipFence.setAutomationReady(connection.isPresent() && !disconnectLatched);
         lifecycle.observeConnection(connection);
     }
 

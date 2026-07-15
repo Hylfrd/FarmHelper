@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClientRuntimeLifecycleTest {
     @Test
@@ -69,6 +71,24 @@ class ClientRuntimeLifecycleTest {
                 ClientCancellationReason.SCREEN_CHANGED,
                 ClientCancellationReason.SCREEN_CHANGED,
                 ClientCancellationReason.SCREEN_CHANGED), cancellations);
+    }
+
+    @Test
+    void expectedScreenCloseConsumesOnlyTheExactPresentToAbsentIdentity() {
+        List<ClientCancellationReason> cancellations = new ArrayList<>();
+        ClientRuntimeLifecycle lifecycle = new ClientRuntimeLifecycle(cancellations::add);
+        Observation<ScreenSnapshot> chat = Observation.present(new ScreenSnapshot(
+                17L, Observation.present("chat"), Observation.present("Chat")));
+
+        lifecycle.observeScreen(chat);
+
+        assertFalse(lifecycle.observeExpectedScreenClose(18L, Observation.absent()));
+        assertFalse(lifecycle.observeExpectedScreenClose(17L, Observation.unknown()));
+        assertTrue(lifecycle.observeExpectedScreenClose(17L, Observation.absent()));
+        assertEquals(List.of(), cancellations);
+
+        lifecycle.observeScreen(chat);
+        assertEquals(List.of(ClientCancellationReason.SCREEN_CHANGED), cancellations);
     }
 
     @Test
