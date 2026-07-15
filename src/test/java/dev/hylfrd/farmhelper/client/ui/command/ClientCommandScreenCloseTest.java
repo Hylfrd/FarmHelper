@@ -3,6 +3,7 @@ package dev.hylfrd.farmhelper.client.ui.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.hylfrd.farmhelper.client.platform.ClientCommandScreenCloseGuard;
+import dev.hylfrd.farmhelper.client.platform.TestClientTickAdapterAccess;
 import dev.hylfrd.farmhelper.client.runtime.FarmHelperClientRuntime;
 import dev.hylfrd.farmhelper.client.runtime.TestFarmHelperClientRuntimeFactory;
 import dev.hylfrd.farmhelper.control.input.ControlOwner;
@@ -10,8 +11,11 @@ import dev.hylfrd.farmhelper.control.input.InputAction;
 import dev.hylfrd.farmhelper.control.input.ReleaseReason;
 import dev.hylfrd.farmhelper.control.rotation.RotationTerminalReason;
 import dev.hylfrd.farmhelper.runtime.snapshot.ConnectionSnapshot;
+import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
+import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
+import dev.hylfrd.farmhelper.runtime.snapshot.WorldSnapshot;
 import dev.hylfrd.farmhelper.ui.command.FarmHelperCommandTree;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,7 +41,7 @@ class ClientCommandScreenCloseTest {
 
         assertEquals(1, fixture.execute("farmhelper toggle"));
         assertEquals("Macro enabled.", fixture.feedback.getLast());
-        fixture.observeAbsent();
+        fixture.endTick();
         assertTrue(fixture.runtime.core().macroManager().enabled());
 
         Object rotationChat = new Object();
@@ -45,7 +49,7 @@ class ClientCommandScreenCloseTest {
         assertFalse(fixture.runtime.core().macroManager().enabled());
         assertEquals(1, fixture.execute("farmhelper rotation test 90 10 100"));
         assertEquals("Rotation test started.", fixture.feedback.getLast());
-        fixture.observeAbsent();
+        fixture.endTick();
         assertTrue(fixture.runtime.rotation().rotating());
     }
 
@@ -58,24 +62,27 @@ class ClientCommandScreenCloseTest {
         assertEquals(1, fixture.execute("farmhelper toggle"));
         assertEquals("Macro disabled.", fixture.feedback.getLast());
         fixture.assertManualStopReasons();
-        fixture.observeAbsent();
+        fixture.endTick();
         fixture.assertManualStopReasons();
+        fixture.assertStoppedAndDrained();
 
         fixture.observePresent(new Object(), true, 22L);
         fixture.acquireOwners("stop");
         assertEquals(1, fixture.execute("farmhelper stop"));
         assertEquals("Macro disabled and controls released.", fixture.feedback.getLast());
         fixture.assertManualStopReasons();
-        fixture.observeAbsent();
+        fixture.endTick();
         fixture.assertManualStopReasons();
+        fixture.assertStoppedAndDrained();
 
         fixture.observePresent(new Object(), true, 23L);
         fixture.acquireOwners("reset");
         assertEquals(1, fixture.execute("farmhelper reset"));
         assertEquals("Runtime stopped and configuration reset.", fixture.feedback.getLast());
         fixture.assertManualStopReasons();
-        fixture.observeAbsent();
+        fixture.endTick();
         fixture.assertManualStopReasons();
+        fixture.assertStoppedAndDrained();
     }
 
     @Test
@@ -85,7 +92,13 @@ class ClientCommandScreenCloseTest {
         fixture.observePresent(new Object(), true, 31L);
         fixture.acquireOwners("status-close");
         assertEquals(1, fixture.execute("farmhelper status"));
-        fixture.observeAbsent();
+        fixture.endTick();
+        fixture.assertScreenReasons();
+
+        fixture.observePresent(new Object(), true, 37L);
+        fixture.acquireOwners("config-close");
+        assertEquals(1, fixture.execute("farmhelper config get targetYaw"));
+        fixture.endTick();
         fixture.assertScreenReasons();
 
         Object replacementChat = new Object();
@@ -170,6 +183,22 @@ class ClientCommandScreenCloseTest {
                     runtime.lifecycle(), runtime.ownershipGeneration());
         }
 
+        private void endTick() {
+            screen.set(null);
+            chat.set(false);
+            ClientSnapshot snapshot = new ClientSnapshot(
+                    Observation.present(new PlayerSnapshot(
+                            Observation.unknown(), Observation.unknown(), Observation.unknown(),
+                            Observation.unknown(), Observation.unknown())),
+                    Observation.present(new WorldSnapshot(
+                            runtime.lifecycle().worldEpoch(), Observation.unknown())),
+                    Observation.present(ConnectionSnapshot.multiplayer()),
+                    Observation.absent());
+            assertTrue(TestClientTickAdapterAccess.tick(runtime, snapshot, () ->
+                    guard.observeScreen(snapshot.screen(), screen.get(), chat.get(),
+                            runtime.lifecycle(), runtime.ownershipGeneration())).isEmpty());
+        }
+
         private void observeUnknown() {
             screen.set(null);
             chat.set(false);
@@ -215,6 +244,11 @@ class ClientCommandScreenCloseTest {
                     runtime.rotation().snapshot().terminalReason().orElseThrow());
             assertEquals(ReleaseReason.SCREEN,
                     runtime.input().snapshot().releaseReason().orElseThrow());
+        }
+
+        private void assertStoppedAndDrained() {
+            assertFalse(runtime.core().macroManager().enabled());
+            assertEquals(0, runtime.core().taskQueue().pendingTaskCount());
         }
     }
 }

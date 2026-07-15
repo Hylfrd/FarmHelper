@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.hylfrd.farmhelper.config.FarmHelperConfigKey;
 import dev.hylfrd.farmhelper.client.platform.ClientCommandScreenCloseGuard;
+import dev.hylfrd.farmhelper.client.platform.TestClientTickAdapterAccess;
 import dev.hylfrd.farmhelper.client.ui.command.ClientFarmHelperCommandService;
 import dev.hylfrd.farmhelper.control.input.ControlOwner;
 import dev.hylfrd.farmhelper.control.input.InputAction;
@@ -26,6 +27,8 @@ import dev.hylfrd.farmhelper.runtime.gamestate.RawGameTextSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ConnectionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
+import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
+import dev.hylfrd.farmhelper.runtime.snapshot.WorldSnapshot;
 import dev.hylfrd.farmhelper.runtime.time.TaskHandle;
 import dev.hylfrd.farmhelper.runtime.time.TaskOwner;
 import dev.hylfrd.farmhelper.ui.command.FarmHelperCommandTree;
@@ -186,7 +189,16 @@ class FarmHelperClientRuntimeTest {
                     throw new AssertionError("deferred task survived MANUAL_STOP");
                 });
 
-        assertEquals(1, runtime.core().taskQueue().advance());
+        ClientSnapshot tickSnapshot = new ClientSnapshot(
+                Observation.present(new PlayerSnapshot(
+                        Observation.unknown(), Observation.unknown(), Observation.unknown(),
+                        Observation.unknown(), Observation.unknown())),
+                Observation.present(new WorldSnapshot(
+                        runtime.lifecycle().worldEpoch(), Observation.unknown())),
+                Observation.present(ConnectionSnapshot.multiplayer()),
+                Observation.absent());
+        assertTrue(TestClientTickAdapterAccess.tick(
+                runtime, tickSnapshot, () -> { }).isEmpty());
 
         assertEquals(5, blocked.size());
         assertTrue(blocked.stream().allMatch(failure ->
@@ -199,7 +211,11 @@ class FarmHelperClientRuntimeTest {
         assertFalse(runtime.core().macroManager().enabled());
         assertTrue(runtime.inventory().activeToken().isEmpty());
         assertFalse(runtime.rotation().rotating());
+        assertEquals(RotationTerminalReason.STOPPED,
+                runtime.rotation().snapshot().terminalReason().orElseThrow());
         assertTrue(runtime.input().snapshot().emptyState());
+        assertEquals(ReleaseReason.STOP,
+                runtime.input().snapshot().releaseReason().orElseThrow());
     }
 
     @Test

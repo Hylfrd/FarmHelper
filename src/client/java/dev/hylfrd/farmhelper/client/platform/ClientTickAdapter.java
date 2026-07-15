@@ -153,7 +153,19 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
 
     @Override
     public void enforceInputSafety(ClientSnapshot snapshot) {
-        ReleaseReason reason = unsafeReason(snapshot);
+        enforceInputSafety(runtime, snapshot);
+    }
+
+    static void enforceInputSafety(
+            FarmHelperClientRuntime runtime,
+            ClientSnapshot snapshot
+    ) {
+        Objects.requireNonNull(runtime, "runtime");
+        Objects.requireNonNull(snapshot, "snapshot");
+        if (runtime.input().snapshot().emptyState()) {
+            return;
+        }
+        ReleaseReason reason = unsafeReason(runtime, snapshot);
         if (reason != null) {
             runtime.input().releaseAll(reason);
         }
@@ -205,7 +217,10 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
                 position.x(), position.y(), position.z(), rotation.yaw(), rotation.pitch());
     }
 
-    private ReleaseReason unsafeReason(ClientSnapshot snapshot) {
+    private static ReleaseReason unsafeReason(
+            FarmHelperClientRuntime runtime,
+            ClientSnapshot snapshot
+    ) {
         if (!snapshot.screen().isAbsent()) {
             return ReleaseReason.SCREEN;
         }
