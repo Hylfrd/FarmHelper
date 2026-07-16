@@ -12,6 +12,7 @@ import java.util.Optional;
 public final class NavigationController {
     private final Runnable acquisitionGuard;
     private final List<NavigationTerminalCleanup> terminalCleanups;
+    private final long firstWorkRevision;
     private long lastGeneration;
     private ActiveRun active;
     private boolean terminating;
@@ -26,7 +27,7 @@ public final class NavigationController {
             Runnable acquisitionGuard,
             NavigationTerminalCleanup... terminalCleanups
     ) {
-        this(0L, acquisitionGuard, terminalCleanups);
+        this(0L, 1L, acquisitionGuard, terminalCleanups);
     }
 
     NavigationController(
@@ -34,10 +35,23 @@ public final class NavigationController {
             Runnable acquisitionGuard,
             NavigationTerminalCleanup... terminalCleanups
     ) {
+        this(lastGeneration, 1L, acquisitionGuard, terminalCleanups);
+    }
+
+    NavigationController(
+            long lastGeneration,
+            long firstWorkRevision,
+            Runnable acquisitionGuard,
+            NavigationTerminalCleanup... terminalCleanups
+    ) {
         if (lastGeneration < 0L) {
             throw new IllegalArgumentException("lastGeneration must be non-negative");
         }
+        if (firstWorkRevision <= 0L) {
+            throw new IllegalArgumentException("firstWorkRevision must be positive");
+        }
         this.lastGeneration = lastGeneration;
+        this.firstWorkRevision = firstWorkRevision;
         this.acquisitionGuard = Objects.requireNonNull(acquisitionGuard, "acquisitionGuard");
         Objects.requireNonNull(terminalCleanups, "terminalCleanups");
         List<NavigationTerminalCleanup> copy = new ArrayList<>(terminalCleanups.length);
@@ -79,7 +93,7 @@ public final class NavigationController {
         // Allocation happens before terminating the current run, so exhaustion cannot discard it.
         NavigationTicket replacement = allocate(request);
         terminate(active, NavigationResult.cancelled(
-                active.ticket(), NavigationCancellationReason.REPLACED));
+                active.status().workTicket(), NavigationCancellationReason.REPLACED));
         return Optional.of(begin(replacement, request, observation));
     }
 
@@ -110,47 +124,47 @@ public final class NavigationController {
     }
 
     public synchronized boolean advance(
-            NavigationTicket ticket,
-            NavigationPhase expected,
+            NavigationWorkTicket expected,
             NavigationPhase next
     ) {
-        Objects.requireNonNull(ticket, "ticket");
         Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(next, "next");
-        if (!matches(ticket) || active.status().phase() != expected
-                || !allowed(expected, next)) {
+        if (!matches(expected) || !allowed(expected.phase(), next)) {
             return false;
         }
-        update(next, next == NavigationPhase.CAPTURING
+        issue(next, next == NavigationPhase.CAPTURING
                 ? Optional.empty() : active.status().spatialSnapshot());
         return true;
     }
 
     public synchronized boolean acceptCapture(
-            NavigationTicket ticket,
+            NavigationWorkTicket expected,
             SegmentedSpatialSnapshot snapshot
     ) {
-        Objects.requireNonNull(ticket, "ticket");
+        Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(snapshot, "snapshot");
-        if (!matches(ticket) || active.status().phase() != NavigationPhase.CAPTURING) {
+        if (!matches(expected) || expected.phase() != NavigationPhase.CAPTURING) {
             return false;
         }
-        if (!snapshot.ticket().equals(ticket)) {
-            throw new IllegalArgumentException("capture has a stale navigation ticket");
+        if (!snapshot.workTicket().equals(expected)) {
+            throw new IllegalArgumentException("capture has a stale work ticket");
         }
-        update(NavigationPhase.SEARCHING, Optional.of(snapshot));
+        issue(NavigationPhase.SEARCHING, Optional.of(snapshot));
         return true;
     }
 
-    public synchronized boolean complete(NavigationTicket ticket) {
-        Objects.requireNonNull(ticket, "ticket");
-        return matches(ticket) && terminate(active, NavigationResult.completed(ticket));
+    public synchronized boolean complete(NavigationWorkTicket expected) {
+        Objects.requireNonNull(expected, "expected");
+        return matches(expected) && terminate(active, NavigationResult.completed(expected));
     }
 
-    public synchronized boolean fail(NavigationTicket ticket, NavigationFailureReason reason) {
-        Objects.requireNonNull(ticket, "ticket");
+    public synchronized boolean fail(
+            NavigationWorkTicket expected,
+            NavigationFailureReason reason
+    ) {
+        Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(reason, "reason");
-        return matches(ticket) && terminate(active, NavigationResult.failed(ticket, reason));
+        return matches(expected) && terminate(active, NavigationResult.failed(expected, reason));
     }
 
     public synchronized boolean cancel(
@@ -159,14 +173,15 @@ public final class NavigationController {
     ) {
         Objects.requireNonNull(ticket, "ticket");
         Objects.requireNonNull(reason, "reason");
-        return matches(ticket) && terminate(active, NavigationResult.cancelled(ticket, reason));
+        return matches(ticket) && terminate(active, NavigationResult.cancelled(
+                active.status().workTicket(), reason));
     }
 
     /** Cancels only the current ticket, if any, for a global lifecycle boundary. */
     public synchronized boolean cancelActive(NavigationCancellationReason reason) {
         Objects.requireNonNull(reason, "reason");
         return active != null && terminate(
-                active, NavigationResult.cancelled(active.ticket(), reason));
+                active, NavigationResult.cancelled(active.status().workTicket(), reason));
     }
 
     private NavigationHandle begin(
@@ -174,12 +189,14 @@ public final class NavigationController {
             NavigationRequest request,
             NavigationStartObservation observation
     ) {
+        NavigationWorkTicket workTicket = new NavigationWorkTicket(
+                ticket, NavigationPhase.REQUESTED, firstWorkRevision);
         NavigationStatus status = new NavigationStatus(
-                ticket, request, NavigationPhase.REQUESTED, Optional.empty(), Optional.empty());
+                ticket, request, workTicket, Optional.empty(), Optional.empty());
         NavigationHandle handle = new NavigationHandle(this, ticket);
         active = new ActiveRun(status, handle);
         observation.failureFor(request).ifPresent(reason ->
-                terminate(active, NavigationResult.failed(ticket, reason)));
+                terminate(active, NavigationResult.failed(workTicket, reason)));
         return handle;
     }
 
@@ -195,23 +212,32 @@ public final class NavigationController {
         return active != null && active.ticket().equals(ticket);
     }
 
-    private void update(
+    private boolean matches(NavigationWorkTicket workTicket) {
+        return active != null && active.status().workTicket().equals(workTicket);
+    }
+
+    private void issue(
             NavigationPhase phase,
             Optional<SegmentedSpatialSnapshot> snapshot
     ) {
         NavigationStatus current = active.status();
+        if (current.workTicket().revision() == Long.MAX_VALUE) {
+            throw new IllegalStateException("navigation work revision exhausted");
+        }
+        NavigationWorkTicket next = new NavigationWorkTicket(
+                current.ticket(), phase, current.workTicket().revision() + 1L);
         NavigationStatus updated = new NavigationStatus(
-                current.ticket(), current.request(), phase, snapshot, Optional.empty());
+                current.ticket(), current.request(), next, snapshot, Optional.empty());
         active = new ActiveRun(updated, active.handle());
     }
 
     private boolean terminate(ActiveRun terminated, NavigationResult result) {
         NavigationStatus current = terminated.status();
-        if (active != terminated || !current.ticket().equals(result.ticket())) {
+        if (active != terminated || !current.workTicket().equals(result.workTicket())) {
             return false;
         }
         NavigationStatus terminal = new NavigationStatus(
-                current.ticket(), current.request(), current.phase(),
+                current.ticket(), current.request(), current.workTicket(),
                 current.spatialSnapshot(), Optional.of(result));
         // Commit the fence before callbacks. Reentrant/stale callbacks cannot touch a replacement.
         active = null;
@@ -242,13 +268,11 @@ public final class NavigationController {
     }
 
     private static boolean allowed(NavigationPhase current, NavigationPhase next) {
-        if (current == next) {
-            return false;
-        }
         return switch (current) {
             case REQUESTED -> next == NavigationPhase.CAPTURING;
             case CAPTURING -> false; // Only acceptCapture may publish CAPTURING -> SEARCHING.
-            case SEARCHING -> next == NavigationPhase.FOLLOWING
+            case SEARCHING -> next == NavigationPhase.SEARCHING
+                    || next == NavigationPhase.FOLLOWING
                     || next == NavigationPhase.EXECUTING;
             case FOLLOWING, EXECUTING -> next == NavigationPhase.CAPTURING
                     || next == NavigationPhase.SEARCHING

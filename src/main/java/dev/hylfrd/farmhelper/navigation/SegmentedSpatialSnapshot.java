@@ -24,17 +24,20 @@ public final class SegmentedSpatialSnapshot {
     /** Seven maximum-size segments (57,344 cells) fit; a ninth cannot bypass the total budget. */
     public static final int MAX_AGGREGATE_CELLS = 65_536;
 
-    private final NavigationTicket ticket;
+    private final NavigationWorkTicket workTicket;
     private final BoxSnapshot bounds;
     private final List<SpatialSegment> segments;
     private final int capturedCellCount;
 
     public SegmentedSpatialSnapshot(
-            NavigationTicket ticket,
+            NavigationWorkTicket workTicket,
             BoxSnapshot bounds,
             List<SpatialSegment> segments
     ) {
-        this.ticket = Objects.requireNonNull(ticket, "ticket");
+        this.workTicket = Objects.requireNonNull(workTicket, "workTicket");
+        if (workTicket.phase() != NavigationPhase.CAPTURING) {
+            throw new IllegalArgumentException("segmented captures require CAPTURING work");
+        }
         this.bounds = Objects.requireNonNull(bounds, "bounds");
         Objects.requireNonNull(segments, "segments");
         if (!bounds.hasPositiveVolume()) {
@@ -57,8 +60,8 @@ public final class SegmentedSpatialSnapshot {
             if (segment.index() != index) {
                 throw new IllegalArgumentException("segment indexes must be contiguous and ordered");
             }
-            if (!segment.ticket().equals(ticket)) {
-                throw new IllegalArgumentException("segment has a stale navigation ticket");
+            if (!segment.workTicket().equals(workTicket)) {
+                throw new IllegalArgumentException("segment has a stale work ticket");
             }
             if (!tokens.add(segment.requestToken())) {
                 throw new IllegalArgumentException("segment request tokens must be unique");
@@ -78,7 +81,11 @@ public final class SegmentedSpatialSnapshot {
     }
 
     public NavigationTicket ticket() {
-        return ticket;
+        return workTicket.runTicket();
+    }
+
+    public NavigationWorkTicket workTicket() {
+        return workTicket;
     }
 
     public BoxSnapshot bounds() {

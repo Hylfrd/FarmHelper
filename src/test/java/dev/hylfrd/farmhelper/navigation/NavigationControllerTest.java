@@ -43,6 +43,19 @@ class NavigationControllerTest {
         assertThrows(IllegalArgumentException.class, () -> new NavigationOptions(
                 NavigationMode.FLY, false, false, 0.0D, -0.1D, false,
                 NavigationRotationPolicy.NONE));
+        assertThrows(IllegalArgumentException.class, () -> new NavigationRequest(
+                OWNER, 7L, new NavigationGoal(1.0D, Double.MAX_VALUE, -3.0D),
+                new NavigationOptions(NavigationMode.FLY, false, false,
+                        Double.MAX_VALUE, 1.0D, false, NavigationRotationPolicy.NONE)));
+        assertThrows(IllegalArgumentException.class, () -> new NavigationRequest(
+                OWNER, 7L, new NavigationGoal(1.0D, -Double.MAX_VALUE, -3.0D),
+                new NavigationOptions(NavigationMode.FLY, false, false,
+                        -Double.MAX_VALUE, 1.0D, false, NavigationRotationPolicy.NONE)));
+        assertEquals(0.0D, new NavigationRequest(
+                OWNER, 7L, new NavigationGoal(1.0D, Double.MAX_VALUE, -3.0D),
+                new NavigationOptions(NavigationMode.FLY, false, false,
+                        -Double.MAX_VALUE, 1.0D, false, NavigationRotationPolicy.NONE))
+                .effectiveGoal().y());
     }
 
     @Test
@@ -50,8 +63,10 @@ class NavigationControllerTest {
         NavigationController controller = new NavigationController();
         NavigationRequest firstRequest = request(OWNER, 3L, 10.0D);
         NavigationHandle first = controller.start(firstRequest, eligible(3L));
-        assertTrue(first.advance(NavigationPhase.REQUESTED, NavigationPhase.CAPTURING));
-        SegmentedSpatialSnapshot firstCapture = capture(first.ticket(), 1L);
+        NavigationWorkTicket firstRequested = work(first);
+        assertTrue(first.advance(firstRequested, NavigationPhase.CAPTURING));
+        NavigationWorkTicket firstCapturing = work(first);
+        SegmentedSpatialSnapshot firstCapture = capture(firstCapturing, 1L);
 
         assertThrows(NavigationConflictException.class,
                 () -> controller.start(request(OWNER, 3L, 20.0D), eligible(3L)));
@@ -67,27 +82,52 @@ class NavigationControllerTest {
                 first.status().orElseThrow().terminalResult().orElseThrow()
                         .cancellationReason().orElseThrow());
         assertFalse(first.cancel());
-        assertFalse(first.advance(NavigationPhase.CAPTURING, NavigationPhase.SEARCHING));
-        assertFalse(first.acceptCapture(firstCapture));
-        assertFalse(first.complete());
-        assertFalse(first.fail(NavigationFailureReason.NO_PATH));
+        assertFalse(first.advance(firstCapturing, NavigationPhase.SEARCHING));
+        assertFalse(first.acceptCapture(firstCapturing, firstCapture));
+        assertFalse(first.complete(firstCapturing));
+        assertFalse(first.fail(firstCapturing, NavigationFailureReason.NO_PATH));
         assertTrue(first.replace(request(OWNER, 3L, 30.0D), eligible(3L)).isEmpty());
         assertEquals(replacement.ticket(), controller.activeTicket().orElseThrow());
 
-        assertTrue(replacement.advance(NavigationPhase.REQUESTED, NavigationPhase.CAPTURING));
-        SegmentedSpatialSnapshot replacementCapture = capture(replacement.ticket(), 2L);
+        NavigationWorkTicket replacementRequested = work(replacement);
+        assertTrue(replacement.advance(replacementRequested, NavigationPhase.CAPTURING));
+        NavigationWorkTicket replacementCapturing = work(replacement);
+        SegmentedSpatialSnapshot replacementCapture = capture(replacementCapturing, 2L);
         assertThrows(IllegalArgumentException.class,
-                () -> controller.acceptCapture(replacement.ticket(), firstCapture));
-        assertTrue(replacement.acceptCapture(replacementCapture));
+                () -> controller.acceptCapture(replacementCapturing, firstCapture));
+        assertTrue(replacement.acceptCapture(replacementCapturing, replacementCapture));
         assertEquals(NavigationPhase.SEARCHING,
                 replacement.status().orElseThrow().phase());
-        assertTrue(replacement.advance(NavigationPhase.SEARCHING, NavigationPhase.EXECUTING));
-        assertTrue(replacement.advance(NavigationPhase.EXECUTING, NavigationPhase.CAPTURING));
+
+        NavigationWorkTicket firstSearch = work(replacement);
+        assertTrue(replacement.advance(firstSearch, NavigationPhase.SEARCHING));
+        NavigationWorkTicket secondSearch = work(replacement);
+        assertTrue(secondSearch.revision() > firstSearch.revision());
+        assertFalse(replacement.advance(firstSearch, NavigationPhase.FOLLOWING));
+        assertFalse(replacement.complete(firstSearch));
+        assertFalse(replacement.fail(firstSearch, NavigationFailureReason.NO_PATH));
+
+        assertTrue(replacement.advance(secondSearch, NavigationPhase.FOLLOWING));
+        NavigationWorkTicket firstFollow = work(replacement);
+        assertTrue(replacement.advance(firstFollow, NavigationPhase.FOLLOWING));
+        NavigationWorkTicket secondFollow = work(replacement);
+        assertFalse(replacement.advance(firstFollow, NavigationPhase.EXECUTING));
+        assertFalse(replacement.complete(firstFollow));
+        assertFalse(replacement.fail(firstFollow, NavigationFailureReason.NO_PATH));
+
+        assertTrue(replacement.advance(secondFollow, NavigationPhase.EXECUTING));
+        NavigationWorkTicket executing = work(replacement);
+        assertTrue(replacement.advance(executing, NavigationPhase.CAPTURING));
+        NavigationWorkTicket recapturing = work(replacement);
         assertTrue(replacement.status().orElseThrow().spatialSnapshot().isEmpty());
-        assertFalse(replacement.advance(NavigationPhase.CAPTURING, NavigationPhase.SEARCHING));
-        SegmentedSpatialSnapshot recapture = capture(replacement.ticket(), 3L);
-        assertTrue(replacement.acceptCapture(recapture));
-        assertTrue(replacement.complete());
+        assertFalse(replacement.advance(recapturing, NavigationPhase.SEARCHING));
+        assertFalse(replacement.acceptCapture(replacementCapturing, replacementCapture));
+        assertThrows(IllegalArgumentException.class,
+                () -> replacement.acceptCapture(recapturing, replacementCapture));
+        SegmentedSpatialSnapshot recapture = capture(recapturing, 3L);
+        assertTrue(replacement.acceptCapture(recapturing, recapture));
+        NavigationWorkTicket finalSearch = work(replacement);
+        assertTrue(replacement.complete(finalSearch));
         assertEquals(NavigationTerminalState.COMPLETED,
                 replacement.status().orElseThrow().terminalResult().orElseThrow().state());
         assertEquals(NavigationCancellationReason.REPLACED,
@@ -143,6 +183,20 @@ class NavigationControllerTest {
     }
 
     @Test
+    void workRevisionOverflowFailsBeforeChangingTheCurrentCapability() {
+        NavigationController controller = new NavigationController(
+                0L, Long.MAX_VALUE, () -> { });
+        NavigationHandle handle = controller.start(request(OWNER, 1L, 0.0D), eligible(1L));
+        NavigationWorkTicket maximum = work(handle);
+        assertEquals(Long.MAX_VALUE, maximum.revision());
+
+        assertThrows(IllegalStateException.class,
+                () -> handle.advance(maximum, NavigationPhase.CAPTURING));
+        assertEquals(maximum, work(handle));
+        assertTrue(handle.cancel());
+    }
+
+    @Test
     void terminalCleanupCommitsFirstAndAttemptsEveryParticipant() {
         List<String> attempts = new ArrayList<>();
         List<RuntimeException> blocked = new ArrayList<>();
@@ -194,11 +248,25 @@ class NavigationControllerTest {
         assertThrows(IllegalArgumentException.class, () -> new NavigationTicket(OWNER, 0L, 1L));
         assertThrows(IllegalArgumentException.class, () -> new NavigationTicket(OWNER, 1L, -1L));
         NavigationTicket ticket = new NavigationTicket(OWNER, 1L, 1L);
+        assertThrows(IllegalArgumentException.class, () -> new NavigationWorkTicket(
+                ticket, NavigationPhase.REQUESTED, 0L));
+        NavigationWorkTicket work = new NavigationWorkTicket(
+                ticket, NavigationPhase.REQUESTED, 1L);
+        assertNotEquals(work, new NavigationWorkTicket(
+                ticket, NavigationPhase.REQUESTED, 2L));
+        assertNotEquals(work, new NavigationWorkTicket(
+                ticket, NavigationPhase.CAPTURING, 1L));
+        NavigationWorkTicket nextWork = new NavigationWorkTicket(
+                ticket, NavigationPhase.REQUESTED, 2L);
+        assertThrows(IllegalArgumentException.class, () -> new NavigationStatus(
+                ticket, request(OWNER, 1L, 0.0D), work,
+                java.util.Optional.empty(),
+                java.util.Optional.of(NavigationResult.completed(nextWork))));
         assertThrows(IllegalArgumentException.class, () -> new NavigationResult(
-                ticket, NavigationTerminalState.FAILED,
+                work, NavigationTerminalState.FAILED,
                 java.util.Optional.empty(), java.util.Optional.empty()));
         assertThrows(IllegalArgumentException.class, () -> new NavigationResult(
-                ticket, NavigationTerminalState.CANCELLED,
+                work, NavigationTerminalState.CANCELLED,
                 java.util.Optional.of(NavigationFailureReason.INTERNAL_FAILURE),
                 java.util.Optional.of(NavigationCancellationReason.FAILURE)));
     }
@@ -241,12 +309,17 @@ class NavigationControllerTest {
         return Observation.present(ConnectionSnapshot.multiplayer());
     }
 
-    private static SegmentedSpatialSnapshot capture(NavigationTicket ticket, long token) {
+    private static NavigationWorkTicket work(NavigationHandle handle) {
+        return handle.status().orElseThrow().workTicket();
+    }
+
+    private static SegmentedSpatialSnapshot capture(NavigationWorkTicket workTicket, long token) {
         BoxSnapshot bounds = new BoxSnapshot(0.0D, 0.0D, 0.0D, 1.0D, 2.0D, 1.0D);
         SpatialSnapshot snapshot = new SpatialSnapshot(
-                ticket.worldEpoch(), token, bounds, 0, 2,
+                workTicket.worldEpoch(), token, bounds, 0, 2,
                 new BoxSnapshot(0.2D, 0.0D, 0.2D, 0.8D, 1.8D, 0.8D), Map.of());
         return new SegmentedSpatialSnapshot(
-                ticket, bounds, List.of(new SpatialSegment(0, ticket, token, snapshot)));
+                workTicket, bounds,
+                List.of(new SpatialSegment(0, workTicket, token, snapshot)));
     }
 }

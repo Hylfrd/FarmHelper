@@ -16,8 +16,16 @@ public record SpaceEvidence(
         Objects.requireNonNull(reason, "reason");
         Objects.requireNonNull(segmentIndexes, "segmentIndexes");
         segmentIndexes = List.copyOf(segmentIndexes);
-        if ((status == SpaceStatus.PASSABLE) != (reason == SpaceEvidenceReason.PASSABLE)) {
-            throw new IllegalArgumentException("only fully known PASSABLE evidence is traversable");
+        SpaceStatus expected = switch (reason) {
+            case PASSABLE -> SpaceStatus.PASSABLE;
+            case COLLISION, FLUID_OBSTRUCTION, NO_SUPPORT -> SpaceStatus.BLOCKED;
+            case UNKNOWN_EVIDENCE, MISSING_EVIDENCE, UNLOADED, COLLISION_ERROR,
+                    SEGMENT_GAP, CONFLICT, OUTSIDE_BOUNDS, STALE_TICKET,
+                    QUERY_TOO_LARGE -> SpaceStatus.UNKNOWN;
+        };
+        if (status != expected) {
+            throw new IllegalArgumentException(
+                    "space status " + status + " is incompatible with reason " + reason);
         }
     }
 

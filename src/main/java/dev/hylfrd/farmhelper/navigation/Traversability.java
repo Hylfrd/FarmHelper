@@ -18,21 +18,26 @@ import java.util.Objects;
 public final class Traversability {
     private static final double SUPPORT_PROBE_DEPTH = 1.0D / 1_024.0D;
     private static final ResourceIdentifier EMPTY_FLUID = ResourceIdentifier.parse("minecraft:empty");
+    /** Maximum legal protrusion outside a block's unit cube on any face. */
+    public static final double COLLISION_NEIGHBOR_REACH = 0.5D;
+    /** Allowed block-local collision coordinates derived from the finite neighbor reach. */
+    public static final double MIN_COLLISION_SHAPE_COORDINATE = -COLLISION_NEIGHBOR_REACH;
+    public static final double MAX_COLLISION_SHAPE_COORDINATE = 1.0D + COLLISION_NEIGHBOR_REACH;
 
     private Traversability() {
     }
 
     public static SpaceEvidence evaluate(
             SegmentedSpatialSnapshot spatial,
-            NavigationTicket expectedTicket,
+            NavigationWorkTicket expectedCapture,
             BoxSnapshot body,
             NavigationMode mode
     ) {
         Objects.requireNonNull(spatial, "spatial");
-        Objects.requireNonNull(expectedTicket, "expectedTicket");
+        Objects.requireNonNull(expectedCapture, "expectedCapture");
         Objects.requireNonNull(body, "body");
         Objects.requireNonNull(mode, "mode");
-        if (!spatial.ticket().equals(expectedTicket)) {
+        if (!spatial.workTicket().equals(expectedCapture)) {
             return unknown(SpaceEvidenceReason.STALE_TICKET, List.of());
         }
         if (!body.hasPositiveVolume()) {
@@ -42,27 +47,38 @@ public final class Traversability {
         BoxSnapshot support = new BoxSnapshot(
                 body.minX(), body.minY() - SUPPORT_PROBE_DEPTH, body.minZ(),
                 body.maxX(), body.minY(), body.maxZ());
-        BoxSnapshot envelope = mode == NavigationMode.WALK ? body.span(support) : body;
-        if (!spatial.bounds().contains(envelope)) {
+        BlockGrid bodyGrid = collisionOrigins(body);
+        BlockGrid supportGrid = mode == NavigationMode.WALK ? collisionOrigins(support) : null;
+        if (bodyGrid == null || mode == NavigationMode.WALK && supportGrid == null) {
+            return unknown(SpaceEvidenceReason.QUERY_TOO_LARGE, List.of());
+        }
+        BoxSnapshot requiredEnvelope = mode == NavigationMode.WALK
+                ? bodyGrid.captureBounds().span(supportGrid.captureBounds())
+                : bodyGrid.captureBounds();
+        // Logical bounds describe the requested body region. Collision origins may live in a
+        // bounded segment halo, so only the body itself must remain inside the logical request.
+        if (!spatial.bounds().contains(body)) {
             return unknown(SpaceEvidenceReason.OUTSIDE_BOUNDS, List.of());
         }
-        BlockGrid envelopeGrid = grid(envelope);
-        if (envelopeGrid == null) {
+        BlockGrid requiredGrid = grid(requiredEnvelope);
+        if (requiredGrid == null) {
             return unknown(SpaceEvidenceReason.QUERY_TOO_LARGE, List.of());
         }
 
-        List<SpatialSegment> candidates = spatial.containing(envelope);
+        List<SpatialSegment> candidates = spatial.containing(requiredEnvelope);
         if (candidates.isEmpty()) {
             return unknown(SpaceEvidenceReason.SEGMENT_GAP, List.of());
         }
         List<Integer> candidateIndexes = candidates.stream().map(SpatialSegment::index).toList();
-        if (conflictingEvidence(spatial.intersecting(envelope), envelopeGrid, expectedTicket)) {
+        if (conflictingEvidence(
+                spatial.intersecting(requiredEnvelope), requiredGrid, expectedCapture)) {
             return unknown(SpaceEvidenceReason.CONFLICT, candidateIndexes);
         }
 
         SpaceEvidence strongest = null;
         for (SpatialSegment segment : candidates) {
-            SpaceEvidence evaluated = evaluateSegment(segment, expectedTicket, body, support, mode);
+            SpaceEvidence evaluated = evaluateSegment(
+                    segment, expectedCapture, body, support, bodyGrid, supportGrid, mode);
             if (evaluated.traversable()) {
                 return evaluated;
             }
@@ -75,22 +91,24 @@ public final class Traversability {
 
     private static SpaceEvidence evaluateSegment(
             SpatialSegment segment,
-            NavigationTicket ticket,
+            NavigationWorkTicket workTicket,
             BoxSnapshot body,
             BoxSnapshot support,
+            BlockGrid bodyGrid,
+            BlockGrid supportGrid,
             NavigationMode mode
     ) {
         SpatialSnapshot snapshot = segment.snapshot();
-        BlockGrid bodyGrid = grid(body);
-        if (bodyGrid == null) {
-            return unknown(SpaceEvidenceReason.QUERY_TOO_LARGE, List.of(segment.index()));
-        }
         for (BlockPosition position : positions(bodyGrid)) {
-            BlockEvidence evidence = block(snapshot, ticket, position);
+            BlockEvidence evidence = block(snapshot, workTicket, position);
             if (evidence.reason() != SpaceEvidenceReason.PASSABLE) {
                 return from(evidence.reason(), segment.index());
             }
-            if (!EMPTY_FLUID.equals(evidence.state().fluidId())) {
+            if (!validCollisionShape(evidence.state())) {
+                return unknown(SpaceEvidenceReason.COLLISION_ERROR, List.of(segment.index()));
+            }
+            if (position.unitBox().intersects(body)
+                    && !EMPTY_FLUID.equals(evidence.state().fluidId())) {
                 return blocked(SpaceEvidenceReason.FLUID_OBSTRUCTION, segment.index());
             }
             if (evidence.state().collision().get().clearance(position, body) == SpaceStatus.BLOCKED) {
@@ -101,17 +119,17 @@ public final class Traversability {
             return passable(segment.index());
         }
 
-        BlockGrid supportGrid = grid(support);
-        if (supportGrid == null) {
-            return unknown(SpaceEvidenceReason.QUERY_TOO_LARGE, List.of(segment.index()));
-        }
         boolean supported = false;
         for (BlockPosition position : positions(supportGrid)) {
-            BlockEvidence evidence = block(snapshot, ticket, position);
+            BlockEvidence evidence = block(snapshot, workTicket, position);
             if (evidence.reason() != SpaceEvidenceReason.PASSABLE) {
                 return from(evidence.reason(), segment.index());
             }
-            if (!EMPTY_FLUID.equals(evidence.state().fluidId())) {
+            if (!validCollisionShape(evidence.state())) {
+                return unknown(SpaceEvidenceReason.COLLISION_ERROR, List.of(segment.index()));
+            }
+            if (position.unitBox().intersects(support)
+                    && !EMPTY_FLUID.equals(evidence.state().fluidId())) {
                 return blocked(SpaceEvidenceReason.FLUID_OBSTRUCTION, segment.index());
             }
             supported |= evidence.state().collision().get().support(position, support)
@@ -123,10 +141,10 @@ public final class Traversability {
 
     private static BlockEvidence block(
             SpatialSnapshot snapshot,
-            NavigationTicket ticket,
+            NavigationWorkTicket workTicket,
             BlockPosition position
     ) {
-        if (snapshot.worldEpoch() != ticket.worldEpoch()
+        if (snapshot.worldEpoch() != workTicket.worldEpoch()
                 || position.y() < snapshot.minY() || position.y() >= snapshot.maxY()) {
             return new BlockEvidence(null, SpaceEvidenceReason.UNKNOWN_EVIDENCE);
         }
@@ -154,7 +172,7 @@ public final class Traversability {
     private static boolean conflictingEvidence(
             List<SpatialSegment> segments,
             BlockGrid grid,
-            NavigationTicket ticket
+            NavigationWorkTicket workTicket
     ) {
         for (BlockPosition position : positions(grid)) {
             BlockStateSnapshot known = null;
@@ -163,7 +181,7 @@ public final class Traversability {
                     continue;
                 }
                 Observation<BlockStateSnapshot> observed = segment.snapshot().block(
-                        ticket.worldEpoch(), position);
+                        workTicket.worldEpoch(), position);
                 if (!observed.isPresent()) {
                     continue;
                 }
@@ -176,6 +194,41 @@ public final class Traversability {
         return false;
     }
 
+    private static boolean validCollisionShape(BlockStateSnapshot state) {
+        for (BoxSnapshot box : state.collision().get().boxes()) {
+            if (!box.hasPositiveVolume()
+                    || box.minX() < MIN_COLLISION_SHAPE_COORDINATE
+                    || box.minY() < MIN_COLLISION_SHAPE_COORDINATE
+                    || box.minZ() < MIN_COLLISION_SHAPE_COORDINATE
+                    || box.maxX() > MAX_COLLISION_SHAPE_COORDINATE
+                    || box.maxY() > MAX_COLLISION_SHAPE_COORDINATE
+                    || box.maxZ() > MAX_COLLISION_SHAPE_COORDINATE) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static BlockGrid collisionOrigins(BoxSnapshot box) {
+        if (!box.hasPositiveVolume()) {
+            return null;
+        }
+        try {
+            long minX = Math.addExact(
+                    (long) checkedFloor(box.minX() - MAX_COLLISION_SHAPE_COORDINATE), 1L);
+            long minY = Math.addExact(
+                    (long) checkedFloor(box.minY() - MAX_COLLISION_SHAPE_COORDINATE), 1L);
+            long minZ = Math.addExact(
+                    (long) checkedFloor(box.minZ() - MAX_COLLISION_SHAPE_COORDINATE), 1L);
+            long maxX = checkedCeil(box.maxX() - MIN_COLLISION_SHAPE_COORDINATE);
+            long maxY = checkedCeil(box.maxY() - MIN_COLLISION_SHAPE_COORDINATE);
+            long maxZ = checkedCeil(box.maxZ() - MIN_COLLISION_SHAPE_COORDINATE);
+            return boundedGrid(minX, minY, minZ, maxX, maxY, maxZ);
+        } catch (ArithmeticException exception) {
+            return null;
+        }
+    }
+
     private static BlockGrid grid(BoxSnapshot box) {
         try {
             int minX = checkedFloor(box.minX());
@@ -184,18 +237,33 @@ public final class Traversability {
             long maxX = checkedCeil(box.maxX());
             long maxY = checkedCeil(box.maxY());
             long maxZ = checkedCeil(box.maxZ());
-            long x = Math.subtractExact(maxX, minX);
-            long y = Math.subtractExact(maxY, minY);
-            long z = Math.subtractExact(maxZ, minZ);
-            long cells = Math.multiplyExact(Math.multiplyExact(x, y), z);
-            if (x <= 0L || y <= 0L || z <= 0L
-                    || cells <= 0L || cells > SpatialCaptureRequest.MAX_BLOCKS) {
-                return null;
-            }
-            return new BlockGrid(minX, minY, minZ, maxX, maxY, maxZ);
+            return boundedGrid(minX, minY, minZ, maxX, maxY, maxZ);
         } catch (ArithmeticException exception) {
             return null;
         }
+    }
+
+    private static BlockGrid boundedGrid(
+            long minX,
+            long minY,
+            long minZ,
+            long maxX,
+            long maxY,
+            long maxZ
+    ) {
+        long x = Math.subtractExact(maxX, minX);
+        long y = Math.subtractExact(maxY, minY);
+        long z = Math.subtractExact(maxZ, minZ);
+        long cells = Math.multiplyExact(Math.multiplyExact(x, y), z);
+        if (minX < Integer.MIN_VALUE || minY < Integer.MIN_VALUE || minZ < Integer.MIN_VALUE
+                || maxX > (long) Integer.MAX_VALUE + 1L
+                || maxY > (long) Integer.MAX_VALUE + 1L
+                || maxZ > (long) Integer.MAX_VALUE + 1L
+                || x <= 0L || y <= 0L || z <= 0L
+                || cells <= 0L || cells > SpatialCaptureRequest.MAX_BLOCKS) {
+            return null;
+        }
+        return new BlockGrid((int) minX, (int) minY, (int) minZ, maxX, maxY, maxZ);
     }
 
     private static List<BlockPosition> positions(BlockGrid grid) {
@@ -270,5 +338,8 @@ public final class Traversability {
             long maxY,
             long maxZ
     ) {
+        private BoxSnapshot captureBounds() {
+            return new BoxSnapshot(minX, minY, minZ, maxX, maxY, maxZ);
+        }
     }
 }

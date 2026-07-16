@@ -436,7 +436,9 @@ public final class FarmHelperClientRuntime {
         NavigationCancellationReason terminal = switch (reason) {
             case MANUAL_STOP -> NavigationCancellationReason.STOPPED;
             case SCREEN_CHANGED -> NavigationCancellationReason.SCREEN_CHANGED;
-            case WORLD_LOAD, WORLD_UNLOAD -> NavigationCancellationReason.WORLD_CHANGED;
+            case WORLD_LOAD, WORLD_UNLOAD -> disconnectLatched
+                    ? NavigationCancellationReason.DISCONNECTED
+                    : NavigationCancellationReason.WORLD_CHANGED;
             case DISCONNECT -> NavigationCancellationReason.DISCONNECTED;
             case CONNECTION_UNAVAILABLE -> NavigationCancellationReason.CONNECTION_LOST;
             case EXCEPTION -> NavigationCancellationReason.FAILURE;

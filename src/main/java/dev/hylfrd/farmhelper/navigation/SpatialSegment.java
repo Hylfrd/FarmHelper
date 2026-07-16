@@ -7,12 +7,12 @@ import java.util.Objects;
 /** One independently bounded capture in an ordered logical navigation snapshot. */
 public record SpatialSegment(
         int index,
-        NavigationTicket ticket,
+        NavigationWorkTicket workTicket,
         long requestToken,
         SpatialSnapshot snapshot
 ) {
     public SpatialSegment {
-        Objects.requireNonNull(ticket, "ticket");
+        Objects.requireNonNull(workTicket, "workTicket");
         Objects.requireNonNull(snapshot, "snapshot");
         if (index < 0) {
             throw new IllegalArgumentException("segment index must be non-negative");
@@ -23,9 +23,16 @@ public record SpatialSegment(
         if (snapshot.requestToken() != requestToken) {
             throw new IllegalArgumentException("segment and snapshot request tokens differ");
         }
-        if (snapshot.worldEpoch() != ticket.worldEpoch()) {
+        if (workTicket.phase() != NavigationPhase.CAPTURING) {
+            throw new IllegalArgumentException("spatial segments require a CAPTURING work ticket");
+        }
+        if (snapshot.worldEpoch() != workTicket.worldEpoch()) {
             throw new IllegalArgumentException("segment snapshot has a stale world epoch");
         }
+    }
+
+    public NavigationTicket ticket() {
+        return workTicket.runTicket();
     }
 
     public int capturedCellCount() {

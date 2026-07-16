@@ -17,6 +17,7 @@ import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.WorldSnapshot;
+import dev.hylfrd.farmhelper.runtime.time.TaskOwner;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -59,6 +60,8 @@ class FarmHelperClientRuntimeNavigationTest {
         assertReason(unloadHandle, NavigationCancellationReason.WORLD_CHANGED);
 
         FarmHelperClientRuntime disconnect = runtime("disconnect.json");
+        disconnect.worldLoaded();
+        ready(disconnect);
         NavigationHandle disconnectHandle = start(disconnect, "disconnect");
         disconnect.disconnected();
         assertReason(disconnectHandle, NavigationCancellationReason.DISCONNECTED);
@@ -89,11 +92,20 @@ class FarmHelperClientRuntimeNavigationTest {
         runtime.input().hold(owner, InputAction.FORWARD, InputAction.SPRINT);
         runtime.rotation().start(owner, 0F, 0F, 90F, 5F, 1_000L,
                 RotationProfile.BACK, 0F, result -> {
-                    try {
-                        runtime.input().hold(owner, InputAction.ATTACK);
-                    } catch (RuntimeException failure) {
-                        blockedReentry.add(failure);
-                    }
+                    captureFailure(blockedReentry,
+                            () -> runtime.input().hold(owner, InputAction.ATTACK));
+                    captureFailure(blockedReentry, () -> runtime.rotation().start(
+                            owner, 0F, 0F, 45F, 5F, 1_000L));
+                    captureFailure(blockedReentry, () -> runtime.core().taskQueue().schedule(
+                            new TaskOwner("reentered-navigation-callback"), 1_000L, () -> { }));
+                    captureFailure(blockedReentry, () -> {
+                        long now = runtime.core().nowNanos();
+                        runtime.core().expectedActions().publish(
+                                owner, 999L, handle.ticket().worldEpoch(), now,
+                                now + 1_000_000_000L,
+                                new ExpectedMotion(new MotionSnapshot(0, 0, 0), 0));
+                    });
+                    captureFailure(blockedReentry, () -> start(runtime, owner));
                 });
         runtime.core().taskQueue().schedule(
                 NavigationTaskOwner.from(handle.ticket()), 1_000L, () -> { });
@@ -107,9 +119,42 @@ class FarmHelperClientRuntimeNavigationTest {
         assertTrue(runtime.input().snapshot().emptyState());
         assertFalse(runtime.rotation().rotating());
         assertEquals(ownershipGeneration + 1L, runtime.ownershipGeneration());
-        assertEquals(1, blockedReentry.size());
-        assertEquals("client transient ownership is fenced",
-                blockedReentry.getFirst().getMessage());
+        assertEquals(5, blockedReentry.size());
+        assertTrue(blockedReentry.stream().allMatch(failure ->
+                "client transient ownership is fenced".equals(failure.getMessage())));
+        assertEquals(0, runtime.core().taskQueue().pendingTaskCount());
+        assertTrue(runtime.core().expectedActions().snapshot().actions().isEmpty());
+    }
+
+    @Test
+    void ownerScopedNavigationCleanupPreservesEveryNonNavigationOwner() {
+        FarmHelperClientRuntime runtime = runtime("non-navigation-preserved.json");
+        ControlOwner navigationOwner = new ControlOwner("navigation-cleanup-owner");
+        ControlOwner otherOwner = new ControlOwner("unrelated-owner");
+        TaskOwner otherTaskOwner = new TaskOwner("unrelated-task");
+        NavigationHandle handle = start(runtime, navigationOwner);
+
+        runtime.input().hold(otherOwner, InputAction.LEFT);
+        runtime.rotation().start(otherOwner, 0F, 0F, 35F, 5F, 1_000L);
+        runtime.core().taskQueue().schedule(otherTaskOwner, 1_000_000_000L, () -> { });
+        long now = runtime.core().nowNanos();
+        runtime.core().expectedActions().publish(
+                otherOwner, 77L, handle.ticket().worldEpoch(), now,
+                now + 1_000_000_000L,
+                new ExpectedMotion(new MotionSnapshot(0, 0, 0), 0));
+
+        assertTrue(handle.cancel());
+
+        assertEquals(otherOwner, runtime.input().snapshot().ownerOf(InputAction.LEFT).orElseThrow());
+        assertTrue(runtime.rotation().rotating());
+        assertEquals(otherOwner, runtime.rotation().snapshot().owner().orElseThrow());
+        assertEquals(1, runtime.core().taskQueue().pendingTaskCount());
+        assertEquals(otherOwner,
+                runtime.core().expectedActions().snapshot().actions().getFirst().owner());
+
+        runtime.failed();
+        assertTrue(runtime.input().snapshot().emptyState());
+        assertFalse(runtime.rotation().rotating());
         assertEquals(0, runtime.core().taskQueue().pendingTaskCount());
         assertTrue(runtime.core().expectedActions().snapshot().actions().isEmpty());
     }
@@ -162,5 +207,16 @@ class FarmHelperClientRuntimeNavigationTest {
     ) {
         assertEquals(expected, handle.status().orElseThrow()
                 .terminalResult().orElseThrow().cancellationReason().orElseThrow());
+    }
+
+    private static void captureFailure(
+            List<RuntimeException> failures,
+            Runnable acquisition
+    ) {
+        try {
+            acquisition.run();
+        } catch (RuntimeException failure) {
+            failures.add(failure);
+        }
     }
 }

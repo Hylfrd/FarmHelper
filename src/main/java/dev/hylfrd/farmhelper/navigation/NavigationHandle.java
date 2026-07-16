@@ -23,20 +23,23 @@ public final class NavigationHandle {
         return terminal == null ? controller.status(ticket) : Optional.of(terminal);
     }
 
-    public boolean advance(NavigationPhase expected, NavigationPhase next) {
-        return controller.advance(ticket, expected, next);
+    public boolean advance(NavigationWorkTicket expected, NavigationPhase next) {
+        return ticket.equals(expected.runTicket()) && controller.advance(expected, next);
     }
 
-    public boolean acceptCapture(SegmentedSpatialSnapshot snapshot) {
-        return controller.acceptCapture(ticket, snapshot);
+    public boolean acceptCapture(
+            NavigationWorkTicket expected,
+            SegmentedSpatialSnapshot snapshot
+    ) {
+        return ticket.equals(expected.runTicket()) && controller.acceptCapture(expected, snapshot);
     }
 
-    public boolean complete() {
-        return controller.complete(ticket);
+    public boolean complete(NavigationWorkTicket expected) {
+        return ticket.equals(expected.runTicket()) && controller.complete(expected);
     }
 
-    public boolean fail(NavigationFailureReason reason) {
-        return controller.fail(ticket, reason);
+    public boolean fail(NavigationWorkTicket expected, NavigationFailureReason reason) {
+        return ticket.equals(expected.runTicket()) && controller.fail(expected, reason);
     }
 
     public boolean cancel() {

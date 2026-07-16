@@ -18,6 +18,8 @@ public record NavigationRequest(
         if (worldEpoch < 0L) {
             throw new IllegalArgumentException("worldEpoch must be non-negative");
         }
+        // Validate the resolved value at request construction, before any asynchronous start/use.
+        goal.withYOffset(options.yOffset());
     }
 
     /** Returns a new resolved value each time; the stored goal is never cumulatively adjusted. */
