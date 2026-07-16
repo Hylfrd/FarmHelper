@@ -44,14 +44,12 @@ class SpatialQueriesTest {
     }
 
     @Test
-    void degenerateCollisionBoxesAndQueriesNeverReportBlocked() {
+    void degenerateCollisionQueriesNeverReportBlocked() {
         BlockPosition origin = new BlockPosition(0, 0, 0);
         BoxSnapshot fullQuery = new BoxSnapshot(0, 0, 0, 1, 1, 1);
         BoxSnapshot pointQuery = new BoxSnapshot(0.5, 0.5, 0.5, 0.5, 0.5, 0.5);
-        CollisionShapeSnapshot pointShape = new CollisionShapeSnapshot(List.of(pointQuery));
         CollisionShapeSnapshot fullShape = new CollisionShapeSnapshot(List.of(fullQuery));
 
-        assertEquals(SpaceStatus.PASSABLE, pointShape.clearance(origin, fullQuery));
         assertEquals(SpaceStatus.PASSABLE, fullShape.clearance(origin, pointQuery));
         assertEquals(SpaceStatus.UNKNOWN, SpatialQueries.clearance(
                 snapshot(BLOCK_BOUNDS, Map.of(origin, Observation.present(full()))), EPOCH, pointQuery));

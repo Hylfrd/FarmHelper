@@ -34,14 +34,7 @@ class SegmentedSpatialSnapshotTest {
     @Test
     void sevenUnchangedBoundedSegmentsSupportAFull1500BlockLogicalRequest() {
         BoxSnapshot logical = new BoxSnapshot(0.0D, 0.0D, 0.0D, 1_500.0D, 4.0D, 4.0D);
-        List<SpatialSegment> segments = new ArrayList<>();
-        double[] starts = {0.0D, 248.0D, 496.0D, 744.0D, 992.0D, 1_240.0D, 1_488.0D};
-        for (int index = 0; index < starts.length; index++) {
-            double maximum = Math.min(1_500.0D, starts[index] + 256.0D);
-            BoxSnapshot bounds = new BoxSnapshot(
-                    starts[index], 0.0D, 0.0D, maximum, 4.0D, 4.0D);
-            segments.add(segment(index, index + 1L, bounds, Map.of()));
-        }
+        List<SpatialSegment> segments = spanningSegments(1_500.0D, 1L);
 
         SegmentedSpatialSnapshot snapshot = new SegmentedSpatialSnapshot(CAPTURE, logical, segments);
 
@@ -53,10 +46,11 @@ class SegmentedSpatialSnapshotTest {
                 <= SegmentedSpatialSnapshot.MAX_AGGREGATE_CELLS);
         assertThrows(UnsupportedOperationException.class,
                 () -> snapshot.segments().add(snapshot.segments().getFirst()));
+        double justOver = Math.nextUp(SegmentedSpatialSnapshot.MAX_LOGICAL_AXIS_SPAN);
         assertThrows(IllegalArgumentException.class, () -> new SegmentedSpatialSnapshot(
                 CAPTURE,
-                new BoxSnapshot(0.0D, 0.0D, 0.0D, 1_501.0D, 4.0D, 4.0D),
-                segments));
+                new BoxSnapshot(0.0D, 0.0D, 0.0D, justOver, 4.0D, 4.0D),
+                spanningSegments(justOver, 20L)));
     }
 
     @Test
@@ -128,19 +122,44 @@ class SegmentedSpatialSnapshotTest {
     }
 
     @Test
+    void interiorSeamHaloAcceptsExactMaximumAndRejectsTheNextDouble() {
+        BoxSnapshot logical = new BoxSnapshot(0, 0, 0, 100, 2, 2);
+        BoxSnapshot left = new BoxSnapshot(0, 0, 0, 60, 2, 2);
+        BoxSnapshot exactRight = new BoxSnapshot(
+                60.0D - SegmentedSpatialSnapshot.MAX_SEAM_HALO,
+                0, 0, 100, 2, 2);
+        SegmentedSpatialSnapshot exact = new SegmentedSpatialSnapshot(
+                CAPTURE, logical, List.of(
+                segment(0, 60L, left, Map.of()),
+                segment(1, 61L, exactRight, Map.of())));
+        assertEquals(SegmentedSpatialSnapshot.MAX_SEAM_HALO,
+                left.maxX() - exactRight.minX());
+        assertEquals(2, exact.segments().size());
+
+        double overRightMinimum = Math.nextDown(
+                60.0D - SegmentedSpatialSnapshot.MAX_SEAM_HALO);
+        assertTrue(60.0D - overRightMinimum > SegmentedSpatialSnapshot.MAX_SEAM_HALO);
+        BoxSnapshot overRight = new BoxSnapshot(overRightMinimum, 0, 0, 100, 2, 2);
+        assertThrows(IllegalArgumentException.class, () -> new SegmentedSpatialSnapshot(
+                CAPTURE, logical, List.of(
+                segment(0, 62L, left, Map.of()),
+                segment(1, 63L, overRight, Map.of()))));
+    }
+
+    @Test
     void seamRequiresOneWholeSegmentAndKnownOverlapMaySatisfyIt() {
         BoxSnapshot logical = new BoxSnapshot(0.0D, 0.0D, 0.0D, 10.0D, 3.0D, 2.0D);
         SegmentedSpatialSnapshot abutting = new SegmentedSpatialSnapshot(CAPTURE, logical, List.of(
-                segment(0, 1L, new BoxSnapshot(0, 0, -1, 5, 3, 2), Map.of()),
-                segment(1, 2L, new BoxSnapshot(5, 0, -1, 10, 3, 2), Map.of())));
+                segment(0, 1L, new BoxSnapshot(0, -1, -2, 5, 4, 3), Map.of()),
+                segment(1, 2L, new BoxSnapshot(5, -1, -2, 10, 4, 3), Map.of())));
         BoxSnapshot crossing = new BoxSnapshot(4.8D, 1.1D, 0.2D, 5.2D, 1.8D, 0.8D);
         SpaceEvidence gap = Traversability.evaluate(
                 abutting, CAPTURE, crossing, NavigationMode.FLY);
         assertFalse(gap.traversable());
         assertEquals(SpaceEvidenceReason.SEGMENT_GAP, gap.reason());
 
-        BoxSnapshot leftBounds = new BoxSnapshot(0, 0, -1, 6, 3, 2);
-        BoxSnapshot rightBounds = new BoxSnapshot(4, 0, -1, 10, 3, 2);
+        BoxSnapshot leftBounds = new BoxSnapshot(0, -1, -2, 7, 4, 3);
+        BoxSnapshot rightBounds = new BoxSnapshot(3, -1, -2, 10, 4, 3);
         SegmentedSpatialSnapshot halo = new SegmentedSpatialSnapshot(CAPTURE, logical, List.of(
                 segment(0, 3L, leftBounds, allAir(leftBounds)),
                 segment(1, 4L, rightBounds, allAir(rightBounds))));
@@ -152,8 +171,8 @@ class SegmentedSpatialSnapshotTest {
     void conflictingOverlapStaleTicketAndOutsideBoundsRetainDistinctReasons() {
         BoxSnapshot logical = new BoxSnapshot(0, 0, 0, 10, 3, 2);
         BlockPosition overlap = new BlockPosition(4, 1, 0);
-        BoxSnapshot leftBounds = new BoxSnapshot(0, 0, -1, 6, 3, 2);
-        BoxSnapshot rightBounds = new BoxSnapshot(4, 0, -1, 10, 3, 2);
+        BoxSnapshot leftBounds = new BoxSnapshot(0, -1, -2, 7, 4, 3);
+        BoxSnapshot rightBounds = new BoxSnapshot(3, -1, -2, 10, 4, 3);
         SegmentedSpatialSnapshot conflict = new SegmentedSpatialSnapshot(CAPTURE, logical, List.of(
                 segment(0, 1L, leftBounds,
                         withCell(allAir(leftBounds), overlap, Observation.present(air()))),
@@ -176,10 +195,10 @@ class SegmentedSpatialSnapshotTest {
 
     @Test
     void onlyFullyKnownEmptyFluidAndCollisionEvidenceIsFlyTraversable() {
-        BoxSnapshot bounds = new BoxSnapshot(-1, 0, -1, 2, 3, 2);
+        BoxSnapshot bounds = new BoxSnapshot(-2, -1, -2, 3, 4, 3);
         BoxSnapshot body = new BoxSnapshot(0.2D, 1.1D, 0.2D, 0.8D, 1.8D, 0.8D);
         BlockPosition block = new BlockPosition(0, 1, 0);
-        BlockPosition first = new BlockPosition(-1, 0, -1);
+        BlockPosition first = new BlockPosition(-1, -1, -1);
 
         assertEvidence(bounds, body, Map.of(), SpaceEvidenceReason.MISSING_EVIDENCE);
         assertEvidence(bounds, body, withCell(allAir(bounds), first, Observation.unknown()),
@@ -204,7 +223,7 @@ class SegmentedSpatialSnapshotTest {
             }
         }
         SpatialSnapshot unloaded = new SpatialSnapshot(
-                EPOCH, 20L, bounds, 0, 3,
+                EPOCH, 20L, bounds, -1, 4,
                 new BoxSnapshot(0.2D, 1.0D, 0.2D, 0.8D, 2.8D, 0.8D),
                 unloadedChunks);
         SegmentedSpatialSnapshot unloadedSegment = new SegmentedSpatialSnapshot(
@@ -221,7 +240,7 @@ class SegmentedSpatialSnapshotTest {
 
     @Test
     void walkNeedsFullyKnownClearanceAndKnownSolidSupport() {
-        BoxSnapshot bounds = new BoxSnapshot(-1, 0, -1, 2, 4, 2);
+        BoxSnapshot bounds = new BoxSnapshot(-2, -1, -2, 3, 5, 3);
         BoxSnapshot body = new BoxSnapshot(0.2D, 1.0D, 0.2D, 0.8D, 2.8D, 0.8D);
         Map<BlockPosition, Observation<BlockStateSnapshot>> supported = withCell(
                 allAir(bounds), new BlockPosition(0, 0, 0), Observation.present(solid()));
@@ -239,7 +258,7 @@ class SegmentedSpatialSnapshotTest {
 
     @Test
     void adjacentLegalCollisionProtrusionsAreCheckedOnEveryFace() {
-        BoxSnapshot bounds = new BoxSnapshot(-1, 0, -1, 2, 3, 2);
+        BoxSnapshot bounds = new BoxSnapshot(-2, -1, -2, 3, 4, 3);
         BoxSnapshot body = new BoxSnapshot(0.2D, 1.0D, 0.2D, 0.8D, 1.8D, 0.8D);
         Map<BlockPosition, Observation<BlockStateSnapshot>> air = allAir(bounds);
 
@@ -260,24 +279,17 @@ class SegmentedSpatialSnapshotTest {
 
         Map<BlockPosition, Observation<BlockStateSnapshot>> unknownNeighbor =
                 new LinkedHashMap<>(air);
-        unknownNeighbor.remove(new BlockPosition(-1, 0, -1));
+        unknownNeighbor.remove(new BlockPosition(-1, -1, -1));
         SegmentedSpatialSnapshot unknown = new SegmentedSpatialSnapshot(
                 CAPTURE, bounds, List.of(segment(0, 41L, bounds, unknownNeighbor)));
         assertEquals(SpaceEvidenceReason.UNKNOWN_EVIDENCE,
                 Traversability.evaluate(unknown, CAPTURE, body, NavigationMode.FLY).reason());
 
-        Map<BlockPosition, Observation<BlockStateSnapshot>> invalidShape = withCell(
-                air, new BlockPosition(0, 1, 0), Observation.present(shaped(
-                        new BoxSnapshot(0, 0, 0, 1.5001D, 1, 1))));
-        SegmentedSpatialSnapshot invalid = new SegmentedSpatialSnapshot(
-                CAPTURE, bounds, List.of(segment(0, 42L, bounds, invalidShape)));
-        assertEquals(SpaceEvidenceReason.COLLISION_ERROR,
-                Traversability.evaluate(invalid, CAPTURE, body, NavigationMode.FLY).reason());
     }
 
     @Test
     void protrudingWalkSupportIsRejectedAsBodyCollision() {
-        BoxSnapshot bounds = new BoxSnapshot(-1, 0, -1, 2, 4, 2);
+        BoxSnapshot bounds = new BoxSnapshot(-2, -1, -2, 3, 5, 3);
         BoxSnapshot body = new BoxSnapshot(0.2D, 1.0D, 0.2D, 0.8D, 2.8D, 0.8D);
         Map<BlockPosition, Observation<BlockStateSnapshot>> fence = withCell(
                 allAir(bounds), new BlockPosition(0, 0, 0), Observation.present(shaped(
@@ -287,6 +299,79 @@ class SegmentedSpatialSnapshotTest {
 
         assertEquals(SpaceEvidenceReason.COLLISION,
                 Traversability.evaluate(snapshot, CAPTURE, body, NavigationMode.WALK).reason());
+    }
+
+    @Test
+    void auditedOuterRingCollisionBlocksBothModesAndBoundaryContactDoesNot() {
+        BoxSnapshot flyBounds = new BoxSnapshot(-1, -1, -1, 2, 3, 2);
+        BoxSnapshot body = new BoxSnapshot(0.2D, 1.25D, 0.2D, 0.8D, 1.75D, 0.8D);
+        BlockPosition outerOrigin = new BlockPosition(0, -1, 0);
+        BoxSnapshot maximumReach = new BoxSnapshot(
+                0, 0, 0, 1, CollisionShapeSnapshot.MAX_VERTICAL_LOCAL_COORDINATE, 1);
+        Map<BlockPosition, Observation<BlockStateSnapshot>> outerCollision = withCell(
+                allAir(flyBounds), outerOrigin, Observation.present(shaped(maximumReach)));
+        SegmentedSpatialSnapshot fly = new SegmentedSpatialSnapshot(
+                CAPTURE, flyBounds, List.of(segment(0, 70L, flyBounds, outerCollision)));
+        assertEquals(SpaceEvidenceReason.COLLISION,
+                Traversability.evaluate(fly, CAPTURE, body, NavigationMode.FLY).reason());
+
+        BoxSnapshot walkBounds = new BoxSnapshot(-1, -1, -1, 2, 4, 2);
+        BoxSnapshot walkBody = new BoxSnapshot(0.2D, 1.25D, 0.2D, 0.8D, 2.8D, 0.8D);
+        Map<BlockPosition, Observation<BlockStateSnapshot>> walkCells = withCell(
+                withCell(allAir(walkBounds), new BlockPosition(0, 0, 0),
+                        Observation.present(solid())),
+                outerOrigin, Observation.present(shaped(maximumReach)));
+        SegmentedSpatialSnapshot walk = new SegmentedSpatialSnapshot(
+                CAPTURE, walkBounds, List.of(segment(0, 71L, walkBounds, walkCells)));
+        assertEquals(SpaceEvidenceReason.COLLISION,
+                Traversability.evaluate(walk, CAPTURE, walkBody, NavigationMode.WALK).reason());
+
+        Map<BlockPosition, Observation<BlockStateSnapshot>> unknownRing =
+                new LinkedHashMap<>(allAir(flyBounds));
+        unknownRing.remove(new BlockPosition(-1, -1, -1));
+        SegmentedSpatialSnapshot unknown = new SegmentedSpatialSnapshot(
+                CAPTURE, flyBounds, List.of(segment(0, 72L, flyBounds, unknownRing)));
+        assertEquals(SpaceEvidenceReason.UNKNOWN_EVIDENCE,
+                Traversability.evaluate(unknown, CAPTURE, body, NavigationMode.FLY).reason());
+
+        BoxSnapshot touchingReach = new BoxSnapshot(0, 0, 0, 1, 2.25D, 1);
+        Map<BlockPosition, Observation<BlockStateSnapshot>> touching = withCell(
+                allAir(flyBounds), outerOrigin, Observation.present(shaped(touchingReach)));
+        SegmentedSpatialSnapshot boundary = new SegmentedSpatialSnapshot(
+                CAPTURE, flyBounds, List.of(segment(0, 73L, flyBounds, touching)));
+        assertTrue(Traversability.evaluate(boundary, CAPTURE, body, NavigationMode.FLY)
+                .traversable());
+    }
+
+    @Test
+    void walkRequiresOneSegmentForCombinedBodyAndSupportEnvelope() {
+        BoxSnapshot logical = new BoxSnapshot(0, 0, 0, 1, 5, 1);
+        BoxSnapshot body = new BoxSnapshot(0.2D, 1.5D, 0.2D, 0.8D, 2.3D, 0.8D);
+        BoxSnapshot lower = new BoxSnapshot(-2, -1, -2, 3, 1, 3);
+        BoxSnapshot upper = new BoxSnapshot(-2, 0, -2, 3, 5, 3);
+        SegmentedSpatialSnapshot seam = new SegmentedSpatialSnapshot(
+                CAPTURE, logical, List.of(
+                segment(0, 80L, lower, Map.of()),
+                segment(1, 81L, upper, Map.of())));
+        assertEquals(SpaceEvidenceReason.SEGMENT_GAP,
+                Traversability.evaluate(seam, CAPTURE, body, NavigationMode.WALK).reason());
+
+        BoxSnapshot whole = new BoxSnapshot(-2, -1, -2, 3, 5, 3);
+        Map<BlockPosition, Observation<BlockStateSnapshot>> supported = withCell(
+                allAir(whole), new BlockPosition(0, 0, 0), Observation.present(shaped(
+                        new BoxSnapshot(0, 0, 0, 1, 1.5D, 1))));
+        SegmentedSpatialSnapshot known = new SegmentedSpatialSnapshot(
+                CAPTURE, logical, List.of(segment(0, 82L, whole, supported)));
+        assertTrue(Traversability.evaluate(known, CAPTURE, body, NavigationMode.WALK)
+                .traversable());
+
+        Map<BlockPosition, Observation<BlockStateSnapshot>> unknownSupport =
+                new LinkedHashMap<>(supported);
+        unknownSupport.remove(new BlockPosition(-1, -1, -1));
+        SegmentedSpatialSnapshot unknown = new SegmentedSpatialSnapshot(
+                CAPTURE, logical, List.of(segment(0, 83L, whole, unknownSupport)));
+        assertEquals(SpaceEvidenceReason.UNKNOWN_EVIDENCE,
+                Traversability.evaluate(unknown, CAPTURE, body, NavigationMode.WALK).reason());
     }
 
     @Test
@@ -360,6 +445,20 @@ class SegmentedSpatialSnapshotTest {
         SpaceEvidence evidence = Traversability.evaluate(snapshot, CAPTURE, body, NavigationMode.FLY);
         assertFalse(evidence.traversable());
         assertEquals(expected, evidence.reason());
+    }
+
+    private static List<SpatialSegment> spanningSegments(double maximum, long firstToken) {
+        List<SpatialSegment> segments = new ArrayList<>();
+        double[] starts = {
+                0.0D, 248.0D, 496.0D, 744.0D, 992.0D, 1_240.0D, 1_488.0D
+        };
+        for (int index = 0; index < starts.length; index++) {
+            double segmentMaximum = Math.min(maximum, starts[index] + 256.0D);
+            BoxSnapshot bounds = new BoxSnapshot(
+                    starts[index], 0.0D, 0.0D, segmentMaximum, 4.0D, 4.0D);
+            segments.add(segment(index, firstToken + index, bounds, Map.of()));
+        }
+        return List.copyOf(segments);
     }
 
     private static void assertCollision(

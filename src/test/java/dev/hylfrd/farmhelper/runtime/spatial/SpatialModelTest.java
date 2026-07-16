@@ -79,6 +79,35 @@ class SpatialModelTest {
     }
 
     @Test
+    void collisionShapesEnforceTheAuditedMinecraftLocalBound() {
+        BoxSnapshot maximum = new BoxSnapshot(
+                CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE,
+                CollisionShapeSnapshot.MIN_VERTICAL_LOCAL_COORDINATE,
+                CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE,
+                CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE,
+                CollisionShapeSnapshot.MAX_VERTICAL_LOCAL_COORDINATE,
+                CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE);
+        assertEquals(List.of(maximum),
+                new CollisionShapeSnapshot(List.of(maximum)).boxes());
+
+        double below = Math.nextDown(
+                CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE);
+        double above = Math.nextUp(CollisionShapeSnapshot.MAX_VERTICAL_LOCAL_COORDINATE);
+        assertThrows(IllegalArgumentException.class, () -> new CollisionShapeSnapshot(List.of(
+                new BoxSnapshot(below, 0, 0, 1, 1, 1))));
+        assertThrows(IllegalArgumentException.class, () -> new CollisionShapeSnapshot(List.of(
+                new BoxSnapshot(0, 0, 0, 1, above, 1))));
+        assertThrows(IllegalArgumentException.class, () -> new CollisionShapeSnapshot(List.of(
+                new BoxSnapshot(0, 0, 0,
+                        Math.nextUp(CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE),
+                        1, 1))));
+        assertThrows(IllegalArgumentException.class, () -> new CollisionShapeSnapshot(List.of(
+                new BoxSnapshot(0.5D, 0.5D, 0.5D, 0.5D, 0.5D, 0.5D))));
+        assertThrows(IllegalArgumentException.class,
+                () -> new BoxSnapshot(Double.NaN, 0, 0, 1, 1, 1));
+    }
+
+    @Test
     void epochUnloadedAndBoundsNeverFabricateBlockState() {
         BlockPosition known = new BlockPosition(0, 1, 0);
         ChunkPosition unloadedPosition = new ChunkPosition(1, 0);

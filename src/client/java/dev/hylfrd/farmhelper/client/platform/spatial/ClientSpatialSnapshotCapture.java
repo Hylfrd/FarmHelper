@@ -134,7 +134,7 @@ public final class ClientSpatialSnapshotCapture implements SpatialSnapshotCaptur
         }
     }
 
-    private static Observation<CollisionShapeSnapshot> captureCollision(VoxelShape shape) {
+    static Observation<CollisionShapeSnapshot> captureCollision(VoxelShape shape) {
         if (shape == null) {
             return Observation.unknown();
         }

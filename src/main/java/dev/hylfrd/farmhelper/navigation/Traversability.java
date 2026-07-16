@@ -6,6 +6,7 @@ import dev.hylfrd.farmhelper.runtime.spatial.BlockPosition;
 import dev.hylfrd.farmhelper.runtime.spatial.BlockStateSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.BoxSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.ChunkSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.CollisionShapeSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.SpaceStatus;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialSnapshot;
@@ -18,11 +19,6 @@ import java.util.Objects;
 public final class Traversability {
     private static final double SUPPORT_PROBE_DEPTH = 1.0D / 1_024.0D;
     private static final ResourceIdentifier EMPTY_FLUID = ResourceIdentifier.parse("minecraft:empty");
-    /** Maximum legal protrusion outside a block's unit cube on any face. */
-    public static final double COLLISION_NEIGHBOR_REACH = 0.5D;
-    /** Allowed block-local collision coordinates derived from the finite neighbor reach. */
-    public static final double MIN_COLLISION_SHAPE_COORDINATE = -COLLISION_NEIGHBOR_REACH;
-    public static final double MAX_COLLISION_SHAPE_COORDINATE = 1.0D + COLLISION_NEIGHBOR_REACH;
 
     private Traversability() {
     }
@@ -104,9 +100,6 @@ public final class Traversability {
             if (evidence.reason() != SpaceEvidenceReason.PASSABLE) {
                 return from(evidence.reason(), segment.index());
             }
-            if (!validCollisionShape(evidence.state())) {
-                return unknown(SpaceEvidenceReason.COLLISION_ERROR, List.of(segment.index()));
-            }
             if (position.unitBox().intersects(body)
                     && !EMPTY_FLUID.equals(evidence.state().fluidId())) {
                 return blocked(SpaceEvidenceReason.FLUID_OBSTRUCTION, segment.index());
@@ -124,9 +117,6 @@ public final class Traversability {
             BlockEvidence evidence = block(snapshot, workTicket, position);
             if (evidence.reason() != SpaceEvidenceReason.PASSABLE) {
                 return from(evidence.reason(), segment.index());
-            }
-            if (!validCollisionShape(evidence.state())) {
-                return unknown(SpaceEvidenceReason.COLLISION_ERROR, List.of(segment.index()));
             }
             if (position.unitBox().intersects(support)
                     && !EMPTY_FLUID.equals(evidence.state().fluidId())) {
@@ -194,35 +184,29 @@ public final class Traversability {
         return false;
     }
 
-    private static boolean validCollisionShape(BlockStateSnapshot state) {
-        for (BoxSnapshot box : state.collision().get().boxes()) {
-            if (!box.hasPositiveVolume()
-                    || box.minX() < MIN_COLLISION_SHAPE_COORDINATE
-                    || box.minY() < MIN_COLLISION_SHAPE_COORDINATE
-                    || box.minZ() < MIN_COLLISION_SHAPE_COORDINATE
-                    || box.maxX() > MAX_COLLISION_SHAPE_COORDINATE
-                    || box.maxY() > MAX_COLLISION_SHAPE_COORDINATE
-                    || box.maxZ() > MAX_COLLISION_SHAPE_COORDINATE) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     private static BlockGrid collisionOrigins(BoxSnapshot box) {
         if (!box.hasPositiveVolume()) {
             return null;
         }
         try {
             long minX = Math.addExact(
-                    (long) checkedFloor(box.minX() - MAX_COLLISION_SHAPE_COORDINATE), 1L);
+                    (long) checkedFloor(
+                            box.minX()
+                                    - CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE), 1L);
             long minY = Math.addExact(
-                    (long) checkedFloor(box.minY() - MAX_COLLISION_SHAPE_COORDINATE), 1L);
+                    (long) checkedFloor(
+                            box.minY()
+                                    - CollisionShapeSnapshot.MAX_VERTICAL_LOCAL_COORDINATE), 1L);
             long minZ = Math.addExact(
-                    (long) checkedFloor(box.minZ() - MAX_COLLISION_SHAPE_COORDINATE), 1L);
-            long maxX = checkedCeil(box.maxX() - MIN_COLLISION_SHAPE_COORDINATE);
-            long maxY = checkedCeil(box.maxY() - MIN_COLLISION_SHAPE_COORDINATE);
-            long maxZ = checkedCeil(box.maxZ() - MIN_COLLISION_SHAPE_COORDINATE);
+                    (long) checkedFloor(
+                            box.minZ()
+                                    - CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE), 1L);
+            long maxX = checkedCeil(
+                    box.maxX() - CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE);
+            long maxY = checkedCeil(
+                    box.maxY() - CollisionShapeSnapshot.MIN_VERTICAL_LOCAL_COORDINATE);
+            long maxZ = checkedCeil(
+                    box.maxZ() - CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE);
             return boundedGrid(minX, minY, minZ, maxX, maxY, maxZ);
         } catch (ArithmeticException exception) {
             return null;

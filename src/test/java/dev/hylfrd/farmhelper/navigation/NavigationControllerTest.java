@@ -185,14 +185,49 @@ class NavigationControllerTest {
     @Test
     void workRevisionOverflowFailsBeforeChangingTheCurrentCapability() {
         NavigationController controller = new NavigationController(
-                0L, Long.MAX_VALUE, () -> { });
+                0L, Long.MAX_VALUE - 1L, () -> { });
         NavigationHandle handle = controller.start(request(OWNER, 1L, 0.0D), eligible(1L));
+        NavigationWorkTicket penultimate = work(handle);
+        assertEquals(Long.MAX_VALUE - 1L, penultimate.revision());
+        assertTrue(handle.advance(penultimate, NavigationPhase.CAPTURING));
         NavigationWorkTicket maximum = work(handle);
         assertEquals(Long.MAX_VALUE, maximum.revision());
+        SegmentedSpatialSnapshot capture = capture(maximum, 90L);
 
         assertThrows(IllegalStateException.class,
-                () -> handle.advance(maximum, NavigationPhase.CAPTURING));
+                () -> handle.acceptCapture(maximum, capture));
         assertEquals(maximum, work(handle));
+        assertEquals(NavigationPhase.CAPTURING, handle.status().orElseThrow().phase());
+        assertTrue(handle.status().orElseThrow().spatialSnapshot().isEmpty());
+        assertTrue(handle.status().orElseThrow().terminalResult().isEmpty());
+        assertTrue(controller.lastResult().isEmpty());
+        assertTrue(handle.cancel());
+    }
+
+    @Test
+    void forgedOwnerAndWorldEpochCannotUseAnyWorkMutation() {
+        NavigationController controller = new NavigationController();
+        NavigationHandle handle = controller.start(request(OWNER, 5L, 0.0D), eligible(5L));
+        NavigationWorkTicket requested = work(handle);
+        assertTrue(handle.advance(requested, NavigationPhase.CAPTURING));
+        NavigationWorkTicket capturing = work(handle);
+
+        NavigationWorkTicket ownerCapture = forgeOwner(capturing);
+        NavigationWorkTicket epochCapture = forgeEpoch(capturing);
+        assertFalse(handle.acceptCapture(ownerCapture, capture(ownerCapture, 91L)));
+        assertFalse(handle.acceptCapture(epochCapture, capture(epochCapture, 92L)));
+        assertEquals(capturing, work(handle));
+
+        assertTrue(handle.acceptCapture(capturing, capture(capturing, 93L)));
+        NavigationWorkTicket searching = work(handle);
+        for (NavigationWorkTicket forged : List.of(
+                forgeOwner(searching), forgeEpoch(searching))) {
+            assertFalse(handle.advance(forged, NavigationPhase.SEARCHING));
+            assertFalse(handle.complete(forged));
+            assertFalse(handle.fail(forged, NavigationFailureReason.NO_PATH));
+            assertEquals(searching, work(handle));
+            assertTrue(handle.status().orElseThrow().terminalResult().isEmpty());
+        }
         assertTrue(handle.cancel());
     }
 
@@ -311,6 +346,19 @@ class NavigationControllerTest {
 
     private static NavigationWorkTicket work(NavigationHandle handle) {
         return handle.status().orElseThrow().workTicket();
+    }
+
+    private static NavigationWorkTicket forgeOwner(NavigationWorkTicket workTicket) {
+        return new NavigationWorkTicket(new NavigationTicket(
+                new ControlOwner("forged-owner"),
+                workTicket.generation(), workTicket.worldEpoch()),
+                workTicket.phase(), workTicket.revision());
+    }
+
+    private static NavigationWorkTicket forgeEpoch(NavigationWorkTicket workTicket) {
+        return new NavigationWorkTicket(new NavigationTicket(
+                workTicket.owner(), workTicket.generation(), workTicket.worldEpoch() + 1L),
+                workTicket.phase(), workTicket.revision());
     }
 
     private static SegmentedSpatialSnapshot capture(NavigationWorkTicket workTicket, long token) {
