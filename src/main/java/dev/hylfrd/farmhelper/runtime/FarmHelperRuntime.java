@@ -129,10 +129,7 @@ public final class FarmHelperRuntime {
         dev.hylfrd.farmhelper.macro.MacroMode requestedMode =
                 dev.hylfrd.farmhelper.macro.MacroMode
                         .fromCode(config.macroMode()).orElseThrow();
-        if (macroManager.enabled() && macroManager.configuredMode() != requestedMode) {
-            throw new IllegalStateException("cannot change macro mode during an active run");
-        }
-        macroManager.settings().replace(
+        macroManager.updateSettings(settings -> settings.replace(
                 requestedMode,
                 config.macroSpawn().map(spawn ->
                         new dev.hylfrd.farmhelper.macro.MacroSpawnPose(
@@ -145,6 +142,6 @@ public final class FarmHelperRuntime {
                 config.alwaysHoldW(), config.holdLeftClickWhenChangingRow(),
                 config.rotateAfterWarped(), config.rotateAfterDrop(), config.dontFixAfterWarping(),
                 config.customPitch(), config.customPitchLevel(), config.customYaw(),
-                config.customYawLevel());
+                config.customYawLevel()));
     }
 }

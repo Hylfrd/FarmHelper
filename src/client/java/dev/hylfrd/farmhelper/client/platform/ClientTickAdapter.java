@@ -166,7 +166,9 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
                 inGarden,
                 developmentGarden,
                 runtime.core().serverResponsiveness(snapshot.connection().isPresent()),
-                capturePlayerPosture(client)));
+                capturePlayerPosture(client),
+                Observation.present(runtime.macroRotationLease().observe(
+                        runtime.rotation().snapshot()))));
         applyDecision(snapshot, decision);
     }
 
@@ -221,9 +223,9 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         Objects.requireNonNull(runtime, "runtime");
         Objects.requireNonNull(decision, "decision");
         if (decision.inputs().isEmpty()) {
-            runtime.input().release(MacroControlOwner.S_SHAPE);
+            runtime.input().release(MacroControlOwner.FARMING);
         } else {
-            runtime.input().replace(MacroControlOwner.S_SHAPE, decision.inputs());
+            runtime.input().replace(MacroControlOwner.FARMING, decision.inputs());
         }
         applyMacroRotationDisposition(runtime, decision);
     }
@@ -236,7 +238,7 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         Objects.requireNonNull(decision, "decision");
         if (decision.rotationDisposition() == MacroRotationDisposition.RELEASE
                 && runtime.rotation().snapshot().owner()
-                .filter(MacroControlOwner.S_SHAPE::equals).isPresent()) {
+                .filter(MacroControlOwner.FARMING::equals).isPresent()) {
             runtime.rotation().cancel(RotationCancelReason.OWNER_CANCELLED);
         }
     }
@@ -254,11 +256,13 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         }
         if (runtime.rotation().rotating()) {
             var active = runtime.rotation().snapshot();
-            if (active.owner().filter(owner -> !MacroControlOwner.S_SHAPE.equals(owner)).isPresent()) {
+            if (active.owner().filter(owner -> !MacroControlOwner.FARMING.equals(owner)).isPresent()) {
                 return;
             }
             float normalizedTargetYaw = RotationTask.normalizeYaw(request.yaw());
-            if (active.targetYaw().filter(target -> Float.compare(target, normalizedTargetYaw) == 0)
+            if ((request.requestToken() == 0L
+                    || runtime.macroRotationLease().owns(request.requestToken()))
+                    && active.targetYaw().filter(target -> Float.compare(target, normalizedTargetYaw) == 0)
                     .isPresent()
                     && active.targetPitch().filter(target -> Float.compare(target, request.pitch()) == 0)
                     .isPresent()
@@ -270,9 +274,18 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
             }
         }
         RotationSnapshot current = snapshot.player().get().rotation().get();
-        runtime.rotation().start(MacroControlOwner.S_SHAPE, current.yaw(), current.pitch(),
+        if (request.requestToken() == 0L) {
+            runtime.rotation().start(MacroControlOwner.FARMING, current.yaw(), current.pitch(),
+                    request.yaw(), request.pitch(), request.durationMillis(), request.profile(),
+                    request.backModifier());
+            return;
+        }
+        runtime.rotation().start(MacroControlOwner.FARMING, current.yaw(), current.pitch(),
                 request.yaw(), request.pitch(), request.durationMillis(), request.profile(),
-                request.backModifier());
+                request.backModifier(), result -> runtime.macroRotationLease().terminated(
+                        request.requestToken(), result.reason(), runtime.rotation().snapshot().revision()));
+        runtime.macroRotationLease().activated(
+                request.requestToken(), runtime.rotation().snapshot());
     }
 
     private boolean developmentGarden() {
@@ -322,7 +335,7 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
                 && snapshot.world().isPresent()
                 && snapshot.player().isPresent()
                 && snapshot.connection().isPresent()) {
-            runtime.input().release(MacroControlOwner.S_SHAPE);
+            runtime.input().release(MacroControlOwner.FARMING);
             return;
         }
         ReleaseReason reason = unsafeReason(runtime, snapshot);

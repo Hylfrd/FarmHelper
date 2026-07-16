@@ -5,7 +5,6 @@ import dev.hylfrd.farmhelper.macro.FarmingContext;
 import dev.hylfrd.farmhelper.macro.Macro;
 import dev.hylfrd.farmhelper.macro.MacroDecision;
 import dev.hylfrd.farmhelper.macro.MacroRandom;
-import dev.hylfrd.farmhelper.macro.MacroRotationRequest;
 import dev.hylfrd.farmhelper.macro.MacroSettings;
 import dev.hylfrd.farmhelper.macro.MacroSpawnPose;
 import dev.hylfrd.farmhelper.macro.MacroPauseCause;
@@ -16,6 +15,11 @@ import dev.hylfrd.farmhelper.macro.CropCompatibility;
 import dev.hylfrd.farmhelper.macro.PlayerPosture;
 import dev.hylfrd.farmhelper.macro.ServerResponsiveness;
 import dev.hylfrd.farmhelper.macro.VerticalCropMode;
+import dev.hylfrd.farmhelper.macro.mechanism.CaptureIdentityLedger;
+import dev.hylfrd.farmhelper.macro.mechanism.DropLedger;
+import dev.hylfrd.farmhelper.macro.mechanism.OwnedRotationLedger;
+import dev.hylfrd.farmhelper.macro.mechanism.RewarpLedger;
+import dev.hylfrd.farmhelper.macro.mechanism.RowProgressLedger;
 import dev.hylfrd.farmhelper.runtime.snapshot.MotionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
@@ -53,26 +57,21 @@ public final class SShapeVerticalCropMacro implements Macro {
     static final long POST_REWARP_NANOS = TimeUnit.MILLISECONDS.toNanos(600L);
 
     private final MacroSettings settings;
-    private final MacroRandom random;
+    private final MacroRandom leafRandom;
+    private final RowProgressLedger rowProgress = new RowProgressLedger(
+            LAG_RETRY_NANOS, 0.05D, 3);
+    private final DropLedger drop = new DropLedger();
+    private final RewarpLedger rewarp = new RewarpLedger();
+    private final CaptureIdentityLedger<SpatialScanKey> captures = new CaptureIdentityLedger<>();
+    private final OwnedRotationLedger rotation = new OwnedRotationLedger();
     private State state = State.STOPPED;
     private Direction direction;
-    private double rowY;
-    private double lastProgressCoordinate;
-    private long progressAt;
-    private int noProgressAttempts;
     private CropBlockKind rowCropKind;
     private long laneDwellNanos;
-    private long rewarpDwellNanos;
-    private long warpSneakNanos;
-    private boolean warpSneakSampled;
     private long rotationDurationMillis;
     private PositionSnapshot laneStart;
     private InputAction laneAction = InputAction.FORWARD;
     private long stateAt;
-    private RewarpPosition warpOrigin;
-    private long lastWarpRequestAt;
-    private long warpAttempts;
-    private MacroSpawnPose confirmedSpawn;
     private long recoveryUntil;
     private MacroRecoveryReason recoveryReason;
     private Float targetYaw;
@@ -80,9 +79,7 @@ public final class SShapeVerticalCropMacro implements Macro {
     private Float farmingYaw;
     private Float farmingPitch;
     private long pausedAt = Long.MIN_VALUE;
-    private long spatialScanGeneration = 1L;
     private long nextSpatialScanPhase = 1L;
-    private long nextSpatialRequestToken = 1L;
     private long spatialScanWorldEpoch = Long.MIN_VALUE;
     private Direction nextSpatialScanDirection = Direction.RIGHT;
     private ScanAnchor spatialScanAnchor;
@@ -91,8 +88,17 @@ public final class SShapeVerticalCropMacro implements Macro {
     private ObstacleEvidence leftObstacleEvidence;
 
     public SShapeVerticalCropMacro(MacroSettings settings, MacroRandom random) {
-        this.settings = Objects.requireNonNull(settings, "settings");
-        this.random = Objects.requireNonNull(random, "random");
+        this(settings, random, random);
+    }
+
+    public SShapeVerticalCropMacro(
+            MacroSettings settings,
+            MacroRandom leafRandom,
+            MacroRandom rotationRandom
+    ) {
+        this.settings = Objects.requireNonNull(settings, "settings").snapshot();
+        this.leafRandom = Objects.requireNonNull(leafRandom, "leafRandom");
+        Objects.requireNonNull(rotationRandom, "rotationRandom");
     }
 
     @Override
@@ -135,10 +141,11 @@ public final class SShapeVerticalCropMacro implements Macro {
         }
         long suspended = elapsed(nowNanos, pausedAt);
         switch (state) {
-            case FARMING -> progressAt = shift(progressAt, suspended);
-            case STARTUP, SWITCHING_LANE, DROPPING, REWARP_DWELL, WARP_LANDING ->
+            case FARMING -> rowProgress.shift(suspended);
+            case STARTUP, SWITCHING_LANE, DROPPING ->
                     stateAt = shift(stateAt, suspended);
-            case REWARPING -> lastWarpRequestAt = shift(lastWarpRequestAt, suspended);
+            case REWARP_DWELL, WARP_LANDING -> rewarp.shiftState(suspended);
+            case REWARPING -> rewarp.shiftRequest(suspended);
             case AFTER_WARP, POST_REWARP -> recoveryUntil = shift(recoveryUntil, suspended);
             case RECOVERY_HANDOFF -> { }
             case STOPPED, ALIGNING -> { }
@@ -207,12 +214,13 @@ public final class SShapeVerticalCropMacro implements Macro {
                     }
                 }
             }
-            long requestToken = nextSpatialRequestToken;
-            nextSpatialRequestToken = incrementPositive(nextSpatialRequestToken);
-            SpatialCaptureRequest request = new SpatialCaptureRequest(
-                    worldEpoch, requestToken, bounds(blocks), blocks);
+            long phase = nextSpatialScanPhase;
+            SpatialScanKey key = new SpatialScanKey(
+                    captures.generation(), phase, scanDirection, anchor);
+            SpatialCaptureRequest request = captures.begin(
+                    key, worldEpoch, bounds(blocks), blocks, body(position));
             pendingSpatialScan = new PendingSpatialScan(
-                    spatialScanGeneration, nextSpatialScanPhase,
+                    captures.generation(), phase,
                     scanDirection, anchor, request);
             nextSpatialScanPhase = incrementPositive(nextSpatialScanPhase);
             return Optional.of(request);
@@ -307,7 +315,8 @@ public final class SShapeVerticalCropMacro implements Macro {
                 targetYaw = farmingYaw;
                 targetPitch = farmingPitch;
                 rotationDurationMillis = sampleRotationDurationMillis(randomUnit());
-                confirmedSpawn = null;
+                rewarp.clear();
+                rotation.clear();
             } else {
                 return MacroDecision.failClosed("farming-rotation-unknown");
             }
@@ -324,9 +333,7 @@ public final class SShapeVerticalCropMacro implements Macro {
         if (rewarp.isPresent()) {
             return rewarp.orElseThrow();
         }
-        if (direction != null && !posture.flying() && !posture.onGround()
-                && Math.abs(observed.position().y() - rowY) > 0.75D
-                && observed.position().y() < 80.0D) {
+        if (direction != null && drop.shouldDrop(posture, observed.position().y())) {
             state = State.DROPPING;
             stateAt = context.nowNanos();
             return MacroDecision.failClosed("dropping");
@@ -351,7 +358,7 @@ public final class SShapeVerticalCropMacro implements Macro {
     }
 
     long spatialScanGeneration() {
-        return spatialScanGeneration;
+        return captures.generation();
     }
 
     boolean spatialScanPending() {
@@ -360,15 +367,28 @@ public final class SShapeVerticalCropMacro implements Macro {
 
     private MacroDecision align(FarmingContext context, Observed observed) {
         ensureFarmingTarget(observed);
+        if (rotation.pending().isPresent()) {
+            return switch (rotation.observe(context)) {
+                case NONE, COMPLETED -> null;
+                case ACTIVE, UNACKNOWLEDGED, RETRYABLE_CANCELLATION ->
+                        rotationDecision("aligning");
+                case CANCELLED -> MacroDecision.failClosed("rotation-cancelled");
+                case STALE_ACKNOWLEDGEMENT ->
+                        MacroDecision.failClosed("rotation-acknowledgement-stale");
+            };
+        }
         if (angleDistance(observed.rotation().yaw(), targetYaw) <= 1.0F
                 && Math.abs(observed.rotation().pitch() - targetPitch) <= 1.0F) {
             return null;
         }
         long duration = rotationDurationMillis(rotationDurationMillis,
                 angleDistance(observed.rotation().yaw(), targetYaw));
-        return new MacroDecision(Set.of(),
-                Optional.of(new MacroRotationRequest(targetYaw, targetPitch, duration)),
-                Optional.empty(), "aligning");
+        rotation.beginLegacy(targetYaw, targetPitch, duration);
+        return rotationDecision("aligning");
+    }
+
+    private MacroDecision rotationDecision(String status) {
+        return new MacroDecision(Set.of(), rotation.pending(), Optional.empty(), status);
     }
 
     private void ensureFarmingTarget(Observed observed) {
@@ -376,6 +396,7 @@ public final class SShapeVerticalCropMacro implements Macro {
             if (targetYaw == null || targetPitch == null) {
                 targetYaw = farmingYaw;
                 targetPitch = farmingPitch;
+                rotation.clear();
             }
             return;
         }
@@ -497,11 +518,11 @@ public final class SShapeVerticalCropMacro implements Macro {
         PendingSpatialScan pending = pendingSpatialScan;
         ScanAnchor currentAnchor = scanAnchor(observed.position(), observed.frame());
         if (pending == null
-                || pending.generation() != spatialScanGeneration
+                || pending.generation() != captures.generation()
                 || pending.phase() != (pending.direction() == Direction.RIGHT ? 1L : 2L)
-                || pending.request().requestToken() != snapshot.requestToken()
-                || pending.request().worldEpoch() != snapshot.worldEpoch()
-                || !pending.request().bounds().equals(snapshot.bounds())
+                || !captures.accepts(new SpatialScanKey(
+                        pending.generation(), pending.phase(), pending.direction(), pending.anchor()),
+                        snapshot)
                 || spatialScanAnchor == null
                 || !spatialScanAnchor.equals(currentAnchor)
                 || !pending.anchor().equals(spatialScanAnchor)
@@ -539,7 +560,7 @@ public final class SShapeVerticalCropMacro implements Macro {
         RelativeFrame frame = RelativeFrame.cardinal(
                 context.player().get().rotation().get().yaw());
         ScanAnchor currentAnchor = scanAnchor(position, frame);
-        if (pending.generation() != spatialScanGeneration
+        if (pending.generation() != captures.generation()
                 || pending.phase() != (pending.direction() == Direction.RIGHT ? 1L : 2L)
                 || pending.request().worldEpoch() != context.worldEpoch()
                 || spatialScanAnchor == null
@@ -566,6 +587,7 @@ public final class SShapeVerticalCropMacro implements Macro {
             leftObstacleEvidence = evidence;
         }
         pendingSpatialScan = null;
+        captures.complete();
         nextSpatialScanDirection = pending.direction().opposite();
     }
 
@@ -600,17 +622,14 @@ public final class SShapeVerticalCropMacro implements Macro {
         }
 
         double coordinate = movementCoordinate(observed.position(), observed.frame(), direction);
-        if (Math.abs(coordinate - lastProgressCoordinate) >= 0.05D) {
-            lastProgressCoordinate = coordinate;
-            progressAt = context.nowNanos();
-            noProgressAttempts = 0;
-        } else if (elapsed(context.nowNanos(), progressAt) >= LAG_RETRY_NANOS) {
-            progressAt = context.nowNanos();
-            noProgressAttempts++;
-            if (noProgressAttempts >= 3) {
-                return enterRecoveryHandoff(MacroRecoveryReason.ROW_STALLED, "row-stalled");
-            }
-            return MacroDecision.failClosed("row-stall-observed-" + noProgressAttempts);
+        RowProgressLedger.Result progress =
+                rowProgress.observeContinuous(context.nowNanos(), coordinate);
+        if (progress == RowProgressLedger.Result.STALLED) {
+            return enterRecoveryHandoff(MacroRecoveryReason.ROW_STALLED, "row-stalled");
+        }
+        if (progress == RowProgressLedger.Result.MISSED) {
+            return MacroDecision.failClosed(
+                    "row-stall-observed-" + rowProgress.misses());
         }
         return farmInputs(observed, direction == Direction.RIGHT ? "farming-right" : "farming-left");
     }
@@ -633,7 +652,7 @@ public final class SShapeVerticalCropMacro implements Macro {
     }
 
     private MacroDecision tickDrop(Observed observed, PlayerPosture posture) {
-        if (posture.onGround()) {
+        if (drop.observeLanding(posture, observed.position().y()).isPresent()) {
             clearLaneState();
             state = State.ALIGNING;
             return MacroDecision.idle("drop-complete");
@@ -654,58 +673,52 @@ public final class SShapeVerticalCropMacro implements Macro {
         }
         invalidateSpatialScan();
         state = State.REWARP_DWELL;
-        warpOrigin = current.orElseThrow();
-        stateAt = context.nowNanos();
-        rewarpDwellNanos = TimeUnit.MILLISECONDS.toNanos(
-                400L + (long) Math.floor(randomUnit() * 350.0D));
-        warpAttempts = 0L;
+        rewarp.begin(current.orElseThrow(), context.nowNanos(), TimeUnit.MILLISECONDS.toNanos(
+                400L + (long) Math.floor(randomUnit() * 350.0D)));
+        rotation.clear();
         return Optional.of(MacroDecision.idle("rewarp-dwell"));
     }
 
     private MacroDecision tickRewarpDwell(FarmingContext context, Observed observed) {
         MacroSpawnPose spawn = settings.spawn().orElse(null);
-        if (spawn == null || warpOrigin == null
-                || settings.rewarps().stream().noneMatch(warpOrigin::equals)) {
+        RewarpPosition origin = rewarp.origin().orElse(null);
+        if (spawn == null || origin == null
+                || settings.rewarps().stream().noneMatch(origin::equals)) {
             return MacroDecision.failClosed("rewarp-config-lost");
         }
-        if (!block(observed.position()).equals(warpOrigin.block())
+        if (!block(observed.position()).equals(origin.block())
                 || !stationary(observed.motion())) {
             clearWarpState();
             state = State.ALIGNING;
             return MacroDecision.failClosed("rewarp-dwell-ineligible");
         }
-        if (elapsed(context.nowNanos(), stateAt) < rewarpDwellNanos) {
+        if (!rewarp.dwellComplete(context.nowNanos())) {
             return MacroDecision.idle("rewarp-dwell");
         }
         state = State.REWARPING;
-        lastWarpRequestAt = context.nowNanos();
-        warpAttempts = 1L;
+        rewarp.requested(context.nowNanos());
         return warpDecision(context, spawn, "rewarp-request");
     }
 
     private MacroDecision tickRewarp(FarmingContext context, Observed observed) {
         MacroSpawnPose spawn = settings.spawn().orElse(null);
-        if (spawn == null || warpOrigin == null
-                || settings.rewarps().stream().noneMatch(warpOrigin::equals)) {
+        RewarpPosition origin = rewarp.origin().orElse(null);
+        if (spawn == null || origin == null
+                || settings.rewarps().stream().noneMatch(origin::equals)) {
             return MacroDecision.failClosed("rewarp-config-lost");
         }
         BlockPosition current = block(observed.position());
-        if (warpOrigin.squaredDistance(current) > 2.0D || spawn.block().equals(current)) {
+        if (origin.squaredDistance(current) > 2.0D || spawn.block().equals(current)) {
             clearLaneState();
-            confirmedSpawn = spawn;
+            rewarp.confirmed(spawn, context.nowNanos());
             state = State.WARP_LANDING;
-            stateAt = context.nowNanos();
-            warpSneakSampled = false;
             return tickWarpLanding(context);
         }
-        if (elapsed(context.nowNanos(), lastWarpRequestAt) < WARP_RETRY_NANOS) {
+        if (!rewarp.retryDue(context.nowNanos(), WARP_RETRY_NANOS)) {
             return MacroDecision.idle("rewarp-waiting");
         }
-        if (warpAttempts < Long.MAX_VALUE) {
-            warpAttempts++;
-        }
-        lastWarpRequestAt = context.nowNanos();
-        return warpDecision(context, spawn, "rewarp-retry-" + warpAttempts);
+        rewarp.requested(context.nowNanos());
+        return warpDecision(context, spawn, "rewarp-retry-" + rewarp.attempts());
     }
 
     private MacroDecision tickWarpLanding(FarmingContext context) {
@@ -717,13 +730,11 @@ public final class SShapeVerticalCropMacro implements Macro {
             return MacroDecision.failClosed("rewarp-suffocating");
         }
         if (posture.flying() && !posture.onGround()) {
-            if (!warpSneakSampled) {
-                warpSneakNanos = TimeUnit.MILLISECONDS.toNanos(
-                        350L + (long) Math.floor(randomUnit() * 300.0D));
-                stateAt = context.nowNanos();
-                warpSneakSampled = true;
+            if (!rewarp.sneakSampled()) {
+                rewarp.beginSneak(context.nowNanos(), TimeUnit.MILLISECONDS.toNanos(
+                        350L + (long) Math.floor(randomUnit() * 300.0D)));
             }
-            if (elapsed(context.nowNanos(), stateAt) < warpSneakNanos) {
+            if (!rewarp.sneakComplete(context.nowNanos())) {
                 return decision(EnumSet.of(InputAction.SNEAK), "rewarp-airborne-sneak");
             }
             return MacroDecision.failClosed("rewarp-airborne");
@@ -734,7 +745,7 @@ public final class SShapeVerticalCropMacro implements Macro {
         state = State.AFTER_WARP;
         recoveryUntil = context.nowNanos() + AFTER_WARP_NANOS;
         return MacroDecision.idle("rewarp-confirmed plot="
-                + (confirmedSpawn == null ? -1 : confirmedSpawn.plot()));
+                + rewarp.confirmedSpawn().map(MacroSpawnPose::plot).orElse(-1));
     }
 
     private MacroDecision warpDecision(FarmingContext context, MacroSpawnPose spawn, String status) {
@@ -823,10 +834,9 @@ public final class SShapeVerticalCropMacro implements Macro {
         direction = next;
         rowCropKind = cropKind;
         state = State.FARMING;
-        rowY = observed.position().y();
-        lastProgressCoordinate = movementCoordinate(observed.position(), observed.frame(), next);
-        progressAt = context.nowNanos();
-        noProgressAttempts = 0;
+        drop.arm(observed.position().y());
+        rowProgress.begin(context.nowNanos(),
+                movementCoordinate(observed.position(), observed.frame(), next));
     }
 
     private MacroDecision farmInputs(Observed observed, String status) {
@@ -941,14 +951,8 @@ public final class SShapeVerticalCropMacro implements Macro {
     }
 
     private void clearWarpState() {
-        warpOrigin = null;
-        lastWarpRequestAt = 0L;
-        warpAttempts = 0L;
-        confirmedSpawn = null;
+        rewarp.clear();
         stateAt = 0L;
-        rewarpDwellNanos = TimeUnit.MILLISECONDS.toNanos(400L);
-        warpSneakNanos = TimeUnit.MILLISECONDS.toNanos(350L);
-        warpSneakSampled = false;
     }
 
     private static boolean stationary(MotionSnapshot motion) {
@@ -961,10 +965,8 @@ public final class SShapeVerticalCropMacro implements Macro {
         invalidateSpatialScan();
         direction = null;
         rowCropKind = null;
-        rowY = 0.0D;
-        lastProgressCoordinate = 0.0D;
-        progressAt = 0L;
-        noProgressAttempts = 0;
+        drop.clear();
+        rowProgress.clear();
         laneStart = null;
         laneAction = InputAction.FORWARD;
         clearWarpState();
@@ -1124,7 +1126,7 @@ public final class SShapeVerticalCropMacro implements Macro {
     }
 
     private double randomUnit() {
-        double value = random.nextUnit();
+        double value = leafRandom.nextUnit();
         if (!Double.isFinite(value) || value < 0.0D || value >= 1.0D) {
             throw new IllegalStateException("macro random draw must be in [0, 1)");
         }
@@ -1135,22 +1137,15 @@ public final class SShapeVerticalCropMacro implements Macro {
         state = next;
         direction = null;
         rowCropKind = null;
-        rowY = 0.0D;
-        lastProgressCoordinate = 0.0D;
-        progressAt = 0L;
-        noProgressAttempts = 0;
+        drop.clear();
+        rowProgress.clear();
         laneDwellNanos = TimeUnit.MILLISECONDS.toNanos(MIN_ROW_PROGRESS_MILLIS);
-        rewarpDwellNanos = TimeUnit.MILLISECONDS.toNanos(400L);
-        warpSneakNanos = TimeUnit.MILLISECONDS.toNanos(350L);
-        warpSneakSampled = false;
+        rewarp.clear();
         rotationDurationMillis = 500L;
+        rotation.clear();
         laneStart = null;
         laneAction = InputAction.FORWARD;
         stateAt = 0L;
-        warpOrigin = null;
-        lastWarpRequestAt = 0L;
-        warpAttempts = 0L;
-        confirmedSpawn = null;
         recoveryUntil = 0L;
         recoveryReason = null;
         targetYaw = null;
@@ -1162,7 +1157,7 @@ public final class SShapeVerticalCropMacro implements Macro {
     }
 
     private void invalidateSpatialScan() {
-        spatialScanGeneration = incrementPositive(spatialScanGeneration);
+        captures.invalidate();
         nextSpatialScanPhase = 1L;
         spatialScanWorldEpoch = Long.MIN_VALUE;
         nextSpatialScanDirection = Direction.RIGHT;
@@ -1253,6 +1248,14 @@ public final class SShapeVerticalCropMacro implements Macro {
             Objects.requireNonNull(anchor, "anchor");
             Objects.requireNonNull(request, "request");
         }
+    }
+
+    private record SpatialScanKey(
+            long generation,
+            long phase,
+            Direction direction,
+            ScanAnchor anchor
+    ) {
     }
 
     private record ScanAnchor(

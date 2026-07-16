@@ -9,6 +9,7 @@ import dev.hylfrd.farmhelper.control.input.InputAction;
 import dev.hylfrd.farmhelper.control.input.InputSnapshot;
 import dev.hylfrd.farmhelper.control.input.ReleaseReason;
 import dev.hylfrd.farmhelper.control.rotation.RotationTerminalReason;
+import dev.hylfrd.farmhelper.control.rotation.RotationProfile;
 import dev.hylfrd.farmhelper.macro.MacroWarpRequest;
 import dev.hylfrd.farmhelper.macro.MacroDecision;
 import dev.hylfrd.farmhelper.macro.MacroRotationRequest;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -346,6 +348,32 @@ class ClientTickAdapterTest {
         assertEquals(RotationTerminalReason.COMPLETED,
                 runtime.rotation().snapshot().terminalReason().orElseThrow());
         assertEquals(revision + 1L, runtime.rotation().snapshot().revision());
+    }
+
+    @Test
+    void positiveRequestIdentityBypassesTargetOnlyDedupAndAcknowledgesReplacement() {
+        FarmHelperClientRuntime runtime = runtime("rotation-request-identity.json");
+        MacroDecision first = new MacroDecision(
+                Set.of(), Optional.of(new MacroRotationRequest(
+                        90F, -10F, 700L, RotationProfile.BACK, 0.0F, 100L)),
+                Optional.empty(), "first");
+        MacroDecision replacement = new MacroDecision(
+                Set.of(), Optional.of(new MacroRotationRequest(
+                        90F, -10F, 700L, RotationProfile.BACK, 0.0F, 101L)),
+                Optional.empty(), "replacement");
+
+        TestClientTickAdapterAccess.applyDecision(runtime, rotationSnapshot(), first);
+        long firstRevision = runtime.rotation().snapshot().revision();
+        assertEquals(100L, runtime.macroRotationLease()
+                .observe(runtime.rotation().snapshot()).requestToken());
+
+        TestClientTickAdapterAccess.applyDecision(runtime, rotationSnapshot(), replacement);
+
+        assertEquals(firstRevision + 2L, runtime.rotation().snapshot().revision());
+        assertEquals(MacroControlOwner.FARMING,
+                runtime.rotation().snapshot().owner().orElseThrow());
+        assertEquals(101L, runtime.macroRotationLease()
+                .observe(runtime.rotation().snapshot()).requestToken());
     }
 
     @Test

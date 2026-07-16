@@ -118,6 +118,33 @@ class FarmHelperClientRuntimeTest {
     }
 
     @Test
+    void everyRunSettingChangeIsRejectedBeforeMemoryOrDiskMutation() {
+        Path configPath = temporaryDirectory.resolve("active-run-settings.json");
+        FarmHelperClientRuntime runtime = TestFarmHelperClientRuntimeFactory.create(configPath);
+        MacroLocationConfig original = new MacroLocationConfig(10, 72, -4, 0F, 0F, 2);
+        assertTrue(runtime.setMacroSpawn(original));
+        ready(runtime);
+        assertTrue(runtime.startMacro());
+
+        FarmHelperConfig changed = runtime.configSnapshot();
+        changed.setRotateAfterDrop(true);
+        changed.setCustomPitch(true);
+        changed.setCustomPitchLevel(51.0F);
+        assertFalse(runtime.saveConfig(changed));
+        assertFalse(runtime.setMacroSpawn(
+                new MacroLocationConfig(20, 80, 6, 0F, 0F, 3)));
+
+        assertFalse(runtime.core().config().rotateAfterDrop());
+        assertFalse(runtime.core().config().customPitch());
+        assertEquals(original, runtime.core().config().macroSpawn().orElseThrow());
+        FarmHelperClientRuntime reloaded =
+                TestFarmHelperClientRuntimeFactory.create(configPath);
+        assertFalse(reloaded.core().config().rotateAfterDrop());
+        assertFalse(reloaded.core().config().customPitch());
+        assertEquals(original, reloaded.core().config().macroSpawn().orElseThrow());
+    }
+
+    @Test
     void activeConfigResetIsRejectedBeforeEveryMutation() {
         Path configPath = temporaryDirectory.resolve("active-reset.json");
         FarmHelperClientRuntime runtime = TestFarmHelperClientRuntimeFactory.create(configPath);

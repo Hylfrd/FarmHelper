@@ -219,7 +219,8 @@ class MacroManagerTest {
 
         assertEquals("s-shape-melon-pumpkin-default", manager.activeMacroId());
         long generation = manager.generation();
-        manager.settings().macroMode(MacroMode.VERTICAL_NORMAL);
+        assertThrows(IllegalStateException.class,
+                () -> manager.settings().macroMode(MacroMode.VERTICAL_NORMAL));
         assertThrows(IllegalStateException.class, manager::start);
         assertEquals("s-shape-melon-pumpkin-default", manager.activeMacroId());
         assertEquals(generation, manager.generation());

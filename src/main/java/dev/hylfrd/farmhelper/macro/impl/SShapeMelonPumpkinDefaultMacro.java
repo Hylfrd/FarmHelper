@@ -11,15 +11,19 @@ import dev.hylfrd.farmhelper.macro.MacroDecision;
 import dev.hylfrd.farmhelper.macro.MacroPauseCause;
 import dev.hylfrd.farmhelper.macro.MacroRandom;
 import dev.hylfrd.farmhelper.macro.MacroRecoveryReason;
-import dev.hylfrd.farmhelper.macro.MacroRotationRequest;
 import dev.hylfrd.farmhelper.macro.MacroSettings;
 import dev.hylfrd.farmhelper.macro.MacroSpawnPose;
 import dev.hylfrd.farmhelper.macro.MacroTerminalReason;
-import dev.hylfrd.farmhelper.macro.MacroTiming;
 import dev.hylfrd.farmhelper.macro.MacroWarpRequest;
 import dev.hylfrd.farmhelper.macro.PlayerPosture;
 import dev.hylfrd.farmhelper.macro.RowDirection;
 import dev.hylfrd.farmhelper.macro.ServerResponsiveness;
+import dev.hylfrd.farmhelper.macro.mechanism.CaptureIdentityLedger;
+import dev.hylfrd.farmhelper.macro.mechanism.DropLedger;
+import dev.hylfrd.farmhelper.macro.mechanism.OwnedRotationLedger;
+import dev.hylfrd.farmhelper.macro.mechanism.RewarpLedger;
+import dev.hylfrd.farmhelper.macro.mechanism.RotationEntropy;
+import dev.hylfrd.farmhelper.macro.mechanism.RowProgressLedger;
 import dev.hylfrd.farmhelper.runtime.snapshot.MotionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
@@ -55,42 +59,43 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     static final int MAX_NO_PROGRESS_WINDOWS = 3;
 
     private final MacroSettings settings;
-    private final MacroRandom random;
+    private final MacroRandom leafRandom;
+    private final RotationEntropy rotationEntropy;
+    private final RowProgressLedger rowProgress = new RowProgressLedger(
+            PROGRESS_WINDOW_NANOS, MIN_PROGRESS, MAX_NO_PROGRESS_WINDOWS);
+    private final DropLedger drop = new DropLedger();
+    private final RewarpLedger rewarp = new RewarpLedger();
+    private final CaptureIdentityLedger<CaptureKey> captures = new CaptureIdentityLedger<>();
+    private final OwnedRotationLedger rotation = new OwnedRotationLedger();
     private State state = State.STOPPED;
     private RowDirection rowDirection;
     private LaneChangeDirection laneDirection;
     private float cardinalYaw;
     private Float farmingYaw;
     private Float farmingPitch;
-    private MacroRotationRequest pendingRotation;
-    private double rowY;
     private PositionSnapshot laneStart;
     private long stateAt;
     private long laneDwellNanos;
-    private long progressAt;
-    private double lastProgressCoordinate;
-    private int noProgressWindows;
-    private RewarpPosition warpOrigin;
-    private MacroSpawnPose confirmedSpawn;
-    private long rewarpDwellNanos;
-    private long warpSneakNanos;
-    private boolean warpSneakSampled;
-    private long lastWarpRequestAt;
-    private long warpAttempts;
     private long recoveryUntil;
     private MacroRecoveryReason recoveryReason;
     private long pausedAt = Long.MIN_VALUE;
     private long runGeneration;
-    private long captureGeneration = 1L;
-    private long capturePhase = 1L;
-    private long nextRequestToken = 1L;
     private int scanDistance;
     private ScanPhase scanPhase = ScanPhase.RIGHT_CROP;
-    private PendingCapture pendingCapture;
 
     public SShapeMelonPumpkinDefaultMacro(MacroSettings settings, MacroRandom random) {
-        this.settings = Objects.requireNonNull(settings, "settings");
-        this.random = Objects.requireNonNull(random, "random");
+        this(settings, random, random);
+    }
+
+    public SShapeMelonPumpkinDefaultMacro(
+            MacroSettings settings,
+            MacroRandom leafRandom,
+            MacroRandom rotationRandom
+    ) {
+        this.settings = Objects.requireNonNull(settings, "settings").snapshot();
+        this.leafRandom = Objects.requireNonNull(leafRandom, "leafRandom");
+        rotationEntropy = new RotationEntropy(
+                Objects.requireNonNull(rotationRandom, "rotationRandom"));
     }
 
     @Override
@@ -133,10 +138,11 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         }
         long suspended = elapsed(nowNanos, pausedAt);
         switch (state) {
-            case STARTUP, SWITCHING_LANE, DROPPING, REWARP_DWELL, WARP_LANDING ->
+            case STARTUP, SWITCHING_LANE, DROPPING ->
                     stateAt = shift(stateAt, suspended);
-            case FARMING_LEFT, FARMING_RIGHT -> progressAt = shift(progressAt, suspended);
-            case REWARPING -> lastWarpRequestAt = shift(lastWarpRequestAt, suspended);
+            case FARMING_LEFT, FARMING_RIGHT -> rowProgress.shift(suspended);
+            case REWARP_DWELL, WARP_LANDING -> rewarp.shiftState(suspended);
+            case REWARPING -> rewarp.shiftRequest(suspended);
             case AFTER_WARP, POST_REWARP -> recoveryUntil = shift(recoveryUntil, suspended);
             case STOPPED, ROW_SELECT, RECOVERY_HANDOFF -> { }
         }
@@ -154,13 +160,14 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         RotationSnapshot rotation = player.rotation().get();
         CaptureAnchor anchor = new CaptureAnchor(
                 block(position), body(position), rotation.yaw(), cardinalYaw);
-        if (pendingCapture != null && pendingCapture.matchesRequest(
-                runGeneration, captureGeneration, capturePhase, state, scanDistance,
-                scanPhase, worldEpoch, anchor)) {
-            return Optional.of(pendingCapture.request());
+        CaptureKey key = captureKey(worldEpoch, anchor);
+        Optional<SpatialCaptureRequest> reusable = captures.reusable(key);
+        if (reusable.isPresent()) {
+            return reusable;
         }
-        if (pendingCapture != null) {
+        if (captures.reusable(key).isEmpty()) {
             invalidateCapture();
+            key = captureKey(worldEpoch, anchor);
         }
 
         Set<BlockPosition> blocks = requestedBlocks(position, rotation);
@@ -168,12 +175,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
             blocks.add(block(position));
         }
         BoxSnapshot bounds = bounds(blocks);
-        long token = nextPositiveToken();
-        SpatialCaptureRequest request = new SpatialCaptureRequest(worldEpoch, token, bounds, blocks);
-        pendingCapture = new PendingCapture(
-                runGeneration, captureGeneration, capturePhase, state, scanDistance,
-                scanPhase, worldEpoch, anchor, request);
-        return Optional.of(request);
+        return Optional.of(captures.begin(key, worldEpoch, bounds, blocks, anchor.body()));
     }
 
     @Override
@@ -213,9 +215,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
             if (elapsed(context.nowNanos(), stateAt) < STARTUP_NANOS) {
                 return MacroDecision.idle("startup");
             }
-            cardinalYaw = settings.customYaw()
-                    ? MacroAngles.closestCardinal(settings.customYawLevel())
-                    : MacroAngles.closestCardinal(MacroAngles.closestDiagonal(observed.rotation().yaw()));
+            cardinalYaw = MacroAngles.closestCardinal(observed.rotation().yaw());
             enterRowSelect();
         }
         if (state == State.RECOVERY_HANDOFF) {
@@ -253,17 +253,15 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         if (rewarp.isPresent()) {
             return rewarp.orElseThrow();
         }
-        if (rowDirection != null && !posture.flying() && !posture.onGround()
-                && Math.abs(observed.position().y() - rowY) > 0.75D
-                && observed.position().y() < 80.0D) {
+        if (rowDirection != null && drop.shouldDrop(posture, observed.position().y())) {
             state = State.DROPPING;
             stateAt = context.nowNanos();
-            pendingRotation = null;
+            rotation.clear();
             invalidateCapture();
             return MacroDecision.failClosed("dropping");
         }
 
-        MacroDecision alignment = align(observed);
+        MacroDecision alignment = align(context, observed);
         if (alignment != null) {
             return alignment;
         }
@@ -287,6 +285,10 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
 
     public Optional<LaneChangeDirection> laneDirection() {
         return Optional.ofNullable(laneDirection);
+    }
+
+    Optional<dev.hylfrd.farmhelper.macro.MacroRotationRequest> pendingRotation() {
+        return rotation.pending();
     }
 
     int scanDistance() {
@@ -356,44 +358,47 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
 
     private MacroDecision beginInitialRow(RowDirection direction, Observed observed) {
         rowDirection = direction;
-        rowY = observed.position().y();
-        progressAt = observed.nowNanos();
-        lastProgressCoordinate = rowCoordinate(observed.position(), observed.cardinalFrame(), direction);
-        noProgressWindows = 0;
+        drop.arm(observed.position().y());
+        rowProgress.begin(observed.nowNanos(),
+                rowCoordinate(observed.position(), observed.cardinalFrame(), direction));
         farmingPitch = targetPitch();
         double sideDraw = randomUnit();
+        float baseYaw = direction == RowDirection.LEFT
+                ? cardinalYaw - 45.0F
+                : direction == RowDirection.RIGHT ? cardinalYaw + 45.0F : cardinalYaw;
         farmingYaw = direction == RowDirection.LEFT
-                ? cardinalYaw - (45.0F + (float) (sideDraw * 2.0D))
+                ? baseYaw - (float) (sideDraw * 2.0D)
                 : direction == RowDirection.RIGHT
-                        ? cardinalYaw + (45.0F + (float) (sideDraw * 2.0D))
-                        : cardinalYaw + (float) (sideDraw * 2.0D - 1.0D);
+                        ? baseYaw + (float) (sideDraw * 2.0D)
+                        : baseYaw + (float) (sideDraw * 2.0D - 1.0D);
         farmingYaw = RotationTask.normalizeYaw(farmingYaw);
         state = direction == RowDirection.LEFT ? State.FARMING_LEFT
                 : direction == RowDirection.RIGHT ? State.FARMING_RIGHT : State.ROW_SELECT;
         resetScan();
         if (settings.dontFixAfterWarping()
-                && Math.abs(MacroAngles.shortestDelta(observed.rotation().yaw(), farmingYaw)) < 0.1F) {
-            pendingRotation = null;
+                && Math.abs(MacroAngles.shortestDelta(observed.rotation().yaw(), baseYaw)) < 0.1F) {
+            rotation.clear();
             return direction == null
                     ? MacroDecision.failClosed("row-direction-unresolved")
                     : farmInputs(observed, "farming-" + direction.name().toLowerCase());
         }
-        pendingRotation = sampledRotation(observed, farmingYaw, farmingPitch,
-                RotationProfile.EXPO_QUART, sampleRotationMillis());
+        rotation.begin(observed.rotation().yaw(), observed.rotation().pitch(),
+                farmingYaw, farmingPitch,
+                RotationProfile.EXPO_QUART, sampleRotationMillis(), rotationEntropy);
         invalidateCapture();
         return rotationDecision(direction == null ? "row-direction-unresolved" : "initial-aligning");
     }
 
-    private MacroDecision align(Observed observed) {
-        if (pendingRotation == null) {
+    private MacroDecision align(FarmingContext context, Observed observed) {
+        if (rotation.pending().isEmpty()) {
             return null;
         }
-        if (Math.abs(MacroAngles.shortestDelta(observed.rotation().yaw(), pendingRotation.yaw())) <= 0.1F
-                && Math.abs(observed.rotation().pitch() - pendingRotation.pitch()) <= 0.1F) {
-            pendingRotation = null;
-            return null;
-        }
-        return rotationDecision("aligning");
+        return switch (rotation.observe(context)) {
+            case NONE, COMPLETED -> null;
+            case ACTIVE, UNACKNOWLEDGED, RETRYABLE_CANCELLATION -> rotationDecision("aligning");
+            case CANCELLED -> MacroDecision.failClosed("rotation-cancelled");
+            case STALE_ACKNOWLEDGEMENT -> MacroDecision.failClosed("rotation-acknowledgement-stale");
+        };
     }
 
     private MacroDecision farmRow(FarmingContext context, Observed observed) {
@@ -433,8 +438,9 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         double offset = 0.2D + randomUnit() * 0.4D;
         farmingYaw = RotationTask.normalizeYaw(cardinalYaw
                 + (rowDirection == RowDirection.RIGHT ? -(float) offset : (float) offset));
-        pendingRotation = sampledRotation(observed, farmingYaw, farmingPitch,
-                RotationProfile.EXPO_QUART, sampleRotationMillis());
+        rotation.begin(observed.rotation().yaw(), observed.rotation().pitch(),
+                farmingYaw, farmingPitch, RotationProfile.EXPO_QUART,
+                sampleRotationMillis(), rotationEntropy);
         laneStart = observed.position();
         state = State.SWITCHING_LANE;
         stateAt = context.nowNanos();
@@ -450,19 +456,18 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
                 * laneDirection.sign();
         if (displacement >= 1.0D) {
             rowDirection = rowDirection.opposite();
-            rowY = observed.position().y();
-            progressAt = context.nowNanos();
-            lastProgressCoordinate = rowCoordinate(
-                    observed.position(), observed.cardinalFrame(), rowDirection);
-            noProgressWindows = 0;
+            drop.arm(observed.position().y());
+            rowProgress.begin(context.nowNanos(), rowCoordinate(
+                    observed.position(), observed.cardinalFrame(), rowDirection));
             farmingPitch = targetPitch();
             double jitter = randomUnit() * 2.0D;
             farmingYaw = RotationTask.normalizeYaw(cardinalYaw
                     + (rowDirection == RowDirection.RIGHT
                     ? 45.0F + (float) jitter
                     : -45.0F - (float) jitter));
-            pendingRotation = sampledRotation(observed, farmingYaw, farmingPitch,
-                    RotationProfile.EXPO_QUART, sampleRotationMillis());
+            rotation.begin(observed.rotation().yaw(), observed.rotation().pitch(),
+                    farmingYaw, farmingPitch, RotationProfile.EXPO_QUART,
+                    sampleRotationMillis(), rotationEntropy);
             state = rowDirection == RowDirection.LEFT ? State.FARMING_LEFT : State.FARMING_RIGHT;
             laneStart = null;
             invalidateCapture();
@@ -489,22 +494,13 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     }
 
     private MacroDecision observeRowProgress(FarmingContext context, Observed observed) {
-        if (elapsed(context.nowNanos(), progressAt) < PROGRESS_WINDOW_NANOS) {
-            return null;
-        }
         double coordinate = rowCoordinate(observed.position(), observed.cardinalFrame(), rowDirection);
-        if (coordinate - lastProgressCoordinate >= MIN_PROGRESS) {
-            noProgressWindows = 0;
-        } else {
-            noProgressWindows++;
-        }
-        lastProgressCoordinate = coordinate;
-        progressAt = context.nowNanos();
-        if (noProgressWindows >= MAX_NO_PROGRESS_WINDOWS) {
-            return enterRecovery(MacroRecoveryReason.ROW_STALLED, "row-stalled");
-        }
-        return noProgressWindows == 0 ? null
-                : MacroDecision.failClosed("row-stall-observed-" + noProgressWindows);
+        return switch (rowProgress.observeWindowed(context.nowNanos(), coordinate)) {
+            case WAITING, PROGRESSED -> null;
+            case MISSED -> MacroDecision.failClosed(
+                    "row-stall-observed-" + rowProgress.misses());
+            case STALLED -> enterRecovery(MacroRecoveryReason.ROW_STALLED, "row-stalled");
+        };
     }
 
     private MacroDecision farmInputs(Observed observed, String status) {
@@ -522,26 +518,28 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     }
 
     private MacroDecision tickDrop(Observed observed, PlayerPosture posture) {
-        if (!posture.onGround()) {
+        Optional<DropLedger.Landing> landing = drop.observeLanding(
+                posture, observed.position().y());
+        if (landing.isEmpty()) {
             return MacroDecision.failClosed("dropping");
         }
-        double height = Math.abs(rowY - observed.position().y());
-        rowY = observed.position().y();
         rowDirection = null;
         laneStart = null;
         enterRowSelect();
-        if (height > 1.5D) {
+        if (landing.orElseThrow().changedLayer()) {
             laneDirection = null;
             if (settings.rotateAfterDrop()) {
                 cardinalYaw = MacroAngles.closestCardinal(cardinalYaw + 180.0F);
                 farmingYaw = cardinalYaw;
                 farmingPitch = farmingPitch == null ? observed.rotation().pitch() : farmingPitch;
-                pendingRotation = sampledRotation(observed, farmingYaw, farmingPitch,
-                        RotationProfile.EXPO_QUART, sampleRotationMillis());
+                rotation.begin(observed.rotation().yaw(), observed.rotation().pitch(),
+                        farmingYaw, farmingPitch, RotationProfile.EXPO_QUART,
+                        sampleRotationMillis(), rotationEntropy);
                 return rotationDecision("drop-rotate");
             }
         }
-        return MacroDecision.failClosed(height > 1.5D ? "drop-complete" : "drop-too-shallow");
+        return MacroDecision.failClosed(
+                landing.orElseThrow().changedLayer() ? "drop-complete" : "drop-too-shallow");
     }
 
     private Optional<MacroDecision> beginRewarp(FarmingContext context, Observed observed) {
@@ -554,13 +552,10 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         if (!stationary(observed.motion())) {
             return Optional.of(MacroDecision.failClosed("rewarp-moving"));
         }
-        warpOrigin = current.orElseThrow();
         state = State.REWARP_DWELL;
-        stateAt = context.nowNanos();
-        rewarpDwellNanos = TimeUnit.MILLISECONDS.toNanos(
-                400L + (long) Math.floor(randomUnit() * 350.0D));
-        warpAttempts = 0L;
-        pendingRotation = null;
+        rewarp.begin(current.orElseThrow(), context.nowNanos(), TimeUnit.MILLISECONDS.toNanos(
+                400L + (long) Math.floor(randomUnit() * 350.0D)));
+        rotation.clear();
         invalidateCapture();
         return Optional.of(MacroDecision.failClosed("rewarp-dwell"));
     }
@@ -570,17 +565,18 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         if (spawn == null) {
             return MacroDecision.failClosed("rewarp-config-lost");
         }
-        if (!block(observed.position()).equals(warpOrigin.block()) || !stationary(observed.motion())) {
+        RewarpPosition origin = rewarp.origin().orElse(null);
+        if (origin == null || !block(observed.position()).equals(origin.block())
+                || !stationary(observed.motion())) {
             clearWarpState();
             enterRowSelect();
             return MacroDecision.failClosed("rewarp-dwell-ineligible");
         }
-        if (elapsed(context.nowNanos(), stateAt) < rewarpDwellNanos) {
+        if (!rewarp.dwellComplete(context.nowNanos())) {
             return MacroDecision.failClosed("rewarp-dwell");
         }
         state = State.REWARPING;
-        lastWarpRequestAt = context.nowNanos();
-        warpAttempts = 1L;
+        rewarp.requested(context.nowNanos());
         invalidateCapture();
         return warpDecision(context, spawn, "rewarp-request");
     }
@@ -591,24 +587,20 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
             return MacroDecision.failClosed("rewarp-config-lost");
         }
         BlockPosition current = block(observed.position());
-        if (warpOrigin.squaredDistance(current) > 2.0D || spawn.block().equals(current)) {
+        RewarpPosition origin = rewarp.origin().orElseThrow();
+        if (origin.squaredDistance(current) > 2.0D || spawn.block().equals(current)) {
             laneDirection = null;
             laneStart = null;
-            confirmedSpawn = spawn;
+            rewarp.confirmed(spawn, context.nowNanos());
             state = State.WARP_LANDING;
-            stateAt = context.nowNanos();
-            warpSneakSampled = false;
             invalidateCapture();
             return tickWarpLanding(context, context.posture().get());
         }
-        if (elapsed(context.nowNanos(), lastWarpRequestAt) < WARP_RETRY_NANOS) {
+        if (!rewarp.retryDue(context.nowNanos(), WARP_RETRY_NANOS)) {
             return MacroDecision.failClosed("rewarp-waiting");
         }
-        if (warpAttempts < Long.MAX_VALUE) {
-            warpAttempts++;
-        }
-        lastWarpRequestAt = context.nowNanos();
-        return warpDecision(context, spawn, "rewarp-retry-" + warpAttempts);
+        rewarp.requested(context.nowNanos());
+        return warpDecision(context, spawn, "rewarp-retry-" + rewarp.attempts());
     }
 
     private MacroDecision tickWarpLanding(FarmingContext context, PlayerPosture posture) {
@@ -616,13 +608,11 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
             return MacroDecision.failClosed("rewarp-suffocating");
         }
         if (posture.flying() && !posture.onGround()) {
-            if (!warpSneakSampled) {
-                warpSneakNanos = TimeUnit.MILLISECONDS.toNanos(
-                        350L + (long) Math.floor(randomUnit() * 300.0D));
-                stateAt = context.nowNanos();
-                warpSneakSampled = true;
+            if (!rewarp.sneakSampled()) {
+                rewarp.beginSneak(context.nowNanos(), TimeUnit.MILLISECONDS.toNanos(
+                        350L + (long) Math.floor(randomUnit() * 300.0D)));
             }
-            if (elapsed(context.nowNanos(), stateAt) < warpSneakNanos) {
+            if (!rewarp.sneakComplete(context.nowNanos())) {
                 return decision(EnumSet.of(InputAction.SNEAK), "rewarp-airborne-sneak");
             }
             return MacroDecision.failClosed("rewarp-airborne");
@@ -634,7 +624,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         recoveryUntil = context.nowNanos() + AFTER_WARP_NANOS;
         invalidateCapture();
         return MacroDecision.failClosed("rewarp-confirmed-plot-"
-                + (confirmedSpawn == null ? -1 : confirmedSpawn.plot()));
+                + rewarp.confirmedSpawn().map(MacroSpawnPose::plot).orElse(-1));
     }
 
     private MacroDecision finishPostRewarp(Observed observed) {
@@ -660,13 +650,24 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         enterRowSelect();
         farmingYaw = targetYaw;
         farmingPitch = targetPitch;
+        float yawDistance = Math.abs(MacroAngles.shortestDelta(
+                observed.rotation().yaw(), targetYaw));
+        float pitchDistance = Math.abs(observed.rotation().pitch() - targetPitch);
         if (settings.dontFixAfterWarping()
-                && Math.abs(MacroAngles.shortestDelta(observed.rotation().yaw(), targetYaw)) < 0.1F) {
-            pendingRotation = null;
+                && Math.hypot(yawDistance, pitchDistance) < 1.0D) {
+            rotation.clear();
             return MacroDecision.failClosed("post-rewarp-fix-suppressed");
         }
-        pendingRotation = sampledRotation(observed, targetYaw, targetPitch,
-                RotationProfile.BACK, sampleRotationMillis());
+        if (settings.rotateAfterWarped()) {
+            sampleRotationMillis();
+        }
+        long correctionMillis = sampleRotationMillis();
+        if (yawDistance > 90.0F) {
+            correctionMillis = Math.multiplyExact(correctionMillis, 2L);
+        }
+        rotation.begin(observed.rotation().yaw(), observed.rotation().pitch(),
+                targetYaw, targetPitch, RotationProfile.BACK,
+                correctionMillis, rotationEntropy);
         return rotationDecision(settings.rotateAfterWarped()
                 ? "post-rewarp-leaf-back" : "post-rewarp-saved-back");
     }
@@ -674,7 +675,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     private MacroDecision enterRecovery(MacroRecoveryReason reason, String status) {
         recoveryReason = Objects.requireNonNull(reason, "reason");
         state = State.RECOVERY_HANDOFF;
-        pendingRotation = null;
+        rotation.clear();
         laneStart = null;
         invalidateCapture();
         return MacroDecision.recoveryHandoff(status, reason);
@@ -682,8 +683,9 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
 
     private MacroSpawnPose validWarpConfig() {
         MacroSpawnPose spawn = settings.spawn().orElse(null);
-        return spawn == null || warpOrigin == null
-                || settings.rewarps().stream().noneMatch(warpOrigin::equals) ? null : spawn;
+        RewarpPosition origin = rewarp.origin().orElse(null);
+        return spawn == null || origin == null
+                || settings.rewarps().stream().noneMatch(origin::equals) ? null : spawn;
     }
 
     private MacroDecision warpDecision(FarmingContext context, MacroSpawnPose spawn, String status) {
@@ -691,25 +693,8 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
                 Optional.of(new MacroWarpRequest(context.developmentGarden(), spawn)), status);
     }
 
-    private MacroRotationRequest sampledRotation(
-            Observed observed,
-            float targetYaw,
-            float targetPitch,
-            RotationProfile profile,
-            long sampledMillis
-    ) {
-        float modifier = (float) (randomUnit() * 0.5D - 0.25D);
-        long floor = 50L + (long) Math.floor(randomUnit() * 100.0D);
-        long duration = MacroTiming.scaledRotationMillis(
-                sampledMillis, floor,
-                MacroAngles.shortestDelta(observed.rotation().yaw(), targetYaw),
-                targetPitch - observed.rotation().pitch());
-        return new MacroRotationRequest(
-                RotationTask.normalizeYaw(targetYaw), targetPitch, duration, profile, modifier);
-    }
-
     private MacroDecision rotationDecision(String status) {
-        return new MacroDecision(Set.of(), Optional.of(pendingRotation), Optional.empty(), status);
+        return new MacroDecision(Set.of(), rotation.pending(), Optional.empty(), status);
     }
 
     private float targetPitch() {
@@ -723,7 +708,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     }
 
     private double randomUnit() {
-        double value = random.nextUnit();
+        double value = leafRandom.nextUnit();
         if (!Double.isFinite(value) || value < 0.0D || value >= 1.0D) {
             throw new IllegalStateException("macro random draw must be in [0, 1)");
         }
@@ -731,7 +716,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     }
 
     private Observed consumeCapture(FarmingContext context) {
-        if (!context.player().isPresent() || !context.spatial().isPresent() || pendingCapture == null) {
+        if (!context.player().isPresent() || !context.spatial().isPresent()) {
             return null;
         }
         PlayerSnapshot player = context.player().get();
@@ -742,14 +727,12 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         RotationSnapshot rotation = player.rotation().get();
         CaptureAnchor current = new CaptureAnchor(block(position), body(position), rotation.yaw(), cardinalYaw);
         SpatialSnapshot spatial = context.spatial().get();
-        PendingCapture expected = pendingCapture;
-        if (!expected.matchesSnapshot(
-                runGeneration, captureGeneration, capturePhase, state, scanDistance,
-                scanPhase, context.worldEpoch(), current, spatial)) {
+        CaptureKey key = captureKey(context.worldEpoch(), current);
+        if (!captures.accepts(key, spatial, current.body())) {
             invalidateCapture();
             return null;
         }
-        pendingCapture = null;
+        captures.complete();
         return new Observed(
                 context.nowNanos(), context.worldEpoch(), position, player.motion().get(), rotation,
                 RelativeFrame.cardinal(cardinalYaw), spatial);
@@ -765,7 +748,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
                         || scanPhase == ScanPhase.RIGHT_OBSTACLE
                         ? RowDirection.RIGHT : RowDirection.LEFT;
                 if (scanPhase == ScanPhase.RIGHT_CROP || scanPhase == ScanPhase.LEFT_CROP) {
-                    blocks.add(RelativeFrame.cardinal(rotation.yaw()).blockAt(
+                    blocks.add(RelativeFrame.eightWay(rotation.yaw()).blockAt(
                             position.x(), position.y(), position.z(),
                             side.sign() * scanDistance, 0, 0));
                 } else {
@@ -852,13 +835,12 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     }
 
     private static RelativeFrame currentFrame(Observed observed) {
-        return RelativeFrame.cardinal(observed.rotation().yaw());
+        return RelativeFrame.eightWay(observed.rotation().yaw());
     }
 
     private void advanceScan(ScanPhase next) {
         scanPhase = next;
-        capturePhase = incrementPositive(capturePhase);
-        pendingCapture = null;
+        captures.advancePhase();
     }
 
     private void enterRowSelect() {
@@ -875,13 +857,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     }
 
     private void clearWarpState() {
-        warpOrigin = null;
-        confirmedSpawn = null;
-        lastWarpRequestAt = 0L;
-        warpAttempts = 0L;
-        rewarpDwellNanos = TimeUnit.MILLISECONDS.toNanos(400L);
-        warpSneakNanos = TimeUnit.MILLISECONDS.toNanos(350L);
-        warpSneakSampled = false;
+        rewarp.clear();
     }
 
     private void reset(State next, long nowNanos) {
@@ -891,14 +867,12 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         cardinalYaw = 0.0F;
         farmingYaw = null;
         farmingPitch = null;
-        pendingRotation = null;
-        rowY = 0.0D;
+        rotation.clear();
+        drop.clear();
         laneStart = null;
         stateAt = nowNanos;
         laneDwellNanos = TimeUnit.MILLISECONDS.toNanos(400L);
-        progressAt = nowNanos;
-        lastProgressCoordinate = 0.0D;
-        noProgressWindows = 0;
+        rowProgress.clear();
         clearWarpState();
         recoveryUntil = 0L;
         recoveryReason = null;
@@ -910,15 +884,13 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     }
 
     private void invalidateCapture() {
-        captureGeneration = incrementPositive(captureGeneration);
-        capturePhase = 1L;
-        pendingCapture = null;
+        captures.invalidate();
     }
 
-    private long nextPositiveToken() {
-        long token = nextRequestToken;
-        nextRequestToken = incrementPositive(nextRequestToken);
-        return token;
+    private CaptureKey captureKey(long worldEpoch, CaptureAnchor anchor) {
+        return new CaptureKey(
+                runGeneration, captures.generation(), captures.phase(), state,
+                scanDistance, scanPhase, worldEpoch, anchor);
     }
 
     private static BoxSnapshot body(PositionSnapshot position) {
@@ -1042,7 +1014,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     ) {
     }
 
-    private record PendingCapture(
+    private record CaptureKey(
             long runGeneration,
             long captureGeneration,
             long capturePhase,
@@ -1050,49 +1022,8 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
             int scanDistance,
             ScanPhase scanPhase,
             long worldEpoch,
-            CaptureAnchor anchor,
-            SpatialCaptureRequest request
+            CaptureAnchor anchor
     ) {
-        boolean matchesRequest(
-                long expectedRunGeneration,
-                long expectedCaptureGeneration,
-                long expectedCapturePhase,
-                State expectedState,
-                int expectedScanDistance,
-                ScanPhase expectedScanPhase,
-                long expectedWorldEpoch,
-                CaptureAnchor expectedAnchor
-        ) {
-            return runGeneration == expectedRunGeneration
-                    && captureGeneration == expectedCaptureGeneration
-                    && capturePhase == expectedCapturePhase
-                    && state == expectedState
-                    && scanDistance == expectedScanDistance
-                    && scanPhase == expectedScanPhase
-                    && worldEpoch == expectedWorldEpoch
-                    && anchor.equals(expectedAnchor);
-        }
-
-        boolean matchesSnapshot(
-                long expectedRunGeneration,
-                long expectedCaptureGeneration,
-                long expectedCapturePhase,
-                State expectedState,
-                int expectedScanDistance,
-                ScanPhase expectedScanPhase,
-                long expectedWorldEpoch,
-                CaptureAnchor expectedAnchor,
-                SpatialSnapshot spatial
-        ) {
-            return matchesRequest(
-                    expectedRunGeneration, expectedCaptureGeneration, expectedCapturePhase,
-                    expectedState, expectedScanDistance, expectedScanPhase,
-                    expectedWorldEpoch, expectedAnchor)
-                    && spatial.worldEpoch() == worldEpoch
-                    && spatial.requestToken() == request.requestToken()
-                    && spatial.bounds().equals(request.bounds())
-                    && spatial.playerBox().equals(anchor.body());
-        }
     }
 
     private record Observed(

@@ -70,7 +70,7 @@ public final class FarmHelperCommandTree {
                 .then(FarmHelperCommandTree.<S>literalNode("stop")
                         .executes(context -> emit(context.getSource(), service.stopMacro(), feedback)))
                 .then(FarmHelperCommandTree.<S>literalNode("mode")
-                        .then(RequiredArgumentBuilder.<S, Integer>argument("mode", integer(0, 9))
+                        .then(RequiredArgumentBuilder.<S, Integer>argument("mode", integer(0, 13))
                                 .executes(context -> emit(context.getSource(),
                                         service.setMacroMode(getInteger(context, "mode")), feedback)))));
         root.then(FarmHelperCommandTree.<S>literalNode("spawn")

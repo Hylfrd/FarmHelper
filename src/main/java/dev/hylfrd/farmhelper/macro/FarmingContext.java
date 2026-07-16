@@ -14,7 +14,8 @@ public record FarmingContext(
         Observation<Boolean> inGarden,
         boolean developmentGarden,
         ServerResponsiveness serverResponsiveness,
-        Observation<PlayerPosture> posture
+        Observation<PlayerPosture> posture,
+        Observation<MacroRotationLeaseState> rotationLease
 ) {
     public FarmingContext {
         if (nowNanos < 0L || worldEpoch < 0L) {
@@ -25,6 +26,7 @@ public record FarmingContext(
         Objects.requireNonNull(inGarden, "inGarden");
         Objects.requireNonNull(serverResponsiveness, "serverResponsiveness");
         Objects.requireNonNull(posture, "posture");
+        Objects.requireNonNull(rotationLease, "rotationLease");
     }
 
     public FarmingContext(
@@ -37,6 +39,20 @@ public record FarmingContext(
             ServerResponsiveness serverResponsiveness
     ) {
         this(nowNanos, worldEpoch, player, spatial, inGarden, developmentGarden,
-                serverResponsiveness, Observation.unknown());
+                serverResponsiveness, Observation.unknown(), Observation.unknown());
+    }
+
+    public FarmingContext(
+            long nowNanos,
+            long worldEpoch,
+            Observation<PlayerSnapshot> player,
+            Observation<SpatialSnapshot> spatial,
+            Observation<Boolean> inGarden,
+            boolean developmentGarden,
+            ServerResponsiveness serverResponsiveness,
+            Observation<PlayerPosture> posture
+    ) {
+        this(nowNanos, worldEpoch, player, spatial, inGarden, developmentGarden,
+                serverResponsiveness, posture, Observation.unknown());
     }
 }

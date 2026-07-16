@@ -1434,7 +1434,7 @@ class SShapeVerticalCropMacroTest {
         removedMacro.tick(context(0L, START, 0.0D, 2.8F,
                 spatial(START, wheat(), true)));
         assertTrue(removed.removeNearest(new RewarpPosition(0, 1, 0), 0.0D));
-        assertEquals("rewarp-config-lost", removedMacro.tick(context(
+        assertEquals("rewarp-dwell", removedMacro.tick(context(
                 1L, START, 0.0D, 2.8F, spatial(START, wheat(), true))).status());
 
         MacroSettings cleared = warpSettings();
@@ -1443,7 +1443,7 @@ class SShapeVerticalCropMacroTest {
         clearedMacro.tick(context(0L, START, 0.0D, 2.8F,
                 spatial(START, wheat(), true)));
         cleared.clearRewarps();
-        assertEquals("rewarp-config-missing", clearedMacro.tick(context(
+        assertEquals("rewarp-dwell", clearedMacro.tick(context(
                 1L, START, 0.0D, 2.8F, spatial(START, wheat(), true))).status());
     }
 
@@ -1583,6 +1583,21 @@ class SShapeVerticalCropMacroTest {
         assertEquals("rewarp-confirmed plot=-1", macro.tick(context(confirmedAt
                 + TimeUnit.MILLISECONDS.toNanos(durationMillis) + 1L, moved, 0.0D, 2.8F,
                 spatial(moved, wheat(), true), new PlayerPosture(true, true))).status());
+    }
+
+    @Test
+    void leafSnapshotsModeAndCannotObserveLaterMutableSettings() {
+        MacroSettings settings = validSettings();
+        settings.mode(VerticalCropMode.NORMAL);
+        SShapeVerticalCropMacro macro =
+                new SShapeVerticalCropMacro(settings, () -> 0.0D);
+        settings.mode(VerticalCropMode.COCOA);
+        macro.onStart();
+
+        MacroDecision decision = macro.tick(context(
+                0L, START, 0.0D, 0.0F, spatial(START, wheat(), true)));
+
+        assertEquals(2.8F, decision.rotation().orElseThrow().pitch());
     }
 
     private static SShapeVerticalCropMacro macro(VerticalCropMode mode) {

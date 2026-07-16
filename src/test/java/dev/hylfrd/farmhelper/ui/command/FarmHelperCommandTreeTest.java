@@ -66,7 +66,7 @@ class FarmHelperCommandTreeTest {
             for (String action : List.of("start", "pause", "resume", "stop")) {
                 assertEquals(1, execute(root + " macro " + action));
             }
-            for (int mode : List.of(0, 1, 2, 5, 6, 9)) {
+            for (int mode = 0; mode <= 13; mode++) {
                 assertEquals(1, execute(root + " macro mode " + mode));
                 assertEquals("mode:" + mode, feedback.getLast());
             }
@@ -81,18 +81,23 @@ class FarmHelperCommandTreeTest {
                 "spawn-set", "rewarp-add", "rewarp-remove", "rewarp-clear")) {
             assertEquals(2, service.calls.stream().filter(call::equals).count(), call);
         }
-        for (int mode : List.of(0, 1, 2, 5, 6, 9)) {
+        for (int mode = 0; mode <= 13; mode++) {
             assertEquals(2, service.calls.stream().filter(("mode:" + mode)::equals).count());
         }
     }
 
     @Test
-    void invalidMappedModesReturnZeroWithoutCommandOwnedState() throws CommandSyntaxException {
-        for (int mode : List.of(3, 4, 7, 8)) {
-            assertEquals(0, execute("farmhelper macro mode " + mode));
-            assertEquals("invalid-mode:" + mode, feedback.getLast());
-            assertEquals(0, execute("fh macro mode " + mode));
+    void parserAcceptsTheCompleteModeRangeAndRejectsOutsideValues() throws CommandSyntaxException {
+        for (int mode : List.of(10, 11, 12, 13)) {
+            assertEquals(1, execute("farmhelper macro mode " + mode));
+            assertEquals("mode:" + mode, feedback.getLast());
         }
+        int calls = service.calls.size();
+        assertThrows(CommandSyntaxException.class,
+                () -> execute("farmhelper macro mode -1"));
+        assertThrows(CommandSyntaxException.class,
+                () -> execute("farmhelper macro mode 14"));
+        assertEquals(calls, service.calls.size());
     }
 
     @Test
@@ -246,7 +251,7 @@ class FarmHelperCommandTreeTest {
 
         @Override
         public CommandActionResult setMacroMode(int code) {
-            if (!List.of(0, 1, 2, 5, 6, 9).contains(code)) {
+            if (code < 0 || code > 13) {
                 calls.add("invalid-mode:" + code);
                 return CommandActionResult.failure("invalid-mode:" + code);
             }

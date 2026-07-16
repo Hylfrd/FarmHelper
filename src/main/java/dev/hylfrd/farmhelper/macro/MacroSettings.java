@@ -22,12 +22,14 @@ public final class MacroSettings {
     private float customPitchLevel;
     private boolean customYaw;
     private float customYawLevel;
+    private boolean mutable = true;
 
     public VerticalCropMode mode() {
         return mode;
     }
 
     public void mode(VerticalCropMode mode) {
+        requireMutable();
         this.mode = Objects.requireNonNull(mode, "mode");
         this.macroMode = MacroMode.fromCode(mode.code()).orElseThrow();
     }
@@ -37,6 +39,7 @@ public final class MacroSettings {
     }
 
     public void macroMode(MacroMode macroMode) {
+        requireMutable();
         MacroMode next = Objects.requireNonNull(macroMode, "macroMode");
         this.macroMode = next;
         next.verticalMode().ifPresent(value -> this.mode = value);
@@ -47,6 +50,7 @@ public final class MacroSettings {
     }
 
     public void alwaysHoldW(boolean alwaysHoldW) {
+        requireMutable();
         this.alwaysHoldW = alwaysHoldW;
     }
 
@@ -55,6 +59,7 @@ public final class MacroSettings {
     }
 
     public void holdLeftClickWhenChangingRow(boolean holdLeftClickWhenChangingRow) {
+        requireMutable();
         this.holdLeftClickWhenChangingRow = holdLeftClickWhenChangingRow;
     }
 
@@ -63,6 +68,7 @@ public final class MacroSettings {
     }
 
     public void rotateAfterWarped(boolean rotateAfterWarped) {
+        requireMutable();
         this.rotateAfterWarped = rotateAfterWarped;
     }
 
@@ -71,6 +77,7 @@ public final class MacroSettings {
     }
 
     public void rotateAfterDrop(boolean rotateAfterDrop) {
+        requireMutable();
         this.rotateAfterDrop = rotateAfterDrop;
     }
 
@@ -79,6 +86,7 @@ public final class MacroSettings {
     }
 
     public void dontFixAfterWarping(boolean dontFixAfterWarping) {
+        requireMutable();
         this.dontFixAfterWarping = dontFixAfterWarping;
     }
 
@@ -87,6 +95,7 @@ public final class MacroSettings {
     }
 
     public void customPitch(boolean customPitch) {
+        requireMutable();
         this.customPitch = customPitch;
     }
 
@@ -95,6 +104,7 @@ public final class MacroSettings {
     }
 
     public void customPitchLevel(float customPitchLevel) {
+        requireMutable();
         this.customPitchLevel = requireRange(customPitchLevel, -90.0F, 90.0F, "customPitchLevel");
     }
 
@@ -103,6 +113,7 @@ public final class MacroSettings {
     }
 
     public void customYaw(boolean customYaw) {
+        requireMutable();
         this.customYaw = customYaw;
     }
 
@@ -111,6 +122,7 @@ public final class MacroSettings {
     }
 
     public void customYawLevel(float customYawLevel) {
+        requireMutable();
         this.customYawLevel = requireRange(customYawLevel, -180.0F, 180.0F, "customYawLevel");
     }
 
@@ -123,6 +135,7 @@ public final class MacroSettings {
     }
 
     public void spawn(MacroSpawnPose spawn) {
+        requireMutable();
         MacroSpawnPose next = Objects.requireNonNull(spawn, "spawn");
         rewarps.removeIf(position -> position.squaredDistance(next.block()) < 4.0D);
         this.spawn = next;
@@ -133,6 +146,7 @@ public final class MacroSettings {
     }
 
     public boolean addRewarp(RewarpPosition position) {
+        requireMutable();
         RewarpPosition next = Objects.requireNonNull(position, "position");
         if (spawn != null && spawn.squaredDistance(next.block()) < 4.0D) {
             return false;
@@ -145,6 +159,7 @@ public final class MacroSettings {
     }
 
     public boolean removeNearest(RewarpPosition position, double maximumDistance) {
+        requireMutable();
         Objects.requireNonNull(position, "position");
         if (!Double.isFinite(maximumDistance) || maximumDistance < 0.0D) {
             throw new IllegalArgumentException("maximumDistance must be finite and non-negative");
@@ -156,6 +171,7 @@ public final class MacroSettings {
     }
 
     public void clearRewarps() {
+        requireMutable();
         rewarps.clear();
     }
 
@@ -193,9 +209,15 @@ public final class MacroSettings {
             boolean customYaw,
             float customYawLevel
     ) {
+        requireMutable();
         MacroMode validatedMacroMode = Objects.requireNonNull(macroMode, "macroMode");
         Optional<MacroSpawnPose> validatedSpawn = Objects.requireNonNull(spawn, "spawn");
-        List<RewarpPosition> validatedRewarps = List.copyOf(rewarps);
+        List<RewarpPosition> validatedRewarps = List.copyOf(
+                Objects.requireNonNull(rewarps, "rewarps"));
+        float validatedPitch = requireRange(
+                customPitchLevel, -90.0F, 90.0F, "customPitchLevel");
+        float validatedYaw = requireRange(
+                customYawLevel, -180.0F, 180.0F, "customYawLevel");
         for (int index = 0; index < validatedRewarps.size(); index++) {
             RewarpPosition candidate = Objects.requireNonNull(validatedRewarps.get(index), "rewarp");
             if (validatedSpawn.filter(value -> value.squaredDistance(candidate.block()) < 4.0D).isPresent()) {
@@ -218,9 +240,33 @@ public final class MacroSettings {
         this.rotateAfterDrop = rotateAfterDrop;
         this.dontFixAfterWarping = dontFixAfterWarping;
         this.customPitch = customPitch;
-        this.customPitchLevel = requireRange(customPitchLevel, -90.0F, 90.0F, "customPitchLevel");
+        this.customPitchLevel = validatedPitch;
         this.customYaw = customYaw;
-        this.customYawLevel = requireRange(customYawLevel, -180.0F, 180.0F, "customYawLevel");
+        this.customYawLevel = validatedYaw;
+    }
+
+    /** Immutable run copy; later edits to the source cannot affect an active leaf. */
+    public MacroSettings snapshot() {
+        MacroSettings copy = new MacroSettings();
+        copy.replace(macroMode, Optional.ofNullable(spawn), rewarps,
+                alwaysHoldW, holdLeftClickWhenChangingRow, rotateAfterWarped, rotateAfterDrop,
+                dontFixAfterWarping, customPitch, customPitchLevel, customYaw, customYawLevel);
+        copy.mutable = false;
+        return copy;
+    }
+
+    void freeze() {
+        mutable = false;
+    }
+
+    void thaw() {
+        mutable = true;
+    }
+
+    private void requireMutable() {
+        if (!mutable) {
+            throw new IllegalStateException("macro settings are immutable for an active run");
+        }
     }
 
     private static float requireRange(float value, float min, float max, String name) {

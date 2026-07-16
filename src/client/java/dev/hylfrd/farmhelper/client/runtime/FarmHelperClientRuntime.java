@@ -2,6 +2,7 @@ package dev.hylfrd.farmhelper.client.runtime;
 
 import dev.hylfrd.farmhelper.client.control.ClientInputController;
 import dev.hylfrd.farmhelper.client.control.ClientRotationController;
+import dev.hylfrd.farmhelper.client.control.MacroRotationLeaseTracker;
 import dev.hylfrd.farmhelper.client.control.inventory.ClientInventoryHotbarPort;
 import dev.hylfrd.farmhelper.client.control.inventory.MinecraftInventoryPort;
 import dev.hylfrd.farmhelper.client.platform.spatial.ClientSpatialSnapshotCapture;
@@ -52,6 +53,7 @@ public final class FarmHelperClientRuntime {
     private final FarmHelperRuntime core;
     private final ClientInputController input;
     private final ClientRotationController rotation;
+    private final MacroRotationLeaseTracker macroRotationLease = new MacroRotationLeaseTracker();
     private final InventoryController inventory;
     private final ClientCancellationFanout cancellationFanout;
     private final ClientRuntimeLifecycle lifecycle;
@@ -132,6 +134,10 @@ public final class FarmHelperClientRuntime {
 
     public ClientRotationController rotation() {
         return rotation;
+    }
+
+    public MacroRotationLeaseTracker macroRotationLease() {
+        return macroRotationLease;
     }
 
     public InventoryController inventory() {
@@ -221,8 +227,7 @@ public final class FarmHelperClientRuntime {
 
     public boolean saveConfig(FarmHelperConfig replacement) {
         FarmHelperConfig snapshot = replacement.copy();
-        if (core.macroManager().enabled()
-                && snapshot.macroMode() != core.config().macroMode()) {
+        if (core.macroManager().enabled()) {
             return false;
         }
         return replaceMacroConfig(snapshot);
@@ -319,6 +324,9 @@ public final class FarmHelperClientRuntime {
     }
 
     private boolean replaceMacroConfig(FarmHelperConfig replacement) {
+        if (core.macroManager().enabled()) {
+            return false;
+        }
         FarmHelperConfig before = core.config().copy();
         boolean diskChanged = false;
         try {
@@ -421,8 +429,8 @@ public final class FarmHelperClientRuntime {
     }
 
     private void releaseMacroControls() {
-        input.release(MacroControlOwner.S_SHAPE);
-        if (rotation.snapshot().owner().filter(MacroControlOwner.S_SHAPE::equals).isPresent()) {
+        input.release(MacroControlOwner.FARMING);
+        if (rotation.snapshot().owner().filter(MacroControlOwner.FARMING::equals).isPresent()) {
             rotation.cancel(RotationCancelReason.OWNER_CANCELLED);
         }
     }

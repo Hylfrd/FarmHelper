@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Consumer;
 
 public final class MacroManager implements MacroLifecycleTarget {
     private static final Runnable NOOP_OBSERVER = () -> { };
@@ -63,10 +64,12 @@ public final class MacroManager implements MacroLifecycleTarget {
         registry = activeMacro == null
                 ? new MacroRegistry(Map.of(
                         MacroFamily.VERTICAL_S_SHAPE,
-                        () -> new SShapeVerticalCropMacro(settings,
+                        () -> new SShapeVerticalCropMacro(settings.snapshot(),
+                                () -> ThreadLocalRandom.current().nextDouble(),
                                 () -> ThreadLocalRandom.current().nextDouble()),
                         MacroFamily.MELON_PUMPKIN_DEFAULT,
-                        () -> new SShapeMelonPumpkinDefaultMacro(settings,
+                        () -> new SShapeMelonPumpkinDefaultMacro(settings.snapshot(),
+                                () -> ThreadLocalRandom.current().nextDouble(),
                                 () -> ThreadLocalRandom.current().nextDouble())))
                 : new MacroRegistry(Map.of());
         this.activeMacro = activeMacro == null
@@ -119,6 +122,15 @@ public final class MacroManager implements MacroLifecycleTarget {
         return settings;
     }
 
+    /** The sole production mutation boundary; active runs own an immutable settings snapshot. */
+    public void updateSettings(Consumer<MacroSettings> update) {
+        Objects.requireNonNull(update, "update");
+        if (enabled()) {
+            throw new IllegalStateException("cannot change macro settings during an active run");
+        }
+        update.accept(settings);
+    }
+
     public String lastStatus() {
         return lastStatus;
     }
@@ -160,11 +172,13 @@ public final class MacroManager implements MacroLifecycleTarget {
                         new IllegalStateException("Macro mode " + settings.macroMode().code()
                                 + " is recognized but not implemented"));
         acquisitionGuard.run();
+        settings.freeze();
         runningTicks = 0L;
         activeMacro = next;
         try {
             lifecycle.start();
         } catch (RuntimeException | Error failure) {
+            settings.thaw();
             lastTerminalReason = MacroTerminalReason.EXCEPTION;
             runningTicks = 0L;
             throw failure;
@@ -255,6 +269,7 @@ public final class MacroManager implements MacroLifecycleTarget {
         } finally {
             runningTicks = 0L;
             lastStatus = "stopped:" + reason.name().toLowerCase();
+            settings.thaw();
         }
     }
 }

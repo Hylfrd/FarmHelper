@@ -7,6 +7,7 @@ import dev.hylfrd.farmhelper.control.rotation.RotationController;
 import dev.hylfrd.farmhelper.control.rotation.RotationHandle;
 import dev.hylfrd.farmhelper.control.rotation.RotationSnapshot;
 import dev.hylfrd.farmhelper.control.rotation.RotationProfile;
+import dev.hylfrd.farmhelper.control.rotation.RotationCallback;
 import dev.hylfrd.farmhelper.runtime.time.MonotonicClock;
 import dev.hylfrd.farmhelper.runtime.time.SystemMonotonicClock;
 import net.minecraft.client.Minecraft;
@@ -89,6 +90,22 @@ public final class ClientRotationController {
         acquisitionGuard.run();
         return controller.start(Objects.requireNonNull(owner, "owner"), startYaw, startPitch,
                 targetYaw, targetPitch, durationMs, profile, backModifier);
+    }
+
+    public RotationHandle start(
+            ControlOwner owner,
+            float startYaw,
+            float startPitch,
+            float targetYaw,
+            float targetPitch,
+            long durationMs,
+            RotationProfile profile,
+            float backModifier,
+            RotationCallback callback) {
+        acquisitionGuard.run();
+        return controller.start(Objects.requireNonNull(owner, "owner"), startYaw, startPitch,
+                targetYaw, targetPitch, durationMs, profile, backModifier,
+                Objects.requireNonNull(callback, "callback"));
     }
 
     boolean start(RotationView view, float targetYaw, float targetPitch, long durationMs) {
