@@ -90,17 +90,29 @@ class SpatialModelTest {
         assertEquals(List.of(maximum),
                 new CollisionShapeSnapshot(List.of(maximum)).boxes());
 
-        double below = Math.nextDown(
-                CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE);
-        double above = Math.nextUp(CollisionShapeSnapshot.MAX_VERTICAL_LOCAL_COORDINATE);
         assertThrows(IllegalArgumentException.class, () -> new CollisionShapeSnapshot(List.of(
-                new BoxSnapshot(below, 0, 0, 1, 1, 1))));
-        assertThrows(IllegalArgumentException.class, () -> new CollisionShapeSnapshot(List.of(
-                new BoxSnapshot(0, 0, 0, 1, above, 1))));
+                new BoxSnapshot(
+                        Math.nextDown(CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE),
+                        0, 0, 1, 1, 1))));
         assertThrows(IllegalArgumentException.class, () -> new CollisionShapeSnapshot(List.of(
                 new BoxSnapshot(0, 0, 0,
                         Math.nextUp(CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE),
                         1, 1))));
+        assertThrows(IllegalArgumentException.class, () -> new CollisionShapeSnapshot(List.of(
+                new BoxSnapshot(0,
+                        Math.nextDown(CollisionShapeSnapshot.MIN_VERTICAL_LOCAL_COORDINATE),
+                        0, 1, 1, 1))));
+        assertThrows(IllegalArgumentException.class, () -> new CollisionShapeSnapshot(List.of(
+                new BoxSnapshot(0, 0, 0, 1,
+                        Math.nextUp(CollisionShapeSnapshot.MAX_VERTICAL_LOCAL_COORDINATE),
+                        1))));
+        assertThrows(IllegalArgumentException.class, () -> new CollisionShapeSnapshot(List.of(
+                new BoxSnapshot(0, 0,
+                        Math.nextDown(CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE),
+                        1, 1, 1))));
+        assertThrows(IllegalArgumentException.class, () -> new CollisionShapeSnapshot(List.of(
+                new BoxSnapshot(0, 0, 0, 1, 1,
+                        Math.nextUp(CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE)))));
         assertThrows(IllegalArgumentException.class, () -> new CollisionShapeSnapshot(List.of(
                 new BoxSnapshot(0.5D, 0.5D, 0.5D, 0.5D, 0.5D, 0.5D))));
         assertThrows(IllegalArgumentException.class,

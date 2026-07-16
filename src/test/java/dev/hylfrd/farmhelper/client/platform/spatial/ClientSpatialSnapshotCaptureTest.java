@@ -48,5 +48,17 @@ class ClientSpatialSnapshotCaptureTest {
                 0, 0, 0,
                 1, Math.nextUp(CollisionShapeSnapshot.MAX_VERTICAL_LOCAL_COORDINATE), 1));
         assertTrue(outside.isUnknown());
+        assertTrue(ClientSpatialSnapshotCapture.captureCollision(Shapes.box(
+                0, Math.nextDown(CollisionShapeSnapshot.MIN_VERTICAL_LOCAL_COORDINATE), 0,
+                1, 1, 1)).isUnknown());
+        assertTrue(ClientSpatialSnapshotCapture.captureCollision(Shapes.box(
+                0, 0, 0,
+                Math.nextUp(CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE),
+                1, 1)).isUnknown());
+        assertTrue(ClientSpatialSnapshotCapture.captureCollision(Shapes.box(
+                0, 0, 0,
+                1, 1,
+                Math.nextUp(CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE)))
+                .isUnknown());
     }
 }

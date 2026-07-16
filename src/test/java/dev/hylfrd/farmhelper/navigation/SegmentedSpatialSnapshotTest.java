@@ -344,6 +344,70 @@ class SegmentedSpatialSnapshotTest {
     }
 
     @Test
+    void horizontalXOuterRingIsRequiredForFlyCollisionEvidence() {
+        BoxSnapshot bounds = new BoxSnapshot(-1, -1, -1, 2, 3, 2);
+        BoxSnapshot body = new BoxSnapshot(0.75D, 1.25D, 0.25D,
+                0.875D, 1.75D, 0.75D);
+        BlockPosition outerOrigin = new BlockPosition(-1, 1, 0);
+        BoxSnapshot maximum = new BoxSnapshot(
+                0, 0, 0, CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE, 1, 1);
+        Map<BlockPosition, Observation<BlockStateSnapshot>> collision = withCell(
+                allAir(bounds), outerOrigin, Observation.present(shaped(maximum)));
+        SegmentedSpatialSnapshot blocked = new SegmentedSpatialSnapshot(
+                CAPTURE, bounds, List.of(segment(0, 74L, bounds, collision)));
+        assertEquals(SpaceEvidenceReason.COLLISION,
+                Traversability.evaluate(blocked, CAPTURE, body, NavigationMode.FLY).reason());
+
+        Map<BlockPosition, Observation<BlockStateSnapshot>> unknown =
+                new LinkedHashMap<>(allAir(bounds));
+        unknown.remove(outerOrigin);
+        SegmentedSpatialSnapshot missingOuter = new SegmentedSpatialSnapshot(
+                CAPTURE, bounds, List.of(segment(0, 75L, bounds, unknown)));
+        assertEquals(SpaceEvidenceReason.UNKNOWN_EVIDENCE,
+                Traversability.evaluate(missingOuter, CAPTURE, body, NavigationMode.FLY).reason());
+
+        BoxSnapshot touching = new BoxSnapshot(0, 0, 0, 1.75D, 1, 1);
+        SegmentedSpatialSnapshot boundary = new SegmentedSpatialSnapshot(
+                CAPTURE, bounds, List.of(segment(0, 76L, bounds, withCell(
+                allAir(bounds), outerOrigin, Observation.present(shaped(touching))))));
+        assertTrue(Traversability.evaluate(boundary, CAPTURE, body, NavigationMode.FLY)
+                .traversable());
+    }
+
+    @Test
+    void horizontalZOuterRingIsRequiredForWalkCollisionEvidence() {
+        BoxSnapshot bounds = new BoxSnapshot(-1, -1, -1, 2, 4, 2);
+        BoxSnapshot body = new BoxSnapshot(0.25D, 1.0D, 0.75D,
+                0.75D, 2.8D, 0.875D);
+        BlockPosition outerOrigin = new BlockPosition(0, 1, -1);
+        BoxSnapshot maximum = new BoxSnapshot(
+                0, 0, 0, 1, 1, CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE);
+        Map<BlockPosition, Observation<BlockStateSnapshot>> supported = withCell(
+                allAir(bounds), new BlockPosition(0, 0, 0), Observation.present(solid()));
+        Map<BlockPosition, Observation<BlockStateSnapshot>> collision = withCell(
+                supported, outerOrigin, Observation.present(shaped(maximum)));
+        SegmentedSpatialSnapshot blocked = new SegmentedSpatialSnapshot(
+                CAPTURE, bounds, List.of(segment(0, 77L, bounds, collision)));
+        assertEquals(SpaceEvidenceReason.COLLISION,
+                Traversability.evaluate(blocked, CAPTURE, body, NavigationMode.WALK).reason());
+
+        Map<BlockPosition, Observation<BlockStateSnapshot>> unknown =
+                new LinkedHashMap<>(supported);
+        unknown.remove(outerOrigin);
+        SegmentedSpatialSnapshot missingOuter = new SegmentedSpatialSnapshot(
+                CAPTURE, bounds, List.of(segment(0, 78L, bounds, unknown)));
+        assertEquals(SpaceEvidenceReason.UNKNOWN_EVIDENCE,
+                Traversability.evaluate(missingOuter, CAPTURE, body, NavigationMode.WALK).reason());
+
+        BoxSnapshot touching = new BoxSnapshot(0, 0, 0, 1, 1, 1.75D);
+        SegmentedSpatialSnapshot boundary = new SegmentedSpatialSnapshot(
+                CAPTURE, bounds, List.of(segment(0, 79L, bounds, withCell(
+                supported, outerOrigin, Observation.present(shaped(touching))))));
+        assertTrue(Traversability.evaluate(boundary, CAPTURE, body, NavigationMode.WALK)
+                .traversable());
+    }
+
+    @Test
     void walkRequiresOneSegmentForCombinedBodyAndSupportEnvelope() {
         BoxSnapshot logical = new BoxSnapshot(0, 0, 0, 1, 5, 1);
         BoxSnapshot body = new BoxSnapshot(0.2D, 1.5D, 0.2D, 0.8D, 2.3D, 0.8D);
