@@ -54,6 +54,8 @@ class FarmHelperRuntimeTest {
     void macroSettingsSynchronizationAtomicallyClearsAbsentLocations() {
         FarmHelperConfig config = new FarmHelperConfig();
         config.setMacroMode(5);
+        config.setAlwaysHoldW(true);
+        config.setHoldLeftClickWhenChangingRow(false);
         config.setMacroSpawn(new MacroLocationConfig(0, 70, 0, 91.5F, -12.25F, 7));
         config.addMacroRewarp(new MacroLocationConfig(3, 70, 0, 0F, 0F, 0));
         FarmHelperRuntime runtime = new FarmHelperRuntime(config);
@@ -62,6 +64,8 @@ class FarmHelperRuntimeTest {
         assertEquals(-12.25F, runtime.macroManager().settings().spawn().orElseThrow().pitch());
         assertEquals(7, runtime.macroManager().settings().spawn().orElseThrow().plot());
         assertEquals(1, runtime.macroManager().settings().rewarps().size());
+        assertTrue(runtime.macroManager().settings().alwaysHoldW());
+        assertFalse(runtime.macroManager().settings().holdLeftClickWhenChangingRow());
 
         config.reset();
         runtime.synchronizeMacroSettings();
@@ -69,6 +73,8 @@ class FarmHelperRuntimeTest {
         assertTrue(runtime.macroManager().settings().spawn().isEmpty());
         assertTrue(runtime.macroManager().settings().rewarps().isEmpty());
         assertEquals(0, runtime.macroManager().settings().mode().code());
+        assertFalse(runtime.macroManager().settings().alwaysHoldW());
+        assertTrue(runtime.macroManager().settings().holdLeftClickWhenChangingRow());
     }
 
     private static final class MutableClock implements MonotonicClock {

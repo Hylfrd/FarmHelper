@@ -166,10 +166,24 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
                 inGarden,
                 developmentGarden,
                 runtime.core().serverResponsiveness(snapshot.connection().isPresent()),
-                client.player == null ? Observation.unknown() : Observation.present(
-                        new PlayerPosture(client.player.getAbilities().flying,
-                                client.player.onGround()))));
+                capturePlayerPosture(client)));
         applyDecision(snapshot, decision);
+    }
+
+    static Observation<PlayerPosture> capturePlayerPosture(Minecraft client) {
+        Objects.requireNonNull(client, "client");
+        if (client.player == null || client.level == null) {
+            return Observation.unknown();
+        }
+        try {
+            boolean suffocating = client.level.getBlockCollisions(
+                    client.player, client.player.getBoundingBox().contract(
+                            0.15D, 0.15D, 0.15D)).iterator().hasNext();
+            return Observation.present(new PlayerPosture(
+                    client.player.getAbilities().flying, client.player.onGround(), suffocating));
+        } catch (RuntimeException exception) {
+            return Observation.unknown();
+        }
     }
 
     static Observation<SpatialSnapshot> captureMacroSpatial(

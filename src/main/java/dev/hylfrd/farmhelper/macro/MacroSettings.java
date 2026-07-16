@@ -12,6 +12,8 @@ public final class MacroSettings {
     private VerticalCropMode mode = VerticalCropMode.NORMAL;
     private MacroSpawnPose spawn;
     private final List<RewarpPosition> rewarps = new ArrayList<>();
+    private boolean alwaysHoldW;
+    private boolean holdLeftClickWhenChangingRow = true;
 
     public VerticalCropMode mode() {
         return mode;
@@ -19,6 +21,22 @@ public final class MacroSettings {
 
     public void mode(VerticalCropMode mode) {
         this.mode = Objects.requireNonNull(mode, "mode");
+    }
+
+    public boolean alwaysHoldW() {
+        return alwaysHoldW;
+    }
+
+    public void alwaysHoldW(boolean alwaysHoldW) {
+        this.alwaysHoldW = alwaysHoldW;
+    }
+
+    public boolean holdLeftClickWhenChangingRow() {
+        return holdLeftClickWhenChangingRow;
+    }
+
+    public void holdLeftClickWhenChangingRow(boolean holdLeftClickWhenChangingRow) {
+        this.holdLeftClickWhenChangingRow = holdLeftClickWhenChangingRow;
     }
 
     public Optional<MacroSpawnPose> spawn() {
@@ -71,6 +89,16 @@ public final class MacroSettings {
             Optional<MacroSpawnPose> spawn,
             List<RewarpPosition> rewarps
     ) {
+        replace(mode, spawn, rewarps, false, true);
+    }
+
+    public void replace(
+            VerticalCropMode mode,
+            Optional<MacroSpawnPose> spawn,
+            List<RewarpPosition> rewarps,
+            boolean alwaysHoldW,
+            boolean holdLeftClickWhenChangingRow
+    ) {
         VerticalCropMode validatedMode = Objects.requireNonNull(mode, "mode");
         Optional<MacroSpawnPose> validatedSpawn = Objects.requireNonNull(spawn, "spawn");
         List<RewarpPosition> validatedRewarps = List.copyOf(rewarps);
@@ -89,5 +117,7 @@ public final class MacroSettings {
         this.spawn = validatedSpawn.orElse(null);
         this.rewarps.clear();
         this.rewarps.addAll(validatedRewarps);
+        this.alwaysHoldW = alwaysHoldW;
+        this.holdLeftClickWhenChangingRow = holdLeftClickWhenChangingRow;
     }
 }

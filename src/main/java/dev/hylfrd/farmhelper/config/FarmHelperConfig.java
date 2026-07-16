@@ -7,7 +7,7 @@ import java.util.Optional;
 
 /** Mutable, version-independent runtime view of FarmHelper's local settings. */
 public final class FarmHelperConfig {
-    public static final int CURRENT_SCHEMA_VERSION = 4;
+    public static final int CURRENT_SCHEMA_VERSION = 5;
     public static final int DEFAULT_OPEN_SETTINGS_KEY = 344;
 
     private float targetYaw = 0.0F;
@@ -16,6 +16,8 @@ public final class FarmHelperConfig {
     private int macroMode;
     private MacroLocationConfig macroSpawn;
     private final List<MacroLocationConfig> macroRewarps = new ArrayList<>();
+    private boolean alwaysHoldW;
+    private boolean holdLeftClickWhenChangingRow = true;
 
     public int schemaVersion() {
         return CURRENT_SCHEMA_VERSION;
@@ -62,6 +64,22 @@ public final class FarmHelperConfig {
         this.macroMode = macroMode;
     }
 
+    public boolean alwaysHoldW() {
+        return alwaysHoldW;
+    }
+
+    public void setAlwaysHoldW(boolean alwaysHoldW) {
+        this.alwaysHoldW = alwaysHoldW;
+    }
+
+    public boolean holdLeftClickWhenChangingRow() {
+        return holdLeftClickWhenChangingRow;
+    }
+
+    public void setHoldLeftClickWhenChangingRow(boolean holdLeftClickWhenChangingRow) {
+        this.holdLeftClickWhenChangingRow = holdLeftClickWhenChangingRow;
+    }
+
     public Optional<MacroLocationConfig> macroSpawn() {
         return Optional.ofNullable(macroSpawn);
     }
@@ -106,11 +124,14 @@ public final class FarmHelperConfig {
         macroMode = 0;
         macroSpawn = null;
         macroRewarps.clear();
+        alwaysHoldW = false;
+        holdLeftClickWhenChangingRow = true;
     }
 
     public FarmHelperConfig copy() {
         return fromPersisted(targetYaw, targetPitch, openSettingsKey,
-                macroMode, macroSpawn, macroRewarps);
+                macroMode, macroSpawn, macroRewarps, alwaysHoldW,
+                holdLeftClickWhenChangingRow);
     }
 
     public void replaceWith(FarmHelperConfig replacement) {
@@ -122,6 +143,8 @@ public final class FarmHelperConfig {
         macroSpawn = replacement.macroSpawn;
         macroRewarps.clear();
         macroRewarps.addAll(replacement.macroRewarps);
+        alwaysHoldW = replacement.alwaysHoldW;
+        holdLeftClickWhenChangingRow = replacement.holdLeftClickWhenChangingRow;
     }
 
     static FarmHelperConfig fromPersisted(float targetYaw, float targetPitch) {
@@ -139,6 +162,20 @@ public final class FarmHelperConfig {
             int macroMode,
             MacroLocationConfig macroSpawn,
             List<MacroLocationConfig> macroRewarps
+    ) {
+        return fromPersisted(targetYaw, targetPitch, openSettingsKey, macroMode,
+                macroSpawn, macroRewarps, false, true);
+    }
+
+    static FarmHelperConfig fromPersisted(
+            float targetYaw,
+            float targetPitch,
+            int openSettingsKey,
+            int macroMode,
+            MacroLocationConfig macroSpawn,
+            List<MacroLocationConfig> macroRewarps,
+            boolean alwaysHoldW,
+            boolean holdLeftClickWhenChangingRow
     ) {
         requireFinite(targetYaw, "rotation.targetYaw");
         requireFinite(targetPitch, "rotation.targetPitch");
@@ -162,6 +199,8 @@ public final class FarmHelperConfig {
                 throw new IllegalArgumentException("macro rewarps overlap spawn or each other");
             }
         }
+        config.alwaysHoldW = alwaysHoldW;
+        config.holdLeftClickWhenChangingRow = holdLeftClickWhenChangingRow;
         return config;
     }
 

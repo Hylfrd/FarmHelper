@@ -12,6 +12,7 @@ import dev.hylfrd.farmhelper.control.rotation.RotationTerminalReason;
 import dev.hylfrd.farmhelper.macro.MacroWarpRequest;
 import dev.hylfrd.farmhelper.macro.MacroDecision;
 import dev.hylfrd.farmhelper.macro.MacroRotationRequest;
+import dev.hylfrd.farmhelper.macro.MacroRecoveryReason;
 import dev.hylfrd.farmhelper.macro.MacroSpawnPose;
 import dev.hylfrd.farmhelper.macro.MacroControlOwner;
 import dev.hylfrd.farmhelper.macro.FeatureSuspension;
@@ -223,6 +224,34 @@ class ClientTickAdapterTest {
             assertEquals(feature, runtime.input().snapshot().ownerOf(InputAction.USE).orElseThrow());
             assertEquals(feature, runtime.input().snapshot().hotbarOwner().orElseThrow());
         }
+    }
+
+    @Test
+    void recoveryHandoffReleasesEveryMacroControlWithoutTouchingFeatureInput() {
+        FarmHelperClientRuntime runtime = runtime("recovery-handoff.json");
+        runtime.input().hold(MacroControlOwner.S_SHAPE,
+                List.of(InputAction.ATTACK, InputAction.RIGHT), Optional.empty());
+        runtime.rotation().start(MacroControlOwner.S_SHAPE,
+                0F, 0F, 45F, 5F, 1_000L);
+        ControlOwner feature = new ControlOwner("recovery-feature");
+        runtime.input().hold(feature, InputAction.USE);
+        MacroDecision handoff = MacroDecision.recoveryHandoff(
+                "row-stalled", MacroRecoveryReason.ROW_STALLED);
+
+        TestClientTickAdapterAccess.applyManagedDecision(runtime, handoff);
+
+        assertTrue(handoff.inputs().isEmpty());
+        assertTrue(handoff.rotation().isEmpty());
+        assertTrue(handoff.warp().isEmpty());
+        assertEquals(MacroRecoveryReason.ROW_STALLED,
+                handoff.recovery().orElseThrow().reason());
+        assertTrue(runtime.input().snapshot().ownerOf(InputAction.ATTACK).isEmpty());
+        assertTrue(runtime.input().snapshot().ownerOf(InputAction.RIGHT).isEmpty());
+        assertEquals(feature,
+                runtime.input().snapshot().ownerOf(InputAction.USE).orElseThrow());
+        assertFalse(runtime.rotation().rotating());
+        assertEquals(RotationTerminalReason.OWNER_CANCELLED,
+                runtime.rotation().snapshot().terminalReason().orElseThrow());
     }
 
     @Test

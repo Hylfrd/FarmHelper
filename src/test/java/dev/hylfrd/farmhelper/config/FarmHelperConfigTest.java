@@ -3,7 +3,9 @@ package dev.hylfrd.farmhelper.config;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FarmHelperConfigTest {
     @Test
@@ -23,12 +25,32 @@ class FarmHelperConfigTest {
         config.setTargetYaw(45.0F);
         config.setTargetPitch(-30.0F);
         config.setOpenSettingsKey(65);
+        config.setAlwaysHoldW(true);
+        config.setHoldLeftClickWhenChangingRow(false);
 
         config.reset();
 
         assertEquals(0.0F, config.targetYaw());
         assertEquals(0.0F, config.targetPitch());
         assertEquals(FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY, config.openSettingsKey());
+        assertFalse(config.alwaysHoldW());
+        assertTrue(config.holdLeftClickWhenChangingRow());
+    }
+
+    @Test
+    void copyPreservesIndependentMacroInputConfiguration() {
+        FarmHelperConfig config = new FarmHelperConfig();
+        config.setAlwaysHoldW(true);
+        config.setHoldLeftClickWhenChangingRow(false);
+
+        FarmHelperConfig copy = config.copy();
+        config.setAlwaysHoldW(false);
+        config.setHoldLeftClickWhenChangingRow(true);
+
+        assertTrue(copy.alwaysHoldW());
+        assertFalse(copy.holdLeftClickWhenChangingRow());
+        assertFalse(config.alwaysHoldW());
+        assertTrue(config.holdLeftClickWhenChangingRow());
     }
 
     @Test

@@ -7,34 +7,31 @@ import java.util.Set;
 
 /** The six upstream vertical S-shape modes that are safe to select in P1. */
 public enum VerticalCropMode {
-    NORMAL(0, 2.8F, 0.5F, false, Set.of(
-            CropBlockKind.WHEAT, CropBlockKind.CARROT, CropBlockKind.POTATO)),
-    PUMPKIN_MELON(1, 28.0F, 2.0F, true, Set.of(
+    NORMAL(0, 2.8F, 0.5F, Set.of(
+            CropBlockKind.WHEAT, CropBlockKind.CARROT, CropBlockKind.POTATO,
+            CropBlockKind.NETHER_WART)),
+    PUMPKIN_MELON(1, 28.0F, 2.0F, Set.of(
             CropBlockKind.PUMPKIN, CropBlockKind.MELON)),
-    MELONGKINGDE(2, -59.2F, 1.0F, false, Set.of(
+    MELONGKINGDE(2, -59.2F, 1.0F, Set.of(
             CropBlockKind.PUMPKIN, CropBlockKind.MELON)),
-    CACTUS_NETHER_WART(5, 0.0F, 0.5F, false, Set.of(
-            CropBlockKind.CACTUS, CropBlockKind.NETHER_WART)),
-    SUNTZU(6, -38.0F, -1.5F, true, Set.of(CropBlockKind.CACTUS)),
-    COCOA(9, -90.0F, 0.0F, false, Set.of(CropBlockKind.COCOA));
+    CACTUS(5, 0.0F, 0.5F, Set.of(CropBlockKind.CACTUS)),
+    SUNTZU(6, -38.0F, -1.5F, Set.of(CropBlockKind.CACTUS)),
+    COCOA(9, -90.0F, 0.0F, Set.of(CropBlockKind.COCOA));
 
     private final int code;
     private final float pitch;
     private final float pitchJitter;
-    private final boolean forwardAssist;
     private final Set<CropBlockKind> crops;
 
     VerticalCropMode(
             int code,
             float pitch,
             float pitchJitter,
-            boolean forwardAssist,
             Set<CropBlockKind> crops
     ) {
         this.code = code;
         this.pitch = pitch;
         this.pitchJitter = pitchJitter;
-        this.forwardAssist = forwardAssist;
         this.crops = Set.copyOf(crops);
     }
 
@@ -57,10 +54,6 @@ public enum VerticalCropMode {
         return result;
     }
 
-    public boolean forwardAssist() {
-        return forwardAssist;
-    }
-
     public boolean accepts(CropBlockKind kind) {
         return compatibility(kind) == CropCompatibility.COMPATIBLE;
     }
@@ -70,7 +63,7 @@ public enum VerticalCropMode {
     }
 
     public boolean cactusMode() {
-        return this == CACTUS_NETHER_WART || this == SUNTZU;
+        return this == CACTUS || this == SUNTZU;
     }
 
     public static Optional<VerticalCropMode> fromCode(int code) {

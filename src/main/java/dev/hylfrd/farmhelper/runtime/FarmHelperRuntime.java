@@ -136,6 +136,7 @@ public final class FarmHelperRuntime {
                                 spawn.yaw(), spawn.pitch(), spawn.plot())),
                 config.macroRewarps().stream().map(rewarp ->
                         new dev.hylfrd.farmhelper.runtime.spatial.RewarpPosition(
-                                rewarp.x(), rewarp.y(), rewarp.z())).toList());
+                                rewarp.x(), rewarp.y(), rewarp.z())).toList(),
+                config.alwaysHoldW(), config.holdLeftClickWhenChangingRow());
     }
 }

@@ -12,7 +12,8 @@ public record MacroDecision(
         Optional<MacroRotationRequest> rotation,
         Optional<MacroWarpRequest> warp,
         String status,
-        MacroRotationDisposition rotationDisposition
+        MacroRotationDisposition rotationDisposition,
+        Optional<MacroRecoveryRequest> recovery
 ) {
     public MacroDecision {
         Objects.requireNonNull(inputs, "inputs");
@@ -20,6 +21,7 @@ public record MacroDecision(
         Objects.requireNonNull(warp, "warp");
         Objects.requireNonNull(status, "status");
         Objects.requireNonNull(rotationDisposition, "rotationDisposition");
+        Objects.requireNonNull(recovery, "recovery");
         inputs = Set.copyOf(inputs);
         if (status.isBlank()) {
             throw new IllegalArgumentException("status must not be blank");
@@ -30,6 +32,20 @@ public record MacroDecision(
         if (rotationDisposition != MacroRotationDisposition.REPLACE && rotation.isPresent()) {
             throw new IllegalArgumentException("rotation request requires REPLACE");
         }
+        if (recovery.isPresent() && (!inputs.isEmpty() || rotation.isPresent() || warp.isPresent()
+                || rotationDisposition != MacroRotationDisposition.RELEASE)) {
+            throw new IllegalArgumentException("recovery handoff must release every active control");
+        }
+    }
+
+    public MacroDecision(
+            Set<InputAction> inputs,
+            Optional<MacroRotationRequest> rotation,
+            Optional<MacroWarpRequest> warp,
+            String status,
+            MacroRotationDisposition rotationDisposition
+    ) {
+        this(inputs, rotation, warp, status, rotationDisposition, Optional.empty());
     }
 
     public MacroDecision(
@@ -39,7 +55,8 @@ public record MacroDecision(
             String status
     ) {
         this(inputs, rotation, warp, status, rotation.isPresent()
-                ? MacroRotationDisposition.REPLACE : MacroRotationDisposition.KEEP);
+                ? MacroRotationDisposition.REPLACE : MacroRotationDisposition.KEEP,
+                Optional.empty());
     }
 
     public static MacroDecision idle(String status) {
@@ -49,5 +66,11 @@ public record MacroDecision(
     public static MacroDecision failClosed(String status) {
         return new MacroDecision(Set.of(), Optional.empty(), Optional.empty(), status,
                 MacroRotationDisposition.RELEASE);
+    }
+
+    public static MacroDecision recoveryHandoff(String status, MacroRecoveryReason reason) {
+        return new MacroDecision(Set.of(), Optional.empty(), Optional.empty(), status,
+                MacroRotationDisposition.RELEASE,
+                Optional.of(new MacroRecoveryRequest(reason)));
     }
 }

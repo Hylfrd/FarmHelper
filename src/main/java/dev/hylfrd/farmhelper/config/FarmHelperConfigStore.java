@@ -30,9 +30,12 @@ public final class FarmHelperConfigStore {
     private static final Set<String> VERSION_TWO_ROOT_FIELDS = Set.of("schemaVersion", "rotation");
     private static final Set<String> VERSION_THREE_ROOT_FIELDS = Set.of("schemaVersion", "rotation", "ui");
     private static final Set<String> VERSION_FOUR_ROOT_FIELDS = Set.of("schemaVersion", "rotation", "ui", "macro");
+    private static final Set<String> VERSION_FIVE_ROOT_FIELDS = VERSION_FOUR_ROOT_FIELDS;
     private static final Set<String> ROTATION_FIELDS = Set.of("targetYaw", "targetPitch");
     private static final Set<String> UI_FIELDS = Set.of("openSettingsKey");
-    private static final Set<String> MACRO_FIELDS = Set.of("mode", "spawn", "rewarps");
+    private static final Set<String> VERSION_FOUR_MACRO_FIELDS = Set.of("mode", "spawn", "rewarps");
+    private static final Set<String> MACRO_FIELDS = Set.of(
+            "mode", "spawn", "rewarps", "alwaysHoldW", "holdLeftClickWhenChangingRow");
     private static final Set<String> LOCATION_FIELDS = Set.of("x", "y", "z", "yaw", "pitch", "plot");
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
@@ -80,6 +83,7 @@ public final class FarmHelperConfigStore {
                 case 1 -> migrateVersionOne(root);
                 case 2 -> readVersionTwo(root);
                 case 3 -> readVersionThree(root);
+                case 4 -> readVersionFour(root);
                 case FarmHelperConfig.CURRENT_SCHEMA_VERSION -> readCurrent(root);
                 default -> throw new ConfigFormatException("No migration path for schema version " + schemaVersion);
             };
@@ -99,7 +103,8 @@ public final class FarmHelperConfigStore {
         Objects.requireNonNull(config, "config");
         FarmHelperConfig validated = FarmHelperConfig.fromPersisted(
                 config.targetYaw(), config.targetPitch(), config.openSettingsKey(),
-                config.macroMode(), config.macroSpawn().orElse(null), config.macroRewarps());
+                config.macroMode(), config.macroSpawn().orElse(null), config.macroRewarps(),
+                config.alwaysHoldW(), config.holdLeftClickWhenChangingRow());
         byte[] json = (GSON.toJson(toJson(validated)) + System.lineSeparator()).getBytes(StandardCharsets.UTF_8);
 
         Path parent = configPath.getParent();
@@ -127,7 +132,7 @@ public final class FarmHelperConfigStore {
     }
 
     private static FarmHelperConfig readCurrent(JsonObject root) {
-        requireOnlyFields(root, VERSION_FOUR_ROOT_FIELDS, "configuration root");
+        requireOnlyFields(root, VERSION_FIVE_ROOT_FIELDS, "configuration root");
         JsonObject rotation = optionalObject(root, "rotation");
         float yaw = 0.0F;
         float pitch = 0.0F;
@@ -147,14 +152,49 @@ public final class FarmHelperConfigStore {
         int mode = 0;
         MacroLocationConfig spawn = null;
         java.util.List<MacroLocationConfig> rewarps = java.util.List.of();
+        boolean alwaysHoldW = false;
+        boolean holdLeftClickWhenChangingRow = true;
         if (macro != null) {
             requireOnlyFields(macro, MACRO_FIELDS, "macro");
             mode = optionalInteger(macro, "mode", 0);
             JsonObject spawnObject = optionalObject(macro, "spawn");
             spawn = spawnObject == null ? null : location(spawnObject, "macro.spawn");
             rewarps = locations(macro.get("rewarps"), "macro.rewarps");
+            alwaysHoldW = optionalBoolean(macro, "alwaysHoldW", false);
+            holdLeftClickWhenChangingRow = optionalBoolean(
+                    macro, "holdLeftClickWhenChangingRow", true);
         }
-        return FarmHelperConfig.fromPersisted(yaw, pitch, openSettingsKey, mode, spawn, rewarps);
+        return FarmHelperConfig.fromPersisted(yaw, pitch, openSettingsKey, mode, spawn, rewarps,
+                alwaysHoldW, holdLeftClickWhenChangingRow);
+    }
+
+    private static FarmHelperConfig readVersionFour(JsonObject root) {
+        requireOnlyFields(root, VERSION_FOUR_ROOT_FIELDS, "schema 4 configuration root");
+        JsonObject rotation = optionalObject(root, "rotation");
+        JsonObject ui = optionalObject(root, "ui");
+        JsonObject macro = optionalObject(root, "macro");
+        float yaw = rotation == null ? 0.0F : optionalFloat(rotation, "targetYaw", 0.0F);
+        float pitch = rotation == null ? 0.0F : optionalFloat(rotation, "targetPitch", 0.0F);
+        if (rotation != null) {
+            requireOnlyFields(rotation, ROTATION_FIELDS, "rotation");
+        }
+        int key = ui == null ? FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY
+                : optionalInteger(ui, "openSettingsKey", FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY);
+        if (ui != null) {
+            requireOnlyFields(ui, UI_FIELDS, "ui");
+        }
+        int mode = 0;
+        MacroLocationConfig spawn = null;
+        java.util.List<MacroLocationConfig> rewarps = java.util.List.of();
+        if (macro != null) {
+            requireOnlyFields(macro, VERSION_FOUR_MACRO_FIELDS, "macro");
+            mode = optionalInteger(macro, "mode", 0);
+            JsonObject spawnObject = optionalObject(macro, "spawn");
+            spawn = spawnObject == null ? null : location(spawnObject, "macro.spawn");
+            rewarps = locations(macro.get("rewarps"), "macro.rewarps");
+        }
+        return FarmHelperConfig.fromPersisted(yaw, pitch, key, mode, spawn, rewarps,
+                false, true);
     }
 
     private static FarmHelperConfig readVersionThree(JsonObject root) {
@@ -253,6 +293,9 @@ public final class FarmHelperConfigStore {
         JsonArray rewarps = new JsonArray();
         config.macroRewarps().forEach(rewarp -> rewarps.add(locationJson(rewarp)));
         macro.add("rewarps", rewarps);
+        macro.addProperty("alwaysHoldW", config.alwaysHoldW());
+        macro.addProperty("holdLeftClickWhenChangingRow",
+                config.holdLeftClickWhenChangingRow());
         root.add("macro", macro);
         return root;
     }
@@ -359,6 +402,17 @@ public final class FarmHelperConfigStore {
         } catch (ArithmeticException | NumberFormatException exception) {
             throw new ConfigFormatException(name + " must be an integer", exception);
         }
+    }
+
+    private static boolean optionalBoolean(JsonObject root, String name, boolean defaultValue) {
+        JsonElement value = root.get(name);
+        if (value == null || value.isJsonNull()) {
+            return defaultValue;
+        }
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isBoolean()) {
+            throw new ConfigFormatException(name + " must be a boolean");
+        }
+        return value.getAsBoolean();
     }
 
     private static void requireOnlyFields(JsonObject object, Set<String> allowedFields, String location) {

@@ -30,7 +30,7 @@ class FarmHelperConfigStoreTest {
         assertEquals(0.0F, result.config().targetYaw());
         assertEquals(0.0F, result.config().targetPitch());
         assertTrue(Files.isRegularFile(path));
-        assertTrue(Files.readString(path, StandardCharsets.UTF_8).contains("\"schemaVersion\": 4"));
+        assertTrue(Files.readString(path, StandardCharsets.UTF_8).contains("\"schemaVersion\": 5"));
         assertEquals(FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY, result.config().openSettingsKey());
     }
 
@@ -53,7 +53,7 @@ class FarmHelperConfigStoreTest {
     @Test
     void missingCurrentFieldsUseTypedDefaults() throws IOException {
         Path path = temporaryDirectory.resolve("farmhelper.json");
-        Files.writeString(path, "{\"schemaVersion\":4}", StandardCharsets.UTF_8);
+        Files.writeString(path, "{\"schemaVersion\":5}", StandardCharsets.UTF_8);
 
         ConfigLoadResult result = new FarmHelperConfigStore(path).load();
 
@@ -188,7 +188,7 @@ class FarmHelperConfigStoreTest {
         assertEquals(ConfigLoadStatus.MIGRATED, result.status());
         assertEquals(45.5F, result.config().targetYaw());
         assertEquals(-30.0F, result.config().targetPitch());
-        assertTrue(migrated.contains("\"schemaVersion\": 4"));
+        assertTrue(migrated.contains("\"schemaVersion\": 5"));
         assertTrue(migrated.contains("\"rotation\""));
         assertFalse(migrated.contains("\"targetYaw\": 45.5\n"));
     }
@@ -267,7 +267,7 @@ class FarmHelperConfigStoreTest {
         assertEquals(ConfigLoadStatus.MIGRATED, result.status());
         assertEquals(45.0F, result.config().targetYaw());
         assertEquals(FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY, result.config().openSettingsKey());
-        assertTrue(migrated.contains("\"schemaVersion\": 4"));
+        assertTrue(migrated.contains("\"schemaVersion\": 5"));
         assertTrue(migrated.contains("\"openSettingsKey\": 344"));
     }
 
@@ -305,6 +305,8 @@ class FarmHelperConfigStoreTest {
         Path path = temporaryDirectory.resolve("macro-roundtrip.json");
         FarmHelperConfig config = new FarmHelperConfig();
         config.setMacroMode(6);
+        config.setAlwaysHoldW(true);
+        config.setHoldLeftClickWhenChangingRow(false);
         config.setMacroSpawn(new MacroLocationConfig(10, 72, -10, 90.0F, -38.5F, 6));
         assertTrue(config.addMacroRewarp(
                 new MacroLocationConfig(20, 71, -10, 90.0F, -38.5F, 6)));
@@ -316,6 +318,50 @@ class FarmHelperConfigStoreTest {
         assertEquals(6, loaded.macroMode());
         assertEquals(config.macroSpawn(), loaded.macroSpawn());
         assertEquals(config.macroRewarps(), loaded.macroRewarps());
+        assertTrue(loaded.alwaysHoldW());
+        assertFalse(loaded.holdLeftClickWhenChangingRow());
+    }
+
+    @Test
+    void migratesVersionFourWithTypedMacroInputDefaults() throws IOException {
+        Path path = temporaryDirectory.resolve("schema-four.json");
+        Files.writeString(path, """
+                {
+                  "schemaVersion": 4,
+                  "macro": {"mode": 6}
+                }
+                """, StandardCharsets.UTF_8);
+
+        ConfigLoadResult result = new FarmHelperConfigStore(path).load();
+
+        assertEquals(ConfigLoadStatus.MIGRATED, result.status());
+        assertEquals(6, result.config().macroMode());
+        assertFalse(result.config().alwaysHoldW());
+        assertTrue(result.config().holdLeftClickWhenChangingRow());
+        String migrated = Files.readString(path, StandardCharsets.UTF_8);
+        assertTrue(migrated.contains("\"schemaVersion\": 5"));
+        assertTrue(migrated.contains("\"alwaysHoldW\": false"));
+        assertTrue(migrated.contains("\"holdLeftClickWhenChangingRow\": true"));
+    }
+
+    @Test
+    void macroInputFlagsRejectNonBooleanPersistedTypes() throws IOException {
+        for (String field : List.of("alwaysHoldW", "holdLeftClickWhenChangingRow")) {
+            Path path = temporaryDirectory.resolve(field + ".json");
+            Files.writeString(path, """
+                    {
+                      "schemaVersion": 5,
+                      "macro": {"%s": "false"}
+                    }
+                    """.formatted(field), StandardCharsets.UTF_8);
+
+            ConfigLoadResult result = new FarmHelperConfigStore(path).load();
+
+            assertEquals(ConfigLoadStatus.RECOVERED_DEFAULTS, result.status(), field);
+            assertTrue(result.backup().isPresent(), field);
+            assertFalse(result.config().alwaysHoldW(), field);
+            assertTrue(result.config().holdLeftClickWhenChangingRow(), field);
+        }
     }
 
     @Test
