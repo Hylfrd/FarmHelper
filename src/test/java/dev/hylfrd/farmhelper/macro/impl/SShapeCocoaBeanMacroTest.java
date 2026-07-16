@@ -162,16 +162,22 @@ class SShapeCocoaBeanMacroTest {
     void lineCompletionAndUpdateUseObservedCardinalAcrossAllAxes() {
         for (float currentYaw : List.of(0.0F, 90.0F, 180.0F, 270.0F)) {
             float startupYaw = MacroAngles.closestCardinal(currentYaw + 90.0F);
+            PositionSnapshot position = lineWindowPosition(currentYaw);
             assertNotEquals(MacroAngles.closestCardinal(currentYaw), startupYaw);
+            assertTrue(SShapeCocoaBeanMacro.lineFraction(
+                    currentYaw, position.x(), position.z()), "current yaw=" + currentYaw);
+            assertFalse(SShapeCocoaBeanMacro.lineFraction(
+                    startupYaw, position.x(), position.z()), "saved yaw=" + startupYaw);
             SShapeCocoaBeanMacro complete = alignedMacroAtYaw(
-                    validSettings(MacroMode.COCOA), zeros(30), zeros(20), START, startupYaw);
-            enterSwitchingLane(complete, START, startupYaw, currentYaw);
+                    validSettings(MacroMode.COCOA), zeros(30), zeros(20), position, startupYaw);
+            enterSwitchingLane(complete, position, startupYaw, currentYaw);
             Map<BlockPosition, Observation<BlockStateSnapshot>> completeEvidence = new HashMap<>(
-                    walkability(START, startupYaw, true, false, true, true));
+                    walkability(position, startupYaw, true, false, true, true));
             completeEvidence.put(UpstreamCurrentYawFrame.from(currentYaw).blockAt(
-                    START.x(), START.y(), START.z(), -1, 0, 1), Observation.present(full()));
+                    position.x(), position.y(), position.z(), -1, 0, 1),
+                    Observation.present(full()));
 
-            MacroDecision invoked = step(complete, 5L, START, currentYaw, -70.0F,
+            MacroDecision invoked = step(complete, 5L, position, currentYaw, -70.0F,
                     STILL, grounded(), completeEvidence);
 
             assertEquals(SShapeCocoaBeanMacro.State.FORWARD, complete.state(),
@@ -180,11 +186,11 @@ class SShapeCocoaBeanMacroTest {
             assertTrue(invoked.inputs().isEmpty());
 
             SShapeCocoaBeanMacro update = alignedMacroAtYaw(
-                    validSettings(MacroMode.COCOA), zeros(30), zeros(20), START, startupYaw);
-            enterSwitchingLane(update, START, startupYaw, currentYaw);
-            MacroDecision updated = step(update, 5L, START, currentYaw, -70.0F,
+                    validSettings(MacroMode.COCOA), zeros(30), zeros(20), position, startupYaw);
+            enterSwitchingLane(update, position, startupYaw, currentYaw);
+            MacroDecision updated = step(update, 5L, position, currentYaw, -70.0F,
                     STILL, grounded(),
-                    walkability(START, startupYaw, true, false, false, true));
+                    walkability(position, startupYaw, true, false, false, true));
             assertEquals(SShapeCocoaBeanMacro.State.FORWARD, update.state(),
                     "update yaw=" + currentYaw);
             assertTrue(updated.inputs().containsAll(
@@ -198,13 +204,13 @@ class SShapeCocoaBeanMacroTest {
         for (MacroMode mode : List.of(MacroMode.COCOA, MacroMode.COCOA_TRAPDOORS)) {
             for (float currentYaw : List.of(0.0F, 90.0F, 180.0F, 270.0F)) {
                 float startupYaw = MacroAngles.closestCardinal(currentYaw + 90.0F);
-                PositionSnapshot position = currentYaw == 0.0F
-                        ? new PositionSnapshot(0.2D, 1.0D, 0.5D)
-                        : currentYaw == 90.0F
-                                ? new PositionSnapshot(0.5D, 1.0D, 0.2D)
-                                : currentYaw == 180.0F
-                                        ? new PositionSnapshot(0.6D, 1.0D, 0.5D)
-                                        : new PositionSnapshot(0.5D, 1.0D, 0.6D);
+                PositionSnapshot position = hugWindowPosition(currentYaw);
+                assertTrue(SShapeCocoaBeanMacro.hugWindow(
+                        mode.code(), currentYaw, position.x(), position.z()),
+                        "current mode=" + mode + " yaw=" + currentYaw);
+                assertFalse(SShapeCocoaBeanMacro.hugWindow(
+                        mode.code(), startupYaw, position.x(), position.z()),
+                        "saved mode=" + mode + " yaw=" + startupYaw);
                 SShapeCocoaBeanMacro macro = alignedMacroAtYaw(
                         validSettings(mode), zeros(20), zeros(20), position, startupYaw);
                 Map<BlockPosition, Observation<BlockStateSnapshot>> evidence = new HashMap<>(
@@ -708,6 +714,38 @@ class SShapeCocoaBeanMacroTest {
         double z = yaw == 90.0F || yaw == 270.0F ? coordinate : 0.0D;
         assertEquals(expected, SShapeCocoaBeanMacro.hugWindow(mode, yaw, x, z),
                 "mode=" + mode + " yaw=" + yaw + " coordinate=" + coordinate);
+    }
+
+    private static PositionSnapshot lineWindowPosition(float currentYaw) {
+        if (currentYaw == 0.0F) {
+            return new PositionSnapshot(0.50D, 1.0D, 0.75D);
+        }
+        if (currentYaw == 90.0F) {
+            return new PositionSnapshot(0.25D, 1.0D, 0.50D);
+        }
+        if (currentYaw == 180.0F) {
+            return new PositionSnapshot(0.75D, 1.0D, 0.25D);
+        }
+        if (currentYaw == 270.0F) {
+            return new PositionSnapshot(0.75D, 1.0D, 0.75D);
+        }
+        throw new IllegalArgumentException("expected a cardinal yaw");
+    }
+
+    private static PositionSnapshot hugWindowPosition(float currentYaw) {
+        if (currentYaw == 0.0F) {
+            return new PositionSnapshot(0.2D, 1.0D, 0.8D);
+        }
+        if (currentYaw == 90.0F) {
+            return new PositionSnapshot(0.2D, 1.0D, 0.2D);
+        }
+        if (currentYaw == 180.0F) {
+            return new PositionSnapshot(0.6D, 1.0D, 0.2D);
+        }
+        if (currentYaw == 270.0F) {
+            return new PositionSnapshot(0.8D, 1.0D, 0.6D);
+        }
+        throw new IllegalArgumentException("expected a cardinal yaw");
     }
 
     private static SShapeCocoaBeanMacro alignedMacro(
