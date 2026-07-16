@@ -1,6 +1,7 @@
 package dev.hylfrd.farmhelper.macro;
 
 import dev.hylfrd.farmhelper.macro.impl.SShapeVerticalCropMacro;
+import dev.hylfrd.farmhelper.macro.impl.SShapeMelonPumpkinDefaultMacro;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
 import dev.hylfrd.farmhelper.runtime.time.MonotonicClock;
@@ -63,6 +64,9 @@ public final class MacroManager implements MacroLifecycleTarget {
                 ? new MacroRegistry(Map.of(
                         MacroFamily.VERTICAL_S_SHAPE,
                         () -> new SShapeVerticalCropMacro(settings,
+                                () -> ThreadLocalRandom.current().nextDouble()),
+                        MacroFamily.MELON_PUMPKIN_DEFAULT,
+                        () -> new SShapeMelonPumpkinDefaultMacro(settings,
                                 () -> ThreadLocalRandom.current().nextDouble())))
                 : new MacroRegistry(Map.of());
         this.activeMacro = activeMacro == null
@@ -147,6 +151,9 @@ public final class MacroManager implements MacroLifecycleTarget {
     }
 
     public void start() {
+        if (enabled()) {
+            throw new IllegalStateException("macro lifecycle is already active");
+        }
         Macro next = fixedMacro != null
                 ? fixedMacro
                 : registry.create(settings.macroMode()).orElseThrow(() ->

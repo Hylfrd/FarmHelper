@@ -126,9 +126,14 @@ public final class FarmHelperRuntime {
     }
 
     public void synchronizeMacroSettings() {
-        macroManager.settings().replace(
+        dev.hylfrd.farmhelper.macro.MacroMode requestedMode =
                 dev.hylfrd.farmhelper.macro.MacroMode
-                        .fromCode(config.macroMode()).orElseThrow(),
+                        .fromCode(config.macroMode()).orElseThrow();
+        if (macroManager.enabled() && macroManager.configuredMode() != requestedMode) {
+            throw new IllegalStateException("cannot change macro mode during an active run");
+        }
+        macroManager.settings().replace(
+                requestedMode,
                 config.macroSpawn().map(spawn ->
                         new dev.hylfrd.farmhelper.macro.MacroSpawnPose(
                                 new dev.hylfrd.farmhelper.runtime.spatial.RewarpPosition(

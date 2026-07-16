@@ -210,6 +210,21 @@ class MacroManagerTest {
         assertTrue(manager.lastTerminalReason().isEmpty());
     }
 
+    @Test
+    void modeThreeResolvesItsLeafAndActiveRunCannotBeReplacedBySecondStart() {
+        MacroManager manager = new MacroManager();
+        manager.settings().macroMode(MacroMode.MELON_PUMPKIN_DEFAULT);
+
+        manager.start();
+
+        assertEquals("s-shape-melon-pumpkin-default", manager.activeMacroId());
+        long generation = manager.generation();
+        manager.settings().macroMode(MacroMode.VERTICAL_NORMAL);
+        assertThrows(IllegalStateException.class, manager::start);
+        assertEquals("s-shape-melon-pumpkin-default", manager.activeMacroId());
+        assertEquals(generation, manager.generation());
+    }
+
     private static FarmingContext context(Observation<PlayerSnapshot> player) {
         return new FarmingContext(0L, 0L, player, Observation.unknown(),
                 Observation.present(true), false, ServerResponsiveness.RESPONSIVE);
