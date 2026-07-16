@@ -127,7 +127,7 @@ public final class FarmHelperRuntime {
 
     public void synchronizeMacroSettings() {
         macroManager.settings().replace(
-                dev.hylfrd.farmhelper.macro.VerticalCropMode
+                dev.hylfrd.farmhelper.macro.MacroMode
                         .fromCode(config.macroMode()).orElseThrow(),
                 config.macroSpawn().map(spawn ->
                         new dev.hylfrd.farmhelper.macro.MacroSpawnPose(
@@ -137,6 +137,9 @@ public final class FarmHelperRuntime {
                 config.macroRewarps().stream().map(rewarp ->
                         new dev.hylfrd.farmhelper.runtime.spatial.RewarpPosition(
                                 rewarp.x(), rewarp.y(), rewarp.z())).toList(),
-                config.alwaysHoldW(), config.holdLeftClickWhenChangingRow());
+                config.alwaysHoldW(), config.holdLeftClickWhenChangingRow(),
+                config.rotateAfterWarped(), config.rotateAfterDrop(), config.dontFixAfterWarping(),
+                config.customPitch(), config.customPitchLevel(), config.customYaw(),
+                config.customYawLevel());
     }
 }

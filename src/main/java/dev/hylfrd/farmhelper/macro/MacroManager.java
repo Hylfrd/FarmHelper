@@ -9,11 +9,14 @@ import dev.hylfrd.farmhelper.runtime.time.SystemMonotonicClock;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 public final class MacroManager implements MacroLifecycleTarget {
     private static final Runnable NOOP_OBSERVER = () -> { };
-    private final Macro activeMacro;
+    private Macro activeMacro;
+    private final Macro fixedMacro;
+    private final MacroRegistry registry;
     private final Runnable acquisitionGuard;
     private final MacroLifecycle lifecycle;
     private final MacroSettings settings;
@@ -32,7 +35,7 @@ public final class MacroManager implements MacroLifecycleTarget {
     }
 
     MacroManager(Macro activeMacro, Runnable acquisitionGuard) {
-        this(activeMacro, new MacroSettings(), SystemMonotonicClock.INSTANCE, acquisitionGuard);
+        this(activeMacro, SystemMonotonicClock.INSTANCE, acquisitionGuard);
     }
 
     public MacroManager(MonotonicClock clock, Runnable acquisitionGuard) {
@@ -40,9 +43,7 @@ public final class MacroManager implements MacroLifecycleTarget {
     }
 
     private MacroManager(MacroSettings settings, MonotonicClock clock, Runnable acquisitionGuard) {
-        this(new SShapeVerticalCropMacro(settings,
-                        () -> ThreadLocalRandom.current().nextDouble()),
-                settings, clock, acquisitionGuard);
+        this(null, settings, clock, acquisitionGuard);
     }
 
     MacroManager(Macro activeMacro, MonotonicClock clock, Runnable acquisitionGuard) {
@@ -55,9 +56,18 @@ public final class MacroManager implements MacroLifecycleTarget {
             MonotonicClock clock,
             Runnable acquisitionGuard
     ) {
-        this.activeMacro = Objects.requireNonNull(activeMacro, "activeMacro");
+        this.fixedMacro = activeMacro;
         this.settings = Objects.requireNonNull(settings, "settings");
         this.acquisitionGuard = Objects.requireNonNull(acquisitionGuard, "acquisitionGuard");
+        registry = activeMacro == null
+                ? new MacroRegistry(Map.of(
+                        MacroFamily.VERTICAL_S_SHAPE,
+                        () -> new SShapeVerticalCropMacro(settings,
+                                () -> ThreadLocalRandom.current().nextDouble())))
+                : new MacroRegistry(Map.of());
+        this.activeMacro = activeMacro == null
+                ? registry.create(settings.macroMode()).orElseThrow()
+                : activeMacro;
         lifecycle = new MacroLifecycle(this, Objects.requireNonNull(clock, "clock"));
     }
 
@@ -71,6 +81,14 @@ public final class MacroManager implements MacroLifecycleTarget {
 
     public String activeMacroId() {
         return activeMacro.id();
+    }
+
+    public MacroMode configuredMode() {
+        return settings.macroMode();
+    }
+
+    public boolean configuredModeImplemented() {
+        return fixedMacro != null || registry.implemented(settings.macroMode());
     }
 
     public long runningTicks() {
@@ -129,8 +147,14 @@ public final class MacroManager implements MacroLifecycleTarget {
     }
 
     public void start() {
+        Macro next = fixedMacro != null
+                ? fixedMacro
+                : registry.create(settings.macroMode()).orElseThrow(() ->
+                        new IllegalStateException("Macro mode " + settings.macroMode().code()
+                                + " is recognized but not implemented"));
         acquisitionGuard.run();
         runningTicks = 0L;
+        activeMacro = next;
         try {
             lifecycle.start();
         } catch (RuntimeException | Error failure) {

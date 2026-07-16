@@ -1,6 +1,7 @@
 package dev.hylfrd.farmhelper.control;
 
 import dev.hylfrd.farmhelper.control.rotation.RotationFrame;
+import dev.hylfrd.farmhelper.control.rotation.RotationProfile;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -162,6 +163,26 @@ class RotationTaskTest {
         assertEquals(1.0F, maximumComplete.progress());
         assertEquals(100.0F, maximumComplete.yaw());
         assertEquals(80.0F, maximumComplete.pitch());
+    }
+
+    @Test
+    void explicitUpstreamProfilesHaveDistinctMidpointsAndExactEnds() {
+        RotationTask ordinary = new RotationTask(
+                0.0F, 0.0F, 100.0F, 80.0F, 100L,
+                RotationProfile.EXPO_QUART, 0.0F);
+        RotationTask back = new RotationTask(
+                0.0F, 0.0F, 100.0F, 80.0F, 100L,
+                RotationProfile.BACK, 0.0F);
+
+        RotationFrame ordinaryMiddle = ordinary.sample(50_000_000L);
+        RotationFrame backMiddle = back.sample(50_000_000L);
+
+        assertEquals(96.875F, ordinaryMiddle.yaw(), EPSILON);
+        assertEquals(75.0F, ordinaryMiddle.pitch(), EPSILON);
+        assertEquals(108.76975F, backMiddle.yaw(), EPSILON);
+        assertEquals(87.0158F, backMiddle.pitch(), EPSILON);
+        assertEquals(100.0F, back.sample(100_000_000L).yaw(), EPSILON);
+        assertEquals(80.0F, back.sample(100_000_000L).pitch(), EPSILON);
     }
 
     @Test

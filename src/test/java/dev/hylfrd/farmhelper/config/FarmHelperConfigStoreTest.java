@@ -30,7 +30,8 @@ class FarmHelperConfigStoreTest {
         assertEquals(0.0F, result.config().targetYaw());
         assertEquals(0.0F, result.config().targetPitch());
         assertTrue(Files.isRegularFile(path));
-        assertTrue(Files.readString(path, StandardCharsets.UTF_8).contains("\"schemaVersion\": 5"));
+        assertTrue(Files.readString(path, StandardCharsets.UTF_8).contains(
+                "\"schemaVersion\": " + FarmHelperConfig.CURRENT_SCHEMA_VERSION));
         assertEquals(FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY, result.config().openSettingsKey());
     }
 
@@ -53,7 +54,7 @@ class FarmHelperConfigStoreTest {
     @Test
     void missingCurrentFieldsUseTypedDefaults() throws IOException {
         Path path = temporaryDirectory.resolve("farmhelper.json");
-        Files.writeString(path, "{\"schemaVersion\":5}", StandardCharsets.UTF_8);
+        Files.writeString(path, "{\"schemaVersion\":6}", StandardCharsets.UTF_8);
 
         ConfigLoadResult result = new FarmHelperConfigStore(path).load();
 
@@ -188,7 +189,7 @@ class FarmHelperConfigStoreTest {
         assertEquals(ConfigLoadStatus.MIGRATED, result.status());
         assertEquals(45.5F, result.config().targetYaw());
         assertEquals(-30.0F, result.config().targetPitch());
-        assertTrue(migrated.contains("\"schemaVersion\": 5"));
+        assertTrue(migrated.contains("\"schemaVersion\": 6"));
         assertTrue(migrated.contains("\"rotation\""));
         assertFalse(migrated.contains("\"targetYaw\": 45.5\n"));
     }
@@ -267,7 +268,7 @@ class FarmHelperConfigStoreTest {
         assertEquals(ConfigLoadStatus.MIGRATED, result.status());
         assertEquals(45.0F, result.config().targetYaw());
         assertEquals(FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY, result.config().openSettingsKey());
-        assertTrue(migrated.contains("\"schemaVersion\": 5"));
+        assertTrue(migrated.contains("\"schemaVersion\": 6"));
         assertTrue(migrated.contains("\"openSettingsKey\": 344"));
     }
 
@@ -339,7 +340,7 @@ class FarmHelperConfigStoreTest {
         assertFalse(result.config().alwaysHoldW());
         assertTrue(result.config().holdLeftClickWhenChangingRow());
         String migrated = Files.readString(path, StandardCharsets.UTF_8);
-        assertTrue(migrated.contains("\"schemaVersion\": 5"));
+        assertTrue(migrated.contains("\"schemaVersion\": 6"));
         assertTrue(migrated.contains("\"alwaysHoldW\": false"));
         assertTrue(migrated.contains("\"holdLeftClickWhenChangingRow\": true"));
     }
@@ -362,6 +363,68 @@ class FarmHelperConfigStoreTest {
             assertFalse(result.config().alwaysHoldW(), field);
             assertTrue(result.config().holdLeftClickWhenChangingRow(), field);
         }
+    }
+
+    @Test
+    void migratesVersionFiveWithSafeP2MechanismDefaults() throws IOException {
+        Path path = temporaryDirectory.resolve("schema-five.json");
+        Files.writeString(path, """
+                {
+                  "schemaVersion": 5,
+                  "macro": {
+                    "mode": 3,
+                    "alwaysHoldW": true,
+                    "holdLeftClickWhenChangingRow": false
+                  }
+                }
+                """, StandardCharsets.UTF_8);
+
+        ConfigLoadResult result = new FarmHelperConfigStore(path).load();
+
+        assertEquals(ConfigLoadStatus.MIGRATED, result.status());
+        assertEquals(3, result.config().macroMode());
+        assertTrue(result.config().alwaysHoldW());
+        assertFalse(result.config().holdLeftClickWhenChangingRow());
+        assertFalse(result.config().rotateAfterWarped());
+        assertFalse(result.config().rotateAfterDrop());
+        assertFalse(result.config().dontFixAfterWarping());
+        assertFalse(result.config().customPitch());
+        assertEquals(0.0F, result.config().customPitchLevel());
+        assertFalse(result.config().customYaw());
+        assertEquals(0.0F, result.config().customYawLevel());
+        assertTrue(Files.readString(path, StandardCharsets.UTF_8)
+                .contains("\"schemaVersion\": 6"));
+    }
+
+    @Test
+    void p2MechanismSettingsRoundTripWithoutUsingManualRotationTargets() throws IOException {
+        Path path = temporaryDirectory.resolve("p2-mechanism.json");
+        FarmHelperConfig config = new FarmHelperConfig();
+        config.setTargetYaw(11.0F);
+        config.setTargetPitch(12.0F);
+        config.setMacroMode(3);
+        config.setRotateAfterWarped(true);
+        config.setRotateAfterDrop(true);
+        config.setDontFixAfterWarping(true);
+        config.setCustomPitch(true);
+        config.setCustomPitchLevel(-90.0F);
+        config.setCustomYaw(true);
+        config.setCustomYawLevel(180.0F);
+
+        FarmHelperConfigStore store = new FarmHelperConfigStore(path);
+        store.save(config);
+        FarmHelperConfig loaded = store.load().config();
+
+        assertEquals(11.0F, loaded.targetYaw());
+        assertEquals(12.0F, loaded.targetPitch());
+        assertEquals(3, loaded.macroMode());
+        assertTrue(loaded.rotateAfterWarped());
+        assertTrue(loaded.rotateAfterDrop());
+        assertTrue(loaded.dontFixAfterWarping());
+        assertTrue(loaded.customPitch());
+        assertEquals(-90.0F, loaded.customPitchLevel());
+        assertTrue(loaded.customYaw());
+        assertEquals(180.0F, loaded.customYawLevel());
     }
 
     @Test

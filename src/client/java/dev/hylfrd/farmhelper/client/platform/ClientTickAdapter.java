@@ -261,13 +261,18 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
             if (active.targetYaw().filter(target -> Float.compare(target, normalizedTargetYaw) == 0)
                     .isPresent()
                     && active.targetPitch().filter(target -> Float.compare(target, request.pitch()) == 0)
+                    .isPresent()
+                    && runtime.rotation().task().filter(task ->
+                            task.profile() == request.profile()
+                                    && Float.compare(task.backModifier(), request.backModifier()) == 0)
                     .isPresent()) {
                 return;
             }
         }
         RotationSnapshot current = snapshot.player().get().rotation().get();
         runtime.rotation().start(MacroControlOwner.S_SHAPE, current.yaw(), current.pitch(),
-                request.yaw(), request.pitch(), request.durationMillis());
+                request.yaw(), request.pitch(), request.durationMillis(), request.profile(),
+                request.backModifier());
     }
 
     private boolean developmentGarden() {

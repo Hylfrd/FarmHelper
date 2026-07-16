@@ -192,6 +192,24 @@ class MacroManagerTest {
         assertEquals(generation, manager.generation());
     }
 
+    @Test
+    void recognizedUnimplementedModeFailsBeforeGuardOrLifecycleMutation() {
+        AtomicInteger acquisitions = new AtomicInteger();
+        MacroManager manager = new MacroManager(acquisitions::incrementAndGet);
+        manager.settings().macroMode(MacroMode.SUGAR_CANE);
+        long generation = manager.generation();
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class, manager::start);
+
+        assertTrue(failure.getMessage().contains("recognized but not implemented"));
+        assertEquals(0, acquisitions.get());
+        assertEquals(generation, manager.generation());
+        assertEquals(MacroState.STOPPED, manager.state());
+        assertFalse(manager.enabled());
+        assertEquals(0L, manager.runningTicks());
+        assertTrue(manager.lastTerminalReason().isEmpty());
+    }
+
     private static FarmingContext context(Observation<PlayerSnapshot> player) {
         return new FarmingContext(0L, 0L, player, Observation.unknown(),
                 Observation.present(true), false, ServerResponsiveness.RESPONSIVE);

@@ -45,6 +45,44 @@ public final class RotationController {
         Objects.requireNonNull(callback, "callback");
         RotationTask nextTask = new RotationTask(startYaw, startPitch, targetYaw, targetPitch, durationMs);
 
+        return start(owner, nextTask, callback);
+    }
+
+    public synchronized RotationHandle start(
+            ControlOwner owner,
+            float startYaw,
+            float startPitch,
+            float targetYaw,
+            float targetPitch,
+            long durationMs,
+            RotationProfile profile,
+            float backModifier) {
+        return start(owner, startYaw, startPitch, targetYaw, targetPitch, durationMs,
+                profile, backModifier, NO_CALLBACK);
+    }
+
+    public synchronized RotationHandle start(
+            ControlOwner owner,
+            float startYaw,
+            float startPitch,
+            float targetYaw,
+            float targetPitch,
+            long durationMs,
+            RotationProfile profile,
+            float backModifier,
+            RotationCallback callback) {
+        Objects.requireNonNull(owner, "owner");
+        Objects.requireNonNull(callback, "callback");
+        RotationTask nextTask = new RotationTask(startYaw, startPitch, targetYaw, targetPitch,
+                durationMs, profile, backModifier);
+        return start(owner, nextTask, callback);
+    }
+
+    private RotationHandle start(
+            ControlOwner owner,
+            RotationTask nextTask,
+            RotationCallback callback) {
+
         if (active != null && !active.owner.equals(owner)) {
             throw new RotationConflictException(owner, active.owner);
         }

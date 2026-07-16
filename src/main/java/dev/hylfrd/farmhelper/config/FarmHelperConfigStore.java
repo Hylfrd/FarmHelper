@@ -34,8 +34,12 @@ public final class FarmHelperConfigStore {
     private static final Set<String> ROTATION_FIELDS = Set.of("targetYaw", "targetPitch");
     private static final Set<String> UI_FIELDS = Set.of("openSettingsKey");
     private static final Set<String> VERSION_FOUR_MACRO_FIELDS = Set.of("mode", "spawn", "rewarps");
-    private static final Set<String> MACRO_FIELDS = Set.of(
+    private static final Set<String> VERSION_FIVE_MACRO_FIELDS = Set.of(
             "mode", "spawn", "rewarps", "alwaysHoldW", "holdLeftClickWhenChangingRow");
+    private static final Set<String> MACRO_FIELDS = Set.of(
+            "mode", "spawn", "rewarps", "alwaysHoldW", "holdLeftClickWhenChangingRow",
+            "rotateAfterWarped", "rotateAfterDrop", "dontFixAfterWarping",
+            "customPitch", "customPitchLevel", "customYaw", "customYawLevel");
     private static final Set<String> LOCATION_FIELDS = Set.of("x", "y", "z", "yaw", "pitch", "plot");
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
@@ -84,6 +88,7 @@ public final class FarmHelperConfigStore {
                 case 2 -> readVersionTwo(root);
                 case 3 -> readVersionThree(root);
                 case 4 -> readVersionFour(root);
+                case 5 -> readVersionFive(root);
                 case FarmHelperConfig.CURRENT_SCHEMA_VERSION -> readCurrent(root);
                 default -> throw new ConfigFormatException("No migration path for schema version " + schemaVersion);
             };
@@ -104,7 +109,10 @@ public final class FarmHelperConfigStore {
         FarmHelperConfig validated = FarmHelperConfig.fromPersisted(
                 config.targetYaw(), config.targetPitch(), config.openSettingsKey(),
                 config.macroMode(), config.macroSpawn().orElse(null), config.macroRewarps(),
-                config.alwaysHoldW(), config.holdLeftClickWhenChangingRow());
+                config.alwaysHoldW(), config.holdLeftClickWhenChangingRow(),
+                config.rotateAfterWarped(), config.rotateAfterDrop(), config.dontFixAfterWarping(),
+                config.customPitch(), config.customPitchLevel(), config.customYaw(),
+                config.customYawLevel());
         byte[] json = (GSON.toJson(toJson(validated)) + System.lineSeparator()).getBytes(StandardCharsets.UTF_8);
 
         Path parent = configPath.getParent();
@@ -154,6 +162,13 @@ public final class FarmHelperConfigStore {
         java.util.List<MacroLocationConfig> rewarps = java.util.List.of();
         boolean alwaysHoldW = false;
         boolean holdLeftClickWhenChangingRow = true;
+        boolean rotateAfterWarped = false;
+        boolean rotateAfterDrop = false;
+        boolean dontFixAfterWarping = false;
+        boolean customPitch = false;
+        float customPitchLevel = 0.0F;
+        boolean customYaw = false;
+        float customYawLevel = 0.0F;
         if (macro != null) {
             requireOnlyFields(macro, MACRO_FIELDS, "macro");
             mode = optionalInteger(macro, "mode", 0);
@@ -163,8 +178,50 @@ public final class FarmHelperConfigStore {
             alwaysHoldW = optionalBoolean(macro, "alwaysHoldW", false);
             holdLeftClickWhenChangingRow = optionalBoolean(
                     macro, "holdLeftClickWhenChangingRow", true);
+            rotateAfterWarped = optionalBoolean(macro, "rotateAfterWarped", false);
+            rotateAfterDrop = optionalBoolean(macro, "rotateAfterDrop", false);
+            dontFixAfterWarping = optionalBoolean(macro, "dontFixAfterWarping", false);
+            customPitch = optionalBoolean(macro, "customPitch", false);
+            customPitchLevel = optionalFloat(macro, "customPitchLevel", 0.0F);
+            customYaw = optionalBoolean(macro, "customYaw", false);
+            customYawLevel = optionalFloat(macro, "customYawLevel", 0.0F);
         }
         return FarmHelperConfig.fromPersisted(yaw, pitch, openSettingsKey, mode, spawn, rewarps,
+                alwaysHoldW, holdLeftClickWhenChangingRow, rotateAfterWarped, rotateAfterDrop,
+                dontFixAfterWarping, customPitch, customPitchLevel, customYaw, customYawLevel);
+    }
+
+    private static FarmHelperConfig readVersionFive(JsonObject root) {
+        requireOnlyFields(root, VERSION_FIVE_ROOT_FIELDS, "schema 5 configuration root");
+        JsonObject rotation = optionalObject(root, "rotation");
+        JsonObject ui = optionalObject(root, "ui");
+        JsonObject macro = optionalObject(root, "macro");
+        float yaw = rotation == null ? 0.0F : optionalFloat(rotation, "targetYaw", 0.0F);
+        float pitch = rotation == null ? 0.0F : optionalFloat(rotation, "targetPitch", 0.0F);
+        if (rotation != null) {
+            requireOnlyFields(rotation, ROTATION_FIELDS, "rotation");
+        }
+        int key = ui == null ? FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY
+                : optionalInteger(ui, "openSettingsKey", FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY);
+        if (ui != null) {
+            requireOnlyFields(ui, UI_FIELDS, "ui");
+        }
+        int mode = 0;
+        MacroLocationConfig spawn = null;
+        java.util.List<MacroLocationConfig> rewarps = java.util.List.of();
+        boolean alwaysHoldW = false;
+        boolean holdLeftClickWhenChangingRow = true;
+        if (macro != null) {
+            requireOnlyFields(macro, VERSION_FIVE_MACRO_FIELDS, "schema 5 macro");
+            mode = optionalInteger(macro, "mode", 0);
+            JsonObject spawnObject = optionalObject(macro, "spawn");
+            spawn = spawnObject == null ? null : location(spawnObject, "macro.spawn");
+            rewarps = locations(macro.get("rewarps"), "macro.rewarps");
+            alwaysHoldW = optionalBoolean(macro, "alwaysHoldW", false);
+            holdLeftClickWhenChangingRow = optionalBoolean(
+                    macro, "holdLeftClickWhenChangingRow", true);
+        }
+        return FarmHelperConfig.fromPersisted(yaw, pitch, key, mode, spawn, rewarps,
                 alwaysHoldW, holdLeftClickWhenChangingRow);
     }
 
@@ -296,6 +353,13 @@ public final class FarmHelperConfigStore {
         macro.addProperty("alwaysHoldW", config.alwaysHoldW());
         macro.addProperty("holdLeftClickWhenChangingRow",
                 config.holdLeftClickWhenChangingRow());
+        macro.addProperty("rotateAfterWarped", config.rotateAfterWarped());
+        macro.addProperty("rotateAfterDrop", config.rotateAfterDrop());
+        macro.addProperty("dontFixAfterWarping", config.dontFixAfterWarping());
+        macro.addProperty("customPitch", config.customPitch());
+        macro.addProperty("customPitchLevel", config.customPitchLevel());
+        macro.addProperty("customYaw", config.customYaw());
+        macro.addProperty("customYawLevel", config.customYawLevel());
         root.add("macro", macro);
         return root;
     }

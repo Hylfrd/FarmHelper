@@ -6,7 +6,7 @@ import dev.hylfrd.farmhelper.config.ConfigLoadResult;
 import dev.hylfrd.farmhelper.config.FarmHelperConfig;
 import dev.hylfrd.farmhelper.config.FarmHelperConfigKey;
 import dev.hylfrd.farmhelper.macro.MacroManager;
-import dev.hylfrd.farmhelper.macro.VerticalCropMode;
+import dev.hylfrd.farmhelper.macro.MacroMode;
 import dev.hylfrd.farmhelper.platform.FarmHelper;
 import dev.hylfrd.farmhelper.config.MacroLocationConfig;
 import dev.hylfrd.farmhelper.runtime.spatial.GardenPlotMap;
@@ -97,7 +97,7 @@ public final class ClientFarmHelperCommandService implements FarmHelperCommandSe
                         .orElse("none"),
                 "Macro: " + macro.activeMacroId() + ", ticks: " + macro.runningTicks(),
                 "Macro status: " + macro.lastStatus(),
-                "Mode: " + macro.settings().mode().code() + ", rewarps: "
+                "Mode: " + macro.settings().macroMode().code() + ", rewarps: "
                         + macro.settings().rewarps().size() + ", spawn: "
                         + macro.settings().spawn().map(Object::toString).orElse("unset"),
                 "Connection: " + connectionText(macro) + ", pauses: " + macro.pauseCauses(),
@@ -194,8 +194,8 @@ public final class ClientFarmHelperCommandService implements FarmHelperCommandSe
 
     @Override
     public CommandActionResult setMacroMode(int code) {
-        if (VerticalCropMode.fromCode(code).isEmpty()) {
-            return CommandActionResult.failure("Unknown macro mode; use 0, 1, 2, 5, 6, or 9.");
+        if (MacroMode.fromCode(code).isEmpty()) {
+            return CommandActionResult.failure("Unknown macro mode; use a code from 0 through 13.");
         }
         if (runtime.core().macroManager().enabled()) {
             return CommandActionResult.failure("Stop the macro before changing mode.");

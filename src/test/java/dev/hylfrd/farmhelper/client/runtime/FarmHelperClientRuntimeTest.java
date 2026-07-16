@@ -3,6 +3,7 @@ package dev.hylfrd.farmhelper.client.runtime;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.hylfrd.farmhelper.config.FarmHelperConfigKey;
+import dev.hylfrd.farmhelper.config.FarmHelperConfig;
 import dev.hylfrd.farmhelper.config.MacroLocationConfig;
 import dev.hylfrd.farmhelper.client.platform.ClientCommandScreenCloseGuard;
 import dev.hylfrd.farmhelper.client.platform.TestClientTickAdapterAccess;
@@ -86,7 +87,7 @@ class FarmHelperClientRuntimeTest {
         assertEquals(60.0F, reloaded.configValue(FarmHelperConfigKey.TARGET_YAW));
 
         assertTrue(runtime.setMacroMode(5));
-        assertFalse(runtime.setMacroMode(3));
+        assertFalse(runtime.setMacroMode(14));
         assertEquals(5, runtime.core().config().macroMode());
         assertEquals(5, runtime.core().macroManager().settings().mode().code());
     }
@@ -161,19 +162,19 @@ class FarmHelperClientRuntimeTest {
     void mappedModesSynchronizeAndInvalidModesNeverPersistOrThrow() {
         Path configPath = temporaryDirectory.resolve("mapped-modes.json");
         FarmHelperClientRuntime runtime = TestFarmHelperClientRuntimeFactory.create(configPath);
-        for (int mode : List.of(0, 1, 2, 5, 6, 9)) {
+        for (int mode = 0; mode <= 13; mode++) {
             assertTrue(runtime.setMacroMode(mode));
             assertEquals(mode, runtime.core().config().macroMode());
-            assertEquals(mode, runtime.core().macroManager().settings().mode().code());
+            assertEquals(mode, runtime.core().macroManager().settings().macroMode().code());
             FarmHelperClientRuntime reloaded = TestFarmHelperClientRuntimeFactory.create(configPath);
             assertEquals(mode, reloaded.core().config().macroMode());
-            assertEquals(mode, reloaded.core().macroManager().settings().mode().code());
+            assertEquals(mode, reloaded.core().macroManager().settings().macroMode().code());
         }
         int before = runtime.core().config().macroMode();
-        for (int invalid : List.of(3, 4, 7, 8)) {
+        for (int invalid : List.of(-1, 14)) {
             assertFalse(runtime.setMacroMode(invalid));
             assertEquals(before, runtime.core().config().macroMode());
-            assertEquals(before, runtime.core().macroManager().settings().mode().code());
+            assertEquals(before, runtime.core().macroManager().settings().macroMode().code());
             assertEquals(before, TestFarmHelperClientRuntimeFactory.create(configPath)
                     .core().config().macroMode());
         }
@@ -197,6 +198,31 @@ class FarmHelperClientRuntimeTest {
                 .spawn().orElseThrow().position().x());
         assertEquals(original.plot(), runtime.core().macroManager().settings()
                 .spawn().orElseThrow().plot());
+    }
+
+    @Test
+    void failedP2MechanismPersistenceRollsBackConfigAndLiveSettings() throws IOException {
+        Path configPath = temporaryDirectory.resolve("failed-p2-save.json");
+        FarmHelperClientRuntime runtime = TestFarmHelperClientRuntimeFactory.create(configPath);
+        FarmHelperConfig enabled = runtime.configSnapshot();
+        enabled.setMacroMode(3);
+        enabled.setRotateAfterDrop(true);
+        enabled.setCustomPitch(true);
+        enabled.setCustomPitchLevel(48.0F);
+        assertTrue(runtime.saveConfig(enabled));
+        Files.delete(configPath);
+        Files.createDirectory(configPath);
+
+        FarmHelperConfig rejected = runtime.configSnapshot();
+        rejected.setRotateAfterDrop(false);
+        rejected.setCustomPitchLevel(52.0F);
+        assertFalse(runtime.saveConfig(rejected));
+
+        assertEquals(3, runtime.core().config().macroMode());
+        assertTrue(runtime.core().config().rotateAfterDrop());
+        assertEquals(48.0F, runtime.core().config().customPitchLevel());
+        assertTrue(runtime.core().macroManager().settings().rotateAfterDrop());
+        assertEquals(48.0F, runtime.core().macroManager().settings().customPitchLevel());
     }
 
     @Test

@@ -1,7 +1,9 @@
 package dev.hylfrd.farmhelper.control;
 
 import dev.hylfrd.farmhelper.control.rotation.RotationFrame;
+import dev.hylfrd.farmhelper.control.rotation.RotationProfile;
 
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /** Immutable, version-independent trajectory for one explicit rotation. */
@@ -13,8 +15,23 @@ public final class RotationTask {
     private final double yawDelta;
     private final long durationMs;
     private final long durationNanos;
+    private final RotationProfile profile;
+    private final float backModifier;
 
     public RotationTask(float startYaw, float startPitch, float targetYaw, float targetPitch, long durationMs) {
+        this(startYaw, startPitch, targetYaw, targetPitch, durationMs,
+                RotationProfile.LEGACY_QUART, 0.0F);
+    }
+
+    public RotationTask(
+            float startYaw,
+            float startPitch,
+            float targetYaw,
+            float targetPitch,
+            long durationMs,
+            RotationProfile profile,
+            float backModifier
+    ) {
         requireFinite(startYaw, "startYaw");
         requireFinite(startPitch, "startPitch");
         requireFinite(targetYaw, "targetYaw");
@@ -30,6 +47,11 @@ public final class RotationTask {
         yawDelta = shortestYawDelta(this.startYaw, this.targetYaw);
         this.durationMs = durationMs;
         durationNanos = TimeUnit.MILLISECONDS.toNanos(durationMs);
+        this.profile = Objects.requireNonNull(profile, "profile");
+        if (!Float.isFinite(backModifier) || backModifier < -0.25F || backModifier >= 0.25F) {
+            throw new IllegalArgumentException("back modifier must be in [-0.25, 0.25)");
+        }
+        this.backModifier = backModifier;
     }
 
     public float startYaw() {
@@ -56,6 +78,14 @@ public final class RotationTask {
         return durationNanos;
     }
 
+    public RotationProfile profile() {
+        return profile;
+    }
+
+    public float backModifier() {
+        return backModifier;
+    }
+
     /** Samples this trajectory by elapsed monotonic time, never by wall-clock time. */
     public RotationFrame sample(long elapsedNanos) {
         long safeElapsed = Math.max(0L, elapsedNanos);
@@ -63,16 +93,15 @@ public final class RotationTask {
         float progress = complete
                 ? 1.0F
                 : clamp((double) safeElapsed / durationNanos, 0.0F, Math.nextDown(1.0F));
-        float eased = complete
-                ? 1.0F
-                : Math.min(easeOutQuart(progress), Math.nextDown(1.0F));
+        float easedYaw = complete ? 1.0F : profile.yaw(progress, backModifier);
+        float easedPitch = complete ? 1.0F : profile.pitch(progress, backModifier);
         float pitchDelta = targetPitch - startPitch;
-        float yaw = narrowYaw((double) startYaw + yawDelta * eased);
-        float pitch = clampPitch(startPitch + pitchDelta * eased);
+        float yaw = narrowYaw((double) startYaw + yawDelta * easedYaw);
+        float pitch = clampPitch(startPitch + pitchDelta * easedPitch);
         if (complete) {
             yaw = targetYaw;
             pitch = targetPitch;
-        } else {
+        } else if (profile != RotationProfile.BACK) {
             if (yawDelta != 0.0D && sameBits(yaw, targetYaw)) {
                 double direction = yawDelta > 0.0D
                         ? Float.NEGATIVE_INFINITY
@@ -115,11 +144,6 @@ public final class RotationTask {
 
     private static double shortestYawDelta(float current, float target) {
         return normalizeYaw((double) target - current);
-    }
-
-    private static float easeOutQuart(float value) {
-        double remaining = 1.0D - value;
-        return (float) (1.0D - remaining * remaining * remaining * remaining);
     }
 
     private static float clampPitch(float value) {
