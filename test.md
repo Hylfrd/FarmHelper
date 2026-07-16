@@ -237,3 +237,83 @@ SetIsBorderRequired failed: 不支持此接口 (0x80004002)
 ## P1 填写规则
 
 工作电脑执行者必须先把本节 P7 commit/tree/JAR 占位符替换为唯一最终对象，再逐项以真实观察填写。任何未执行、仅由自动化覆盖、无法安全复现或证据不足的步骤继续保持 `[ ] NOT RUN / NOT PASS`；不得用本节文本、沙盒日志、CI 或自动测试代替 GUI/gameplay PASS。
+
+# P2 shared farming + Default Melon/Pumpkin 待工作电脑验收
+
+## P2 状态与固定锚点
+
+本节覆盖 P2 shared farming contracts 与 mode `3 DEFAULT_MELON_PUMPKIN`；全部项目均为未勾选的 `NOT RUN / NOT PASS`。Windows 10 沙盒在 `SetIsBorderRequired` 返回 `0x80004002`，因此没有执行 Computer Use、盲输入、SendKeys 或自建 UI 自动化。沙盒自动测试、CI 与无 GUI 的 `runClient` 启动/日志证据均不能替代工作电脑上的可观察 GUI/gameplay 验收。
+
+- 已批准产品代码锚点 commit：`de715711d9ee17a193afb92e3c1b713930c77471`
+- 已批准产品代码锚点 tree：`f4b26ff7a3b00fa044ec289189967ecd7ca30c87`
+- 最终 P7 GUI 验收 commit：`待填写`
+- 最终 P7 GUI 验收 tree：`待填写`
+- 最终 P7 GUI 验收 JAR 路径/大小/SHA-256：`待填写`
+
+执行 P2 时复用 P0 #2～#3、#8～#18 与 P1-03/P1-08 的命令反馈、生命周期、日志、控制释放和正常退出证据。任何只能由自动回归安全覆盖的 stale identity/UNKNOWN 路径继续保持 automated-only、`NOT RUN / NOT PASS`，不得通过注入或未观察行为勾选。
+
+## P2 未执行矩阵
+
+- [ ] P2-01 mode 3 command/config persistence and active immutability — NOT RUN / NOT PASS
+  - 操作：在 stopped 状态执行 `/fh macro mode 3`，记录配置文件与 diagnostics，正常退出并重启后复查；分别修改并 roundtrip `rotateAfterWarped`、`rotateAfterDrop`、`dontFixAfterWarping`、custom pitch/yaw 开关及 level。在 mode 3 active 时尝试切换 mode 与 reset。
+  - 预期结果：mode 3 及新增行为字段原子持久化并准确重载；active 修改被拒绝且 generation、运行对象、配置文件哈希和控制 owner 不变。非法范围或保存失败不得留下半写配置。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写命令反馈、重启前后配置内容/SHA-256、generation 与 held-input diagnostics。
+
+- [ ] P2-02 recognized but unimplemented modes refuse safely — NOT RUN / NOT PASS
+  - 操作：在 stopped 状态依次选择 modes `10`、`11`、`12`、`13`，确认 parser/状态显示可识别，然后逐一执行 start；每次检查 generation、macro/rotation/input owner 和日志。
+  - 预期结果：四种 mode 都被稳定识别并可保存，但 start 必须以诚实的 unimplemented 反馈 fail closed；不得创建 placeholder macro、增加运行 generation、获取控制、生成旋转或发出移动/攻击。非法 modes `-1`、`14` 仍被拒绝且配置不变。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写逐 mode 命令反馈、配置/状态、owner 与输入诊断、日志。
+
+- [ ] P2-03 fruit/stem filtering and direction scan priority — NOT RUN / NOT PASS
+  - 操作：mode 3 fresh start，分别布置 melon/pumpkin fruit、stem/attached stem、未知/decoy 方块；用当前 yaw 的连续方向扫描验证首尾角度，并构造右侧与左侧都可行、仅右侧阻塞、仅左侧阻塞和无可靠观察四组布局。
+  - 预期结果：只有 melon/pumpkin fruit 是作物，stem 一律不当作 READY；方向扫描使用当前-yaw frame，覆盖 `0..179`，同距离右侧证据优先。右侧阻塞选择 LEFT、左侧阻塞选择 RIGHT；两侧均无可靠结论时无输入、无 RNG 消耗并 fail closed。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写精确方块布局、起始 yaw、选边结果、视频与日志；UNKNOWN 注入不属于 GUI 手测。
+
+- [ ] P2-04 startup alignment and custom angle behavior — NOT RUN / NOT PASS
+  - 操作：从多个 cardinal/diagonal 朝向和 LEFT/RIGHT 初始选边 fresh start，测量 `300 ms` startup、默认 yaw/pitch、rotation duration 与曲线；分别启用 custom pitch/yaw level 后重启复测，途中 pause/resume。
+  - 预期结果：startup 满 `300 ms` 前无耕作输入；默认 pitch 落在 `[47,53)`，yaw 对齐最近 diagonal 并按选边使用有界 jitter，rotation duration 为 `[500,800)`。mode 3 明确使用 easeOutBack 且最终准确收敛；custom 值按配置使用。pause 释放控制且 resume 不重抽已采样 RNG、不重复创建旋转。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写毫秒时间线、实际角度/曲线视频、配置、generation 与 rotation diagnostics。
+
+- [ ] P2-05 farming ownership, row choice and recorded-direction obstruction — NOT RUN / NOT PASS
+  - 操作：分别在 LEFT/RIGHT farming 状态布置相邻 fruit、后墙可走/不可走、前路/后路组合；先形成 FORWARD 再形成 BACKWARD 记录方向，并在后续 tick 改变另一方向障碍验证 probe。
+  - 预期结果：只有 active macro generation 可持有 farming 控制；FARMING 使用侧向键加 `ATTACK`，仅后方不可走时加入 `FORWARD`。作物耗尽时前路优先，否则选后路并记录 FORWARD/BACKWARD；后续输入和 obstruction probe 都必须使用记录方向，不能在 BACKWARD 状态误查或误走 front。与既有方向相反的选择只产生 no-input `LANE_BLOCKED` recovery handoff，不私自翻转。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写逐布局视频、owner/generation、按键、记录方向、probe 结果与 recovery reason。
+
+- [ ] P2-06 lane dwell, one-block completion, timeout and attack option — NOT RUN / NOT PASS
+  - 操作：分别完成 FORWARD/BACKWARD lane，测量 row dwell、移动距离与超时；切换 `holdLeftClickWhenChangingRow`；构造速度和为 `<0.15` 与边界附近场景，并在 lane 中 pause/resume。
+  - 预期结果：dwell 为 `400-599 ms`；FORWARD 持有 `FORWARD+SPRINT`，BACKWARD 只持有 `BACKWARD`，`ATTACK` 仅由配置决定。位移达到一格后完成并翻转 lateral row；两秒未完成以无输入 `LANE_STALLED` handoff。低运动/阻塞判断使用记录方向；pause 释放控制并保留剩余时序。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写方向、毫秒/位移/速度时间线、按键与 attack 配置、pause/resume 视频。
+
+- [ ] P2-07 drop boundaries and rotateAfterDrop — NOT RUN / NOT PASS
+  - 操作：覆盖 flying/nonflying、airborne/grounded、drop `0.75` 与严格大于边界、grounded `1.5` 与严格大于边界、`Y=80` 与 `Y<80`；启闭 `rotateAfterDrop`，落地前后检查输入、anchor 与 lane ledger。
+  - 预期结果：仅 nonflying airborne、drop `>0.75` 且 `Y<80` 进入严格 drop；grounded drop `>1.5` 走独立安全分支。空中始终释放 input/rotation；确认落地后刷新 spatial anchor、清除 lane/row 状态。启用 rotateAfterDrop 时只创建一次到相反最近 cardinal 的旋转并只抽 duration；关闭时不旋转。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写 flying/onGround/Y/高度差、输入、anchor、lane、实际角度与旋转计数。
+
+- [ ] P2-08 rewarp timing and rotation policy — NOT RUN / NOT PASS
+  - 操作：复用 P1-07 的 prerequisites、origin、stationary、retry、落地/flying/suffocation布局，测量 dwell、sneak、after-warp 和 post delay；组合 `rotateAfterWarped` 与 `dontFixAfterWarping`，并在每个阶段 pause/resume 或移除配置。
+  - 预期结果：保持 P1 的 `400-749 ms` dwell、`5000 ms` retry、flying `SNEAK 350-649 ms`、`1500 ms` after-warp 与 `600 ms` post delay；配置/姿态/evidence 失效立即无输入 fail closed。按两个开关只执行规定的 mode 3 diagonal/修正策略，每 tick 最多一个 rotation request，绝无 leaf/shared 重复旋转或重复 RNG 抽样。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写配置组合、完整毫秒时间线、输入/旋转请求计数、角度与日志。
+
+- [ ] P2-09 pause/Screen/world/connection/stop and stale safety — NOT RUN / NOT PASS
+  - 操作：在 startup、farming、lane、drop、rewarp、rotation 各阶段自然触发 manual pause、Screen pause/close、Save & Quit、断线、世界重载和 stop；观察 generation、spatial request identity、rotation/input owner。不得注入 stale capture 或伪造 world epoch。
+  - 预期结果：pause 立即释放控制，只有可恢复的 pause causes 全部解除后才在同 generation 继续；stop/world/connection 是 terminal boundary，旧 generation 永不恢复。迟到或身份不匹配的 capture/rotation 不得影响新对象、获取控制或推进状态；无法自然观察的 stale 路径保持 automated-only、`NOT RUN / NOT PASS`。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写阶段/generation 时间线、Screen/world/connection 事件、owner、held input 与日志。
+
+- [ ] P2-10 complete work-computer session, logs and safe exit — NOT RUN / NOT PASS
+  - 操作：完成上述矩阵后检查 latest/debug/crash/hs_err 与 FarmHelper remote activity，再通过正常 Quit Game 退出并核对本次 owned Gradle/runClient/Minecraft/java/javaw 进程。
+  - 预期结果：无 actionable FarmHelper/Mixin failure、crash/hs_err、秘密泄露或 FarmHelper remote/WebSocket/Webhook/Discord/analytics 活动；正常退出后 owned process 为零且不终止无关进程。所有 P0/P1/P2 尚未真实观察的项目继续保持未勾选。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写日志路径/SHA-256、检索命中、退出视频、exact PID 链与零进程查询。
+
+## P2 填写规则
+
+工作电脑执行者必须先把 P7 commit/tree/JAR 占位符替换为唯一最终对象，再按 exact matrix 逐项记录真实观察。任何未执行、自动化-only、证据不足或无法安全复现的项目必须保持 `[ ] NOT RUN / NOT PASS`；严禁把沙盒 CI、测试、启动日志或本文预期改写成 GUI/gameplay PASS。
