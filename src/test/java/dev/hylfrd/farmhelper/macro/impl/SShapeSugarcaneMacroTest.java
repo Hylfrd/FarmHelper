@@ -377,6 +377,12 @@ class SShapeSugarcaneMacroTest {
         restarted.onStop();
         restarted.onStart(1L);
         assertEquals(SShapeSugarcaneMacro.State.STARTUP, restarted.state());
+        SpatialCaptureRequest newRequest = restarted.spatialRequest(
+                stablePlayer, EPOCH).orElseThrow();
+        assertEquals(oldRequest.worldEpoch(), newRequest.worldEpoch());
+        assertEquals(oldRequest.bounds(), newRequest.bounds());
+        assertEquals(oldRequest.blocks(), newRequest.blocks());
+        assertTrue(oldRequest.requestToken() != newRequest.requestToken());
         assertEquals("spatial-unknown-or-stale",
                 restarted.tick(context(1L, stablePlayer, oldCapture, grounded())).status());
         assertEquals(0, restartLeaf.draws());
