@@ -1,7 +1,13 @@
 package dev.hylfrd.farmhelper.macro;
 
-import dev.hylfrd.farmhelper.macro.impl.SShapeVerticalCropMacro;
+import dev.hylfrd.farmhelper.macro.impl.CircularCropMacro;
+import dev.hylfrd.farmhelper.macro.impl.SShapeCocoaBeanMacro;
 import dev.hylfrd.farmhelper.macro.impl.SShapeMelonPumpkinDefaultMacro;
+import dev.hylfrd.farmhelper.macro.impl.SShapeMushroomMacro;
+import dev.hylfrd.farmhelper.macro.impl.SShapeMushroomRotateMacro;
+import dev.hylfrd.farmhelper.macro.impl.SShapeMushroomSDSMacro;
+import dev.hylfrd.farmhelper.macro.impl.SShapeSugarcaneMacro;
+import dev.hylfrd.farmhelper.macro.impl.SShapeVerticalCropMacro;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
 import dev.hylfrd.farmhelper.runtime.time.MonotonicClock;
@@ -69,6 +75,30 @@ public final class MacroManager implements MacroLifecycleTarget {
                                 () -> ThreadLocalRandom.current().nextDouble()),
                         MacroFamily.MELON_PUMPKIN_DEFAULT,
                         () -> new SShapeMelonPumpkinDefaultMacro(settings.snapshot(),
+                                () -> ThreadLocalRandom.current().nextDouble(),
+                                () -> ThreadLocalRandom.current().nextDouble()),
+                        MacroFamily.SUGAR_CANE,
+                        () -> new SShapeSugarcaneMacro(settings.snapshot(),
+                                () -> ThreadLocalRandom.current().nextDouble(),
+                                () -> ThreadLocalRandom.current().nextDouble()),
+                        MacroFamily.COCOA,
+                        () -> new SShapeCocoaBeanMacro(settings.snapshot(),
+                                () -> ThreadLocalRandom.current().nextDouble(),
+                                () -> ThreadLocalRandom.current().nextDouble()),
+                        MacroFamily.MUSHROOM,
+                        () -> new SShapeMushroomMacro(settings.snapshot(),
+                                () -> ThreadLocalRandom.current().nextDouble(),
+                                () -> ThreadLocalRandom.current().nextDouble()),
+                        MacroFamily.MUSHROOM_ROTATE,
+                        () -> new SShapeMushroomRotateMacro(settings.snapshot(),
+                                () -> ThreadLocalRandom.current().nextDouble(),
+                                () -> ThreadLocalRandom.current().nextDouble()),
+                        MacroFamily.MUSHROOM_SDS,
+                        () -> new SShapeMushroomSDSMacro(settings.snapshot(),
+                                () -> ThreadLocalRandom.current().nextDouble(),
+                                () -> ThreadLocalRandom.current().nextDouble()),
+                        MacroFamily.CIRCULAR,
+                        () -> new CircularCropMacro(settings.snapshot(),
                                 () -> ThreadLocalRandom.current().nextDouble(),
                                 () -> ThreadLocalRandom.current().nextDouble())))
                 : new MacroRegistry(Map.of());

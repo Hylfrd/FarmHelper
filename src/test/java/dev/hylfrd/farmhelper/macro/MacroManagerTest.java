@@ -11,6 +11,8 @@ import dev.hylfrd.farmhelper.runtime.spatial.BoxSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -193,21 +195,93 @@ class MacroManagerTest {
     }
 
     @Test
-    void recognizedUnimplementedModeFailsBeforeGuardOrLifecycleMutation() {
+    void everyPersistedModeStartsItsExpectedImplementationAcrossStoppedSwitches() {
         AtomicInteger acquisitions = new AtomicInteger();
         MacroManager manager = new MacroManager(acquisitions::incrementAndGet);
-        manager.settings().macroMode(MacroMode.SUGAR_CANE);
-        long generation = manager.generation();
+        Set<String> resolvedIds = new HashSet<>();
+        String stoppedActiveId = "s-shape-vertical";
+        long previousGeneration = manager.generation();
 
-        IllegalStateException failure = assertThrows(IllegalStateException.class, manager::start);
+        for (MacroMode mode : MacroMode.values()) {
+            manager.updateSettings(settings -> settings.macroMode(mode));
 
-        assertTrue(failure.getMessage().contains("recognized but not implemented"));
-        assertEquals(0, acquisitions.get());
-        assertEquals(generation, manager.generation());
-        assertEquals(MacroState.STOPPED, manager.state());
-        assertFalse(manager.enabled());
-        assertEquals(0L, manager.runningTicks());
-        assertTrue(manager.lastTerminalReason().isEmpty());
+            assertEquals(stoppedActiveId, manager.activeMacroId(),
+                    "a stopped settings edit must not masquerade as an active instance switch");
+            assertEquals(mode, manager.configuredMode());
+            assertTrue(manager.configuredModeImplemented());
+
+            manager.start();
+            String expectedId = expectedMacroId(mode);
+            assertEquals(expectedId, manager.activeMacroId());
+            assertEquals(MacroState.RUNNING, manager.state());
+            assertTrue(manager.generation() > previousGeneration);
+            assertThrows(IllegalStateException.class,
+                    () -> manager.updateSettings(settings -> settings.macroMode(MacroMode.VERTICAL_NORMAL)));
+            resolvedIds.add(manager.activeMacroId());
+            long runningGeneration = manager.generation();
+
+            manager.stop();
+
+            assertEquals(MacroState.STOPPED, manager.state());
+            assertEquals(MacroTerminalReason.MANUAL_STOP,
+                    manager.lastTerminalReason().orElseThrow());
+            assertTrue(manager.generation() > runningGeneration);
+            stoppedActiveId = expectedId;
+            previousGeneration = manager.generation();
+        }
+
+        assertEquals(MacroMode.values().length, acquisitions.get());
+        assertEquals(Set.of(
+                "s-shape-vertical",
+                "s-shape-melon-pumpkin-default",
+                "s-shape-sugarcane",
+                "s-shape-cocoa-beans",
+                "s-shape-mushroom",
+                "s-shape-mushroom-rotate",
+                "s-shape-mushroom-sds",
+                "circular-crop"), resolvedIds);
+    }
+
+    @Test
+    void everyFamilyKeepsOneGenerationAcrossNestedPauseAndTerminallyInvalidatesIt() {
+        for (MacroMode mode : List.of(
+                MacroMode.VERTICAL_NORMAL,
+                MacroMode.MELON_PUMPKIN_DEFAULT,
+                MacroMode.SUGAR_CANE,
+                MacroMode.COCOA,
+                MacroMode.MUSHROOM,
+                MacroMode.MUSHROOM_ROTATE,
+                MacroMode.MUSHROOM_SDS,
+                MacroMode.CIRCULAR)) {
+            MacroManager manager = new MacroManager();
+            manager.updateSettings(settings -> settings.macroMode(mode));
+            manager.start();
+            long runningGeneration = manager.generation();
+
+            FeatureSuspension first = manager.suspendForFeature("first");
+            FeatureSuspension second = manager.suspendForFeature("second");
+            manager.observeScreen(true);
+            assertEquals(MacroState.PAUSED, manager.state());
+            assertEquals(Set.of(MacroPauseCause.FEATURE, MacroPauseCause.SCREEN_OPEN),
+                    manager.pauseCauses());
+            first.close();
+            second.close();
+            assertEquals(MacroState.PAUSED, manager.state());
+            assertEquals(Set.of(MacroPauseCause.SCREEN_OPEN), manager.pauseCauses());
+            assertEquals(runningGeneration, manager.generation());
+
+            manager.observeScreen(false);
+            assertEquals(MacroState.RUNNING, manager.state());
+            assertEquals(runningGeneration, manager.generation());
+            assertEquals(expectedMacroId(mode), manager.activeMacroId());
+
+            manager.stop(MacroTerminalReason.WORLD_CHANGE);
+            assertEquals(MacroState.STOPPED, manager.state());
+            assertEquals(MacroTerminalReason.WORLD_CHANGE,
+                    manager.lastTerminalReason().orElseThrow());
+            assertTrue(manager.generation() > runningGeneration);
+            assertTrue(manager.pauseCauses().isEmpty());
+        }
     }
 
     @Test
@@ -224,6 +298,19 @@ class MacroManagerTest {
         assertThrows(IllegalStateException.class, manager::start);
         assertEquals("s-shape-melon-pumpkin-default", manager.activeMacroId());
         assertEquals(generation, manager.generation());
+    }
+
+    private static String expectedMacroId(MacroMode mode) {
+        return switch (mode.family()) {
+            case VERTICAL_S_SHAPE -> "s-shape-vertical";
+            case MELON_PUMPKIN_DEFAULT -> "s-shape-melon-pumpkin-default";
+            case SUGAR_CANE -> "s-shape-sugarcane";
+            case COCOA -> "s-shape-cocoa-beans";
+            case MUSHROOM -> "s-shape-mushroom";
+            case MUSHROOM_ROTATE -> "s-shape-mushroom-rotate";
+            case MUSHROOM_SDS -> "s-shape-mushroom-sds";
+            case CIRCULAR -> "circular-crop";
+        };
     }
 
     private static FarmingContext context(Observation<PlayerSnapshot> player) {

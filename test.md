@@ -238,14 +238,15 @@ SetIsBorderRequired failed: 不支持此接口 (0x80004002)
 
 工作电脑执行者必须先把本节 P7 commit/tree/JAR 占位符替换为唯一最终对象，再逐项以真实观察填写。任何未执行、仅由自动化覆盖、无法安全复现或证据不足的步骤继续保持 `[ ] NOT RUN / NOT PASS`；不得用本节文本、沙盒日志、CI 或自动测试代替 GUI/gameplay PASS。
 
-# P2 shared farming + Default Melon/Pumpkin 待工作电脑验收
+# P2 全部 farming modes 待工作电脑验收
 
 ## P2 状态与固定锚点
 
-本节覆盖 P2 shared farming contracts 与 mode `3 DEFAULT_MELON_PUMPKIN`；全部项目均为未勾选的 `NOT RUN / NOT PASS`。Windows 10 沙盒在 `SetIsBorderRequired` 返回 `0x80004002`，因此没有执行 Computer Use、盲输入、SendKeys 或自建 UI 自动化。沙盒自动测试、CI 与无 GUI 的 `runClient` 启动/日志证据均不能替代工作电脑上的可观察 GUI/gameplay 验收。
+本节覆盖 P2 shared farming contracts、mode `3 DEFAULT_MELON_PUMPKIN`，以及 modes `4/7/8/10/11/12/13` 的 Sugarcane、Cocoa、Mushroom、Mushroom Rotate、Mushroom SDS 与 Circular leaf；全部项目均为未勾选的 `NOT RUN / NOT PASS`。Windows 10 沙盒在 `SetIsBorderRequired` 返回 `0x80004002`，因此没有执行 Computer Use、盲输入、SendKeys 或自建 UI 自动化。沙盒自动测试、CI 与无 GUI 的 `runClient` 启动/日志证据均不能替代工作电脑上的可观察 GUI/gameplay 验收。
 
-- 已批准产品代码锚点 commit：`de715711d9ee17a193afb92e3c1b713930c77471`
-- 已批准产品代码锚点 tree：`f4b26ff7a3b00fa044ec289189967ecd7ca30c87`
+- 已批准 shared/mode 3 产品代码锚点 commit：`de715711d9ee17a193afb92e3c1b713930c77471`
+- 已批准 shared/mode 3 产品代码锚点 tree：`f4b26ff7a3b00fa044ec289189967ecd7ca30c87`
+- P2 全量集成 commit/tree：`待完成 combined review 与 master 集成后填写`
 - 最终 P7 GUI 验收 commit：`待填写`
 - 最终 P7 GUI 验收 tree：`待填写`
 - 最终 P7 GUI 验收 JAR 路径/大小/SHA-256：`待填写`
@@ -260,9 +261,9 @@ SetIsBorderRequired failed: 不支持此接口 (0x80004002)
   - 实际结果：NOT RUN / NOT PASS。
   - 证据：待填写命令反馈、重启前后配置内容/SHA-256、generation 与 held-input diagnostics。
 
-- [ ] P2-02 recognized but unimplemented modes refuse safely — NOT RUN / NOT PASS
-  - 操作：在 stopped 状态依次选择 modes `10`、`11`、`12`、`13`，确认 parser/状态显示可识别，然后逐一执行 start；每次检查 generation、macro/rotation/input owner 和日志。
-  - 预期结果：四种 mode 都被稳定识别并可保存，但 start 必须以诚实的 unimplemented 反馈 fail closed；不得创建 placeholder macro、增加运行 generation、获取控制、生成旋转或发出移动/攻击。非法 modes `-1`、`14` 仍被拒绝且配置不变。
+- [ ] P2-02 all 14 persisted modes dispatch to the exact implementation — NOT RUN / NOT PASS
+  - 操作：在 stopped 状态依次选择并持久化 modes `0..13`，每次正常退出、重启、start、读取 active macro ID 后 stop；另外尝试非法 modes `-1`、`14`。
+  - 预期结果：`0/1/2/5/6/9 -> s-shape-vertical`、`3 -> s-shape-melon-pumpkin-default`、`4 -> s-shape-sugarcane`、`7/8 -> s-shape-cocoa-beans`、`10 -> s-shape-mushroom`、`11 -> s-shape-mushroom-rotate`、`12 -> s-shape-mushroom-sds`、`13 -> circular-crop`。每个合法 mode 均可在重载后启动且只创建对应 leaf；非法 mode 被拒绝且内存/磁盘配置不变。
   - 实际结果：NOT RUN / NOT PASS。
   - 证据：待填写逐 mode 命令反馈、配置/状态、owner 与输入诊断、日志。
 
@@ -308,7 +309,49 @@ SetIsBorderRequired failed: 不支持此接口 (0x80004002)
   - 实际结果：NOT RUN / NOT PASS。
   - 证据：待填写阶段/generation 时间线、Screen/world/connection 事件、owner、held input 与日志。
 
-- [ ] P2-10 complete work-computer session, logs and safe exit — NOT RUN / NOT PASS
+- [ ] P2-10 mode 4 Sugarcane geometry, state transitions and lifecycle — NOT RUN / NOT PASS
+  - 操作：mode 4 在八个 yaw sector、两侧 water/wall 组合、A/D/S 各状态和 `0..7` side scan 布局中运行；覆盖 custom angles、`dontFixAfterWarping`、shallow/deep drop、rewarp、pause/resume 与 stop。
+  - 预期结果：minus-water 路径优先，已知阻塞才按固定表回退，D 优先于 A；UNKNOWN water/wall/support 一律无输入 fail closed。A/D 使用各自侧向输入，进入 S 前先释放旧控制；drop 仅在严格阈值后触发，换层深落地和 rewarp 只产生规定的一次 owned rotation，pause/resume 不重抽 entropy 或接受旧 generation capture。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写 water/wall 坐标、yaw sector、状态/输入、drop/rewarp 角度与时序、generation/owner 视频；UNKNOWN/stale 仅自动化覆盖时保持 NOT RUN。
+
+- [ ] P2-11 modes 7/8 Cocoa line, wall-hug and lane switching — NOT RUN / NOT PASS
+  - 操作：分别以 modes 7、8 在四个 cardinal、正负坐标边界、严格 line fraction/wall-hug window、NONE/A/D/W/S 与 SWITCHING_LANE 状态运行；覆盖 cocoa 成熟/未成熟/无关方块、drop、rewarp 与 pause/stop。
+  - 预期结果：两种 mode 使用各自严格 window 与观察到的 cardinal，固定转移优先级不因无关 cocoa maturity 改变 blind attack；lane switching 先完成再发下一状态输入。UNKNOWN walkability/wall/line 无输入 fail closed；drop 立即释放，rewarp 按配置恢复 saved rotation 或 yaw+180，超过 90° 的时长只按 leaf 规则放大一次。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写 mode、cardinal、坐标 fraction、wall 状态、逐 tick state/input、rotation 曲线与生命周期视频。
+
+- [ ] P2-12 mode 10 Mushroom target scan, diagonal lanes and recovery — NOT RUN / NOT PASS
+  - 操作：在 `y+1/+2/+3` 布置 red/brown mushroom、兼容/不兼容邻近目标与左右 walkability；验证距离 `1..179` 的同距 right-first scan、四个 cardinal/两侧 diagonal 输入、alwaysHoldW、drop 与 rewarp。
+  - 预期结果：只有兼容 mushroom 且对应侧可走才成为 READY；近处不兼容目标不能遮蔽后续兼容目标，UNKNOWN 不推进 scan、不消耗随机数。LEFT/RIGHT 按固定 diagonal 映射持键，alwaysHoldW 仅作规定覆盖；strict deep landing 使用普通 `400..699 ms` rotation，rewarp 转到相反 diagonal，stall 只交给 shared recovery。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写三层方块布局、scan 距离/选边、yaw/input、drop/rewarp 时间线与 recovery reason。
+
+- [ ] P2-13 mode 11 Mushroom Rotate lane-owned rotation — NOT RUN / NOT PASS
+  - 操作：覆盖三层 red/brown target、right-first scan、LEFT/RIGHT walkability 真值表与 lane 切换；分别从两条 lane 触发 deep drop、rewarp、pause/resume 和 stop。
+  - 预期结果：两条 lane 在 owned rotation 完成后都只持 `FORWARD+ATTACK`；LEFT/RIGHT 转换分别围绕 cardinal 使用 `-30/+30` 规则及固定 pitch/jitter/duration 顺序，无可靠方向时无旋转。deep drop 必须使用进入 DROPPING 前捕获的 lane 生成相反 cardinal 偏移；rewarp 只刷新 pitch，绝不创建 post-warp rotation；stale/cancelled rotation acknowledgement 不可推进状态。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写 previous lane、目标 yaw/pitch、随机窗口、owned rotation token、输入与 generation 时间线。
+
+- [ ] P2-14 mode 12 Mushroom SDS switching and no-drop-rotation invariant — NOT RUN / NOT PASS
+  - 操作：在 `y+0/+1` mushroom 布局验证 right-first scan；覆盖 LEFT/RIGHT、back walkability、SWITCHING_LANE 的 PASSABLE/BLOCKED/UNKNOWN，以及 alwaysHoldW、drop、两种 rewarp rotation 配置。
+  - 预期结果：LEFT/RIGHT 分别仅持 `LEFT/RIGHT+ATTACK`；back 可走且未启用 alwaysHoldW 才进入 SWITCHING_LANE，随后只持 `BACKWARD+ATTACK`。alwaysHoldW 仅阻止 backward switch，绝不增加 FORWARD。BLOCKED 释放并回到 NONE，UNKNOWN fail closed；任何 drop 都立即释放且永不旋转，rewarp 才可按配置保持 target 或 old cardinal+180。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写两层布局、state/input、alwaysHoldW 配置、drop 无旋转证明与 rewarp rotation diagnostics。
+
+- [ ] P2-15 mode 13 Circular corner evidence and exact movement cycle — NOT RUN / NOT PASS
+  - 操作：从 NONE/W 开始完整运行 `D -> S -> A -> W -> D`，逐方向构造 body/support PASSABLE/BLOCKED/UNKNOWN 与静止/运动边界；覆盖 `400..599 ms` corner dwell、alwaysHoldW、drop、rewarp 和 pause/resume。
+  - 预期结果：D/S/A/W 分别只产生 `RIGHT/BACKWARD/LEFT/FORWARD + ATTACK`，alwaysHoldW 无影响。只有对应 body/support 的已知 blocked/missing-support、水平绝对速度均 `<0.01` 且垂直静止，持续完整 dwell 后才转向；PASSABLE/UNKNOWN 或运动立即 fail closed/重置 dwell。deep landing 转相反最近 diagonal，shallow landing 只刷新 anchor；rewarp yaw+180 且只发一个 Back rotation。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写方向、probe 坐标/status、motion/dwell 时间线、按键 cycle、anchor 与 drop/rewarp rotation 视频。
+
+- [ ] P2-16 cross-family stopped switching, nested pause and terminal cleanup — NOT RUN / NOT PASS
+  - 操作：按八个 implementation family 轮换：stopped 修改 mode/start，叠加 manual+Screen+两个 feature pause，再按相反顺序 resume；随后分别以 manual stop、world unload、connection loss、disconnect 结束并切换下一 family。active 期间尝试 mode/config mutation。
+  - 预期结果：stopped 修改只改变下一次 factory 选择，不伪装成 active instance；active 修改拒绝且对象/generation/config 不变。所有 pause cause 清空前不恢复，恢复仍为原 generation/原 leaf；terminal boundary 释放全部 input/rotation/task/inventory ownership、使旧 generation 永久失效，下一 family 必须创建新 snapshot 和新 generation。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写 mode/active ID、generation、pause-cause set、owner/held-input、终止原因与配置哈希时间线。
+
+- [ ] P2-17 complete work-computer session, logs and safe exit — NOT RUN / NOT PASS
   - 操作：完成上述矩阵后检查 latest/debug/crash/hs_err 与 FarmHelper remote activity，再通过正常 Quit Game 退出并核对本次 owned Gradle/runClient/Minecraft/java/javaw 进程。
   - 预期结果：无 actionable FarmHelper/Mixin failure、crash/hs_err、秘密泄露或 FarmHelper remote/WebSocket/Webhook/Discord/analytics 活动；正常退出后 owned process 为零且不终止无关进程。所有 P0/P1/P2 尚未真实观察的项目继续保持未勾选。
   - 实际结果：NOT RUN / NOT PASS。

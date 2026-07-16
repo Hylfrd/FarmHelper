@@ -48,8 +48,10 @@ import java.nio.file.Path;
 import java.nio.file.Files;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -189,6 +191,7 @@ class FarmHelperClientRuntimeTest {
     void mappedModesSynchronizeAndInvalidModesNeverPersistOrThrow() {
         Path configPath = temporaryDirectory.resolve("mapped-modes.json");
         FarmHelperClientRuntime runtime = TestFarmHelperClientRuntimeFactory.create(configPath);
+        Set<String> resolvedIds = new HashSet<>();
         for (int mode = 0; mode <= 13; mode++) {
             assertTrue(runtime.setMacroMode(mode));
             assertEquals(mode, runtime.core().config().macroMode());
@@ -196,7 +199,24 @@ class FarmHelperClientRuntimeTest {
             FarmHelperClientRuntime reloaded = TestFarmHelperClientRuntimeFactory.create(configPath);
             assertEquals(mode, reloaded.core().config().macroMode());
             assertEquals(mode, reloaded.core().macroManager().settings().macroMode().code());
+            assertTrue(reloaded.core().macroManager().configuredModeImplemented());
+            ready(reloaded);
+            assertTrue(reloaded.startMacro());
+            assertEquals(expectedMacroId(mode), reloaded.core().macroManager().activeMacroId());
+            resolvedIds.add(reloaded.core().macroManager().activeMacroId());
+            assertTrue(reloaded.stopMacro());
+            assertEquals(MacroTerminalReason.MANUAL_STOP,
+                    reloaded.core().macroManager().lastTerminalReason().orElseThrow());
         }
+        assertEquals(Set.of(
+                "s-shape-vertical",
+                "s-shape-melon-pumpkin-default",
+                "s-shape-sugarcane",
+                "s-shape-cocoa-beans",
+                "s-shape-mushroom",
+                "s-shape-mushroom-rotate",
+                "s-shape-mushroom-sds",
+                "circular-crop"), resolvedIds);
         int before = runtime.core().config().macroMode();
         for (int invalid : List.of(-1, 14)) {
             assertFalse(runtime.setMacroMode(invalid));
@@ -681,6 +701,20 @@ class FarmHelperClientRuntimeTest {
     private static String status(FarmHelperClientRuntime runtime) {
         return new ClientFarmHelperCommandService(runtime, () -> false,
                 new ClientCommandScreenCloseGuard()).status().getFirst();
+    }
+
+    private static String expectedMacroId(int mode) {
+        return switch (mode) {
+            case 0, 1, 2, 5, 6, 9 -> "s-shape-vertical";
+            case 3 -> "s-shape-melon-pumpkin-default";
+            case 4 -> "s-shape-sugarcane";
+            case 7, 8 -> "s-shape-cocoa-beans";
+            case 10 -> "s-shape-mushroom";
+            case 11 -> "s-shape-mushroom-rotate";
+            case 12 -> "s-shape-mushroom-sds";
+            case 13 -> "circular-crop";
+            default -> throw new IllegalArgumentException("invalid macro mode: " + mode);
+        };
     }
 
     private static void assertMacroLocations(
