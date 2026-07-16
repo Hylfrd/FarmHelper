@@ -39,7 +39,6 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SShapeMelonPumpkinDefaultMacroTest {
@@ -48,14 +47,15 @@ class SShapeMelonPumpkinDefaultMacroTest {
     private static final MotionSnapshot STILL = new MotionSnapshot(0.0D, 0.0D, 0.0D);
 
     @Test
-    void rightFruitHasPriorityAndInitialRotationConsumesExactDrawOrder() {
+    void defaultStartupYawUsesCurrentDiagonalThenCardinalForRightTarget() {
         QueueRandom leaf = new QueueRandom(0.0D, 0.0D, 0.0D);
         QueueRandom rotationEntropy = new QueueRandom(0.0D, 0.0D);
         SShapeMelonPumpkinDefaultMacro macro = new SShapeMelonPumpkinDefaultMacro(
                 validSettings(), leaf, rotationEntropy);
-        macro.onStart();
+        macro.onStart(0L);
 
-        MacroDecision decision = step(macro, 0L, START, 0.0F, 0.0F,
+        MacroDecision decision = step(macro, TimeUnit.MILLISECONDS.toNanos(300L),
+                START, 0.0F, 0.0F,
                 new MotionSnapshot(0.0D, 0.0D, 0.0D), grounded(),
                 Map.of(new BlockPosition(0, 1, 0), Observation.present(melon())));
 
@@ -64,16 +64,16 @@ class SShapeMelonPumpkinDefaultMacroTest {
         assertEquals(3, leaf.draws());
         assertEquals(2, rotationEntropy.draws());
         var rotation = decision.rotation().orElseThrow();
-        assertEquals(45.0F, rotation.yaw());
+        assertEquals(135.0F, rotation.yaw());
         assertEquals(47.0F, rotation.pitch());
-        assertEquals(450L, rotation.durationMillis());
+        assertEquals(550L, rotation.durationMillis());
         assertEquals(RotationProfile.EXPO_QUART, rotation.profile());
         assertEquals(-0.25F, rotation.backModifier());
         assertTrue(decision.inputs().isEmpty());
     }
 
     @Test
-    void customPitchAvoidsPitchDrawAndCustomYawUsesCurrentPlayerCardinal() {
+    void customPitchAndYawUseConfiguredBaseWithExactJitter() {
         MacroSettings settings = validSettings();
         settings.customPitch(true);
         settings.customPitchLevel(52.0F);
@@ -93,8 +93,28 @@ class SShapeMelonPumpkinDefaultMacroTest {
 
         assertEquals(2, leaf.draws());
         assertEquals(2, rotationEntropy.draws());
-        assertEquals(46.0F, decision.rotation().orElseThrow().yaw());
+        assertEquals(136.0F, decision.rotation().orElseThrow().yaw());
         assertEquals(52.0F, decision.rotation().orElseThrow().pitch());
+    }
+
+    @Test
+    void defaultStartupYawTracksTheObservedCurrentSector() {
+        MacroSettings settings = validSettings();
+        settings.customPitch(true);
+        settings.customPitchLevel(52.0F);
+        QueueRandom leaf = new QueueRandom(0.0D, 0.0D);
+        QueueRandom rotationEntropy = new QueueRandom(0.0D, 0.0D);
+        SShapeMelonPumpkinDefaultMacro macro =
+                new SShapeMelonPumpkinDefaultMacro(settings, leaf, rotationEntropy);
+        macro.onStart(0L);
+
+        MacroDecision decision = step(macro, TimeUnit.MILLISECONDS.toNanos(300L),
+                START, 179.0F, 0.0F, STILL, grounded(),
+                Map.of(new BlockPosition(0, 1, 0), Observation.present(melon())));
+
+        assertEquals(-135.0F, decision.rotation().orElseThrow().yaw());
+        assertEquals(2, leaf.draws(), "side jitter then duration");
+        assertEquals(2, rotationEntropy.draws());
     }
 
     @Test
@@ -191,46 +211,68 @@ class SShapeMelonPumpkinDefaultMacroTest {
     }
 
     @Test
-    void currentYawSectorSeamPreservesDistanceZeroAndDiagonalDistance179Geometry() {
-        for (float yaw : List.of(22.5F, Math.nextUp(22.5F))) {
+    void currentYawSectorUsesExactUpstreamSeamsThroughCapturedDistanceZeroAnd179() {
+        List<SectorCase> sectors = List.of(
+                new SectorCase(Math.nextDown(30.0F), new BlockPosition(-179, 1, 0)),
+                new SectorCase(30.0F, new BlockPosition(-179, 1, -179)),
+                new SectorCase(Math.nextUp(30.0F), new BlockPosition(-179, 1, -179)),
+                new SectorCase(Math.nextDown(60.0F), new BlockPosition(-179, 1, -179)),
+                new SectorCase(60.0F, new BlockPosition(0, 1, -179)),
+                new SectorCase(Math.nextUp(60.0F), new BlockPosition(0, 1, -179)),
+                new SectorCase(-0.5F, new BlockPosition(-179, 1, 0)),
+                new SectorCase(390.0F, new BlockPosition(-179, 1, -179)));
+        for (SectorCase sector : sectors) {
             SShapeMelonPumpkinDefaultMacro zero = macro(new QueueRandom(
                     0.0D, 0.0D, 0.0D, 0.0D, 0.0D));
-            MacroDecision selected = step(zero, 0L, START, yaw, 0.0F, STILL, grounded(),
+            MacroDecision selected = step(zero, 0L, START, sector.yaw(), 0.0F, STILL, grounded(),
                     Map.of(new BlockPosition(0, 1, 0), Observation.present(melon())));
             assertEquals(RowDirection.RIGHT, zero.rowDirection().orElseThrow());
             assertTrue(selected.rotation().isPresent());
+
+            SShapeMelonPumpkinDefaultMacro distant = macro(new QueueRandom());
+            advanceEmptyScanTo179(distant, sector.yaw());
+            SpatialCaptureRequest request = distant.spatialRequest(
+                    player(START, sector.yaw(), 0.0F, STILL), EPOCH).orElseThrow();
+            assertTrue(request.blocks().contains(sector.rightAt179()),
+                    () -> "yaw " + sector.yaw() + " requested " + request.blocks());
         }
-
-        SShapeMelonPumpkinDefaultMacro cardinalSector = macro(new QueueRandom());
-        advanceEmptyScanTo179(cardinalSector, 22.5F);
-        SpatialCaptureRequest cardinalRequest = cardinalSector.spatialRequest(
-                player(START, 22.5F, 0.0F, STILL), EPOCH).orElseThrow();
-        assertTrue(cardinalRequest.blocks().contains(new BlockPosition(-179, 1, 0)));
-
-        float diagonalYaw = Math.nextUp(22.5F);
-        SShapeMelonPumpkinDefaultMacro diagonalSector = macro(new QueueRandom());
-        advanceEmptyScanTo179(diagonalSector, diagonalYaw);
-        SpatialCaptureRequest diagonalRequest = diagonalSector.spatialRequest(
-                player(START, diagonalYaw, 0.0F, STILL), EPOCH).orElseThrow();
-        assertTrue(diagonalRequest.blocks().contains(new BlockPosition(-179, 1, -179)));
-        assertFalse(diagonalRequest.blocks().contains(new BlockPosition(-179, 1, 0)));
     }
 
     @Test
-    void dontFixSuppressionOccursAfterTargetDrawsButBeforeDurationDraws() {
+    void initialDontFixComparesObservedYawWithStoredBaseNotJitteredRowTarget() {
         MacroSettings settings = validSettings();
         settings.dontFixAfterWarping(true);
-        QueueRandom random = new QueueRandom(0.0D, 0.5D);
-        SShapeMelonPumpkinDefaultMacro macro = new SShapeMelonPumpkinDefaultMacro(settings, random);
-        macro.onStart();
+        settings.customPitch(true);
+        settings.customPitchLevel(47.0F);
+        settings.customYaw(true);
+        settings.customYawLevel(90.0F);
+        QueueRandom suppressedLeaf = new QueueRandom(0.5D);
+        QueueRandom suppressedRotation = new QueueRandom();
+        SShapeMelonPumpkinDefaultMacro suppressed = new SShapeMelonPumpkinDefaultMacro(
+                settings, suppressedLeaf, suppressedRotation);
+        suppressed.onStart(0L);
 
-        MacroDecision decision = step(macro, 0L, START, 45.0F, 47.0F, STILL, grounded(),
+        MacroDecision decision = step(suppressed, TimeUnit.MILLISECONDS.toNanos(300L),
+                START, 90.0F, 47.0F, STILL, grounded(),
                 Map.of(new BlockPosition(0, 1, 0), Observation.present(melon())));
 
-        assertEquals(2, random.draws(),
-                "stored base yaw suppresses even when the drawn final target is jittered");
+        assertEquals(1, suppressedLeaf.draws(), "the final row target is 136 after jitter");
+        assertEquals(0, suppressedRotation.draws());
         assertTrue(decision.rotation().isEmpty());
         assertTrue(decision.inputs().isEmpty());
+
+        QueueRandom alignedLeaf = new QueueRandom(0.5D, 0.0D);
+        QueueRandom alignedRotation = new QueueRandom(0.0D, 0.0D);
+        SShapeMelonPumpkinDefaultMacro alignedWithFinalTarget =
+                new SShapeMelonPumpkinDefaultMacro(settings, alignedLeaf, alignedRotation);
+        alignedWithFinalTarget.onStart(0L);
+        MacroDecision request = step(alignedWithFinalTarget,
+                TimeUnit.MILLISECONDS.toNanos(300L), START, 136.0F, 47.0F,
+                STILL, grounded(),
+                Map.of(new BlockPosition(0, 1, 0), Observation.present(melon())));
+        assertEquals(136.0F, request.rotation().orElseThrow().yaw());
+        assertEquals(2, alignedLeaf.draws(), "jitter then duration when base yaw differs");
+        assertEquals(2, alignedRotation.draws());
     }
 
     @Test
@@ -415,6 +457,69 @@ class SShapeMelonPumpkinDefaultMacroTest {
     }
 
     @Test
+    void startupAtRewarpFailsClosedUntilRowEvidenceIsKnown() {
+        MacroSettings settings = rewarpSettings();
+        QueueRandom leaf = new QueueRandom();
+        QueueRandom rotationEntropy = new QueueRandom();
+        SShapeMelonPumpkinDefaultMacro macro =
+                new SShapeMelonPumpkinDefaultMacro(settings, leaf, rotationEntropy);
+        macro.onStart(0L);
+
+        MacroDecision decision = step(macro, TimeUnit.MILLISECONDS.toNanos(300L),
+                START, 0.0F, 0.0F, STILL, grounded(),
+                Map.of(new BlockPosition(0, 1, 0), Observation.unknown()));
+
+        assertEquals("row-crop-scan-unknown", decision.status());
+        assertEquals(SShapeMelonPumpkinDefaultMacro.State.ROW_SELECT, macro.state());
+        assertTrue(macro.rowDirection().isEmpty());
+        assertTrue(decision.warp().isEmpty());
+        assertEquals(0, leaf.draws());
+        assertEquals(0, rotationEntropy.draws());
+    }
+
+    @Test
+    void startupAtRewarpSelectsAndSavesTargetBeforeDwell() {
+        MacroSettings settings = rewarpSettings();
+        settings.customPitch(true);
+        settings.customPitchLevel(52.0F);
+        settings.customYaw(true);
+        settings.customYawLevel(90.0F);
+        QueueRandom leaf = new QueueRandom(0.5D, 0.0D, 0.0D, 0.0D);
+        QueueRandom rotationEntropy = zeros(4);
+        SShapeMelonPumpkinDefaultMacro macro =
+                new SShapeMelonPumpkinDefaultMacro(settings, leaf, rotationEntropy);
+        macro.onStart(0L);
+        long selectedAt = TimeUnit.MILLISECONDS.toNanos(300L);
+
+        MacroDecision selected = step(macro, selectedAt,
+                START, 12.0F, 0.0F, STILL, grounded(),
+                Map.of(new BlockPosition(0, 1, 0), Observation.present(melon())));
+        assertEquals(136.0F, selected.rotation().orElseThrow().yaw());
+        assertEquals(52.0F, selected.rotation().orElseThrow().pitch());
+
+        long dwellAt = selectedAt + 1L;
+        assertEquals("rewarp-dwell", step(macro, dwellAt,
+                START, 12.0F, 0.0F, STILL, grounded(), Map.of()).status());
+        long warpAt = dwellAt + TimeUnit.MILLISECONDS.toNanos(400L);
+        assertTrue(step(macro, warpAt, START, 12.0F, 0.0F,
+                STILL, grounded(), Map.of()).warp().isPresent());
+        PositionSnapshot moved = new PositionSnapshot(2.5D, 1.0D, 0.5D);
+        long landedAt = warpAt + 1L;
+        step(macro, landedAt, moved, 0.0F, 0.0F, STILL, grounded(), Map.of());
+        long postAt = landedAt + TimeUnit.MILLISECONDS.toNanos(1_500L);
+        step(macro, postAt, moved, 0.0F, 0.0F, STILL, grounded(), Map.of());
+        MacroDecision correction = step(macro,
+                postAt + TimeUnit.MILLISECONDS.toNanos(600L),
+                moved, 0.0F, 0.0F, STILL, grounded(), Map.of());
+
+        assertEquals("post-rewarp-saved-back", correction.status());
+        assertEquals(136.0F, correction.rotation().orElseThrow().yaw());
+        assertEquals(52.0F, correction.rotation().orElseThrow().pitch());
+        assertEquals(4, leaf.draws(), "initial jitter/duration, dwell, saved correction duration");
+        assertEquals(4, rotationEntropy.draws());
+    }
+
+    @Test
     void postRewarpLeafBackEmitsOneRequestAndUsesBackProfile() {
         MacroSettings settings = validSettings();
         settings.clearRewarps();
@@ -425,38 +530,24 @@ class SShapeMelonPumpkinDefaultMacroTest {
         QueueRandom rotationEntropy = zeros(20);
         SShapeMelonPumpkinDefaultMacro macro =
                 new SShapeMelonPumpkinDefaultMacro(settings, leaf, rotationEntropy);
-        macro.onStart();
-
-        assertEquals("rewarp-dwell", step(macro, 0L, START, 0.0F, 0.0F,
-                STILL, grounded(), Map.of()).status());
-        assertTrue(step(macro, TimeUnit.MILLISECONDS.toNanos(400L),
-                START, 0.0F, 0.0F, STILL, grounded(), Map.of()).warp().isPresent());
-        PositionSnapshot moved = new PositionSnapshot(2.5D, 1.0D, 0.5D);
-        long landedAt = TimeUnit.MILLISECONDS.toNanos(400L) + 1L;
-        assertEquals("rewarp-confirmed-plot--1", step(macro, landedAt,
-                moved, 0.0F, 0.0F, STILL, grounded(), Map.of()).status());
-        long postAt = landedAt + TimeUnit.MILLISECONDS.toNanos(1_500L);
-        assertEquals("post-rewarp", step(macro, postAt,
-                moved, 0.0F, 0.0F, STILL, grounded(), Map.of()).status());
-        MacroDecision correction = step(macro,
-                postAt + TimeUnit.MILLISECONDS.toNanos(600L),
-                moved, 0.0F, 0.0F, STILL, grounded(), Map.of());
+        MacroDecision correction = completeRewarp(macro, 134.0F, 47.0F);
 
         assertEquals("post-rewarp-leaf-back", correction.status());
         assertEquals(1, correction.rotation().stream().count());
         assertEquals(RotationProfile.BACK, correction.rotation().orElseThrow().profile());
-        assertEquals(-1.0F, correction.rotation().orElseThrow().yaw());
+        assertEquals(135.0F, correction.rotation().orElseThrow().yaw());
         assertEquals(47.0F, correction.rotation().orElseThrow().pitch());
-        assertEquals(450L, correction.rotation().orElseThrow().durationMillis());
-        assertEquals(5, leaf.draws(),
-                "dwell, target pitch, jitter, traced leaf duration, correction duration");
-        assertEquals(2, rotationEntropy.draws(), "Back handler modifier and floor");
+        assertEquals(325L, correction.rotation().orElseThrow().durationMillis());
+        assertEquals(8, leaf.draws(),
+                "initial target, dwell, post target, traced duration, correction duration");
+        assertEquals(4, rotationEntropy.draws(),
+                "initial and Back handlers each own their entropy");
     }
 
     @Test
     void postRewarpCorrectionDoublesOnlyBeyondNinetyDegrees() {
-        MacroDecision exact = rewarpCorrection(89.0F, 47.0F, false);
-        MacroDecision beyond = rewarpCorrection(90.0F, 47.0F, false);
+        MacroDecision exact = rewarpCorrection(45.0F, 47.0F, false);
+        MacroDecision beyond = rewarpCorrection(44.0F, 47.0F, false);
 
         assertEquals(500L, exact.rotation().orElseThrow().durationMillis());
         assertEquals(1_000L, beyond.rotation().orElseThrow().durationMillis());
@@ -464,9 +555,21 @@ class SShapeMelonPumpkinDefaultMacroTest {
 
     @Test
     void dontFixUsesCombinedYawPitchDistanceAndBackRequestIsNotDuplicated() {
-        MacroDecision suppressed = rewarpCorrection(-1.0F, 46.5F, true);
+        MacroSettings suppressedSettings = rewarpSettings();
+        suppressedSettings.rotateAfterWarped(true);
+        suppressedSettings.dontFixAfterWarping(true);
+        QueueRandom suppressedLeaf = zeros(20);
+        QueueRandom suppressedRotation = zeros(20);
+        SShapeMelonPumpkinDefaultMacro suppressedMacro =
+                new SShapeMelonPumpkinDefaultMacro(
+                        suppressedSettings, suppressedLeaf, suppressedRotation);
+        MacroDecision suppressed = completeRewarp(suppressedMacro, 135.0F, 46.5F);
         assertEquals("post-rewarp-fix-suppressed", suppressed.status());
         assertTrue(suppressed.rotation().isEmpty());
+        assertEquals(7, suppressedLeaf.draws(),
+                "suppressed path still consumes the traced leaf duration draw");
+        assertEquals(2, suppressedRotation.draws(),
+                "suppression emits no Back request or Back entropy draws");
 
         MacroSettings settings = rewarpSettings();
         settings.rotateAfterWarped(true);
@@ -475,8 +578,7 @@ class SShapeMelonPumpkinDefaultMacroTest {
         QueueRandom rotationEntropy = zeros(20);
         SShapeMelonPumpkinDefaultMacro macro =
                 new SShapeMelonPumpkinDefaultMacro(settings, leaf, rotationEntropy);
-        macro.onStart();
-        MacroDecision correction = completeRewarp(macro, -1.0F, 45.5F);
+        MacroDecision correction = completeRewarp(macro, 135.0F, 45.5F);
         var request = correction.rotation().orElseThrow();
         int leafDraws = leaf.draws();
         int rotationDraws = rotationEntropy.draws();
@@ -608,7 +710,6 @@ class SShapeMelonPumpkinDefaultMacroTest {
         settings.dontFixAfterWarping(dontFix);
         SShapeMelonPumpkinDefaultMacro macro = new SShapeMelonPumpkinDefaultMacro(
                 settings, zeros(20), zeros(20));
-        macro.onStart();
         return completeRewarp(macro, observedYaw, observedPitch);
     }
 
@@ -617,11 +718,21 @@ class SShapeMelonPumpkinDefaultMacroTest {
             float observedYaw,
             float observedPitch
     ) {
-        step(macro, 0L, START, 0.0F, 0.0F, STILL, grounded(), Map.of());
-        step(macro, TimeUnit.MILLISECONDS.toNanos(400L),
-                START, 0.0F, 0.0F, STILL, grounded(), Map.of());
+        macro.onStart(0L);
+        long selectedAt = TimeUnit.MILLISECONDS.toNanos(300L);
+        MacroDecision selected = step(macro, selectedAt,
+                START, 0.0F, 0.0F, STILL, grounded(),
+                Map.of(new BlockPosition(0, 1, 0), Observation.present(melon())));
+        assertEquals(RowDirection.RIGHT, macro.rowDirection().orElseThrow());
+        assertEquals(135.0F, selected.rotation().orElseThrow().yaw());
+        long dwellAt = selectedAt + 1L;
+        assertEquals("rewarp-dwell", step(macro, dwellAt,
+                START, 0.0F, 0.0F, STILL, grounded(), Map.of()).status());
+        long warpAt = dwellAt + TimeUnit.MILLISECONDS.toNanos(400L);
+        assertTrue(step(macro, warpAt, START, 0.0F, 0.0F,
+                STILL, grounded(), Map.of()).warp().isPresent());
         PositionSnapshot moved = new PositionSnapshot(2.5D, 1.0D, 0.5D);
-        long landedAt = TimeUnit.MILLISECONDS.toNanos(400L) + 1L;
+        long landedAt = warpAt + 1L;
         step(macro, landedAt, moved, observedYaw, observedPitch,
                 STILL, grounded(), Map.of());
         long postAt = landedAt + TimeUnit.MILLISECONDS.toNanos(1_500L);
@@ -805,6 +916,9 @@ class SShapeMelonPumpkinDefaultMacroTest {
     private static QueueRandom zeros(int count) {
         double[] values = new double[count];
         return new QueueRandom(values);
+    }
+
+    private record SectorCase(float yaw, BlockPosition rightAt179) {
     }
 
     private static final class QueueRandom implements dev.hylfrd.farmhelper.macro.MacroRandom {

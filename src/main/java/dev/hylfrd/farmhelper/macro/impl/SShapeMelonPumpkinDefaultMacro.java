@@ -39,6 +39,7 @@ import dev.hylfrd.farmhelper.runtime.spatial.SpaceStatus;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialQueries;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.UpstreamCurrentYawFrame;
 
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -70,6 +71,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     private State state = State.STOPPED;
     private RowDirection rowDirection;
     private LaneChangeDirection laneDirection;
+    private float baseYaw;
     private float cardinalYaw;
     private Float farmingYaw;
     private Float farmingPitch;
@@ -215,8 +217,12 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
             if (elapsed(context.nowNanos(), stateAt) < STARTUP_NANOS) {
                 return MacroDecision.idle("startup");
             }
-            cardinalYaw = MacroAngles.closestCardinal(observed.rotation().yaw());
+            baseYaw = settings.customYaw()
+                    ? settings.customYawLevel()
+                    : MacroAngles.closestDiagonal(observed.rotation().yaw());
+            cardinalYaw = MacroAngles.closestCardinal(baseYaw);
             enterRowSelect();
+            observed = observed.withCardinalFrame(RelativeFrame.cardinal(cardinalYaw));
         }
         if (state == State.RECOVERY_HANDOFF) {
             return MacroDecision.recoveryHandoff("recovery-handoff", recoveryReason);
@@ -248,6 +254,9 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         if (state == State.DROPPING) {
             return tickDrop(observed, posture);
         }
+        if (state == State.ROW_SELECT && rotation.pending().isEmpty()) {
+            return selectRow(observed);
+        }
 
         Optional<MacroDecision> rewarp = beginRewarp(context, observed);
         if (rewarp.isPresent()) {
@@ -266,10 +275,9 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
             return alignment;
         }
         return switch (state) {
-            case ROW_SELECT -> selectRow(observed);
             case FARMING_LEFT, FARMING_RIGHT -> farmRow(context, observed);
             case SWITCHING_LANE -> switchLane(context, observed);
-            case STARTUP, DROPPING, REWARP_DWELL, REWARPING, WARP_LANDING,
+            case STARTUP, ROW_SELECT, DROPPING, REWARP_DWELL, REWARPING, WARP_LANDING,
                     AFTER_WARP, POST_REWARP, RECOVERY_HANDOFF, STOPPED ->
                     MacroDecision.idle(state.name().toLowerCase());
         };
@@ -363,14 +371,14 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
                 rowCoordinate(observed.position(), observed.cardinalFrame(), direction));
         farmingPitch = targetPitch();
         double sideDraw = randomUnit();
-        float baseYaw = direction == RowDirection.LEFT
+        float rowTargetBaseYaw = direction == RowDirection.LEFT
                 ? cardinalYaw - 45.0F
                 : direction == RowDirection.RIGHT ? cardinalYaw + 45.0F : cardinalYaw;
         farmingYaw = direction == RowDirection.LEFT
-                ? baseYaw - (float) (sideDraw * 2.0D)
+                ? rowTargetBaseYaw - (float) (sideDraw * 2.0D)
                 : direction == RowDirection.RIGHT
-                        ? baseYaw + (float) (sideDraw * 2.0D)
-                        : baseYaw + (float) (sideDraw * 2.0D - 1.0D);
+                        ? rowTargetBaseYaw + (float) (sideDraw * 2.0D)
+                        : rowTargetBaseYaw + (float) (sideDraw * 2.0D - 1.0D);
         farmingYaw = RotationTask.normalizeYaw(farmingYaw);
         state = direction == RowDirection.LEFT ? State.FARMING_LEFT
                 : direction == RowDirection.RIGHT ? State.FARMING_RIGHT : State.ROW_SELECT;
@@ -653,13 +661,13 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         float yawDistance = Math.abs(MacroAngles.shortestDelta(
                 observed.rotation().yaw(), targetYaw));
         float pitchDistance = Math.abs(observed.rotation().pitch() - targetPitch);
+        if (settings.rotateAfterWarped()) {
+            sampleRotationMillis();
+        }
         if (settings.dontFixAfterWarping()
                 && Math.hypot(yawDistance, pitchDistance) < 1.0D) {
             rotation.clear();
             return MacroDecision.failClosed("post-rewarp-fix-suppressed");
-        }
-        if (settings.rotateAfterWarped()) {
-            sampleRotationMillis();
         }
         long correctionMillis = sampleRotationMillis();
         if (yawDistance > 90.0F) {
@@ -748,7 +756,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
                         || scanPhase == ScanPhase.RIGHT_OBSTACLE
                         ? RowDirection.RIGHT : RowDirection.LEFT;
                 if (scanPhase == ScanPhase.RIGHT_CROP || scanPhase == ScanPhase.LEFT_CROP) {
-                    blocks.add(RelativeFrame.eightWay(rotation.yaw()).blockAt(
+                    blocks.add(UpstreamCurrentYawFrame.from(rotation.yaw()).blockAt(
                             position.x(), position.y(), position.z(),
                             side.sign() * scanDistance, 0, 0));
                 } else {
@@ -835,7 +843,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     }
 
     private static RelativeFrame currentFrame(Observed observed) {
-        return RelativeFrame.eightWay(observed.rotation().yaw());
+        return UpstreamCurrentYawFrame.from(observed.rotation().yaw());
     }
 
     private void advanceScan(ScanPhase next) {
@@ -864,6 +872,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         state = next;
         rowDirection = null;
         laneDirection = null;
+        baseYaw = 0.0F;
         cardinalYaw = 0.0F;
         farmingYaw = null;
         farmingPitch = null;
@@ -1035,5 +1044,9 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
             RelativeFrame cardinalFrame,
             SpatialSnapshot spatial
     ) {
+        private Observed withCardinalFrame(RelativeFrame replacement) {
+            return new Observed(
+                    nowNanos, worldEpoch, position, motion, rotation, replacement, spatial);
+        }
     }
 }
