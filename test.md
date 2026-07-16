@@ -160,3 +160,80 @@ SetIsBorderRequired failed: 不支持此接口 (0x80004002)
 ## 未来执行记录规则
 
 若未来由人类手动执行本矩阵，必须保持 exact commit/tree/environment，逐项勾选，并把每项“实际结果”和“证据”替换为真实观察；证据至少包含截图或视频、日志路径与 SHA-256、必要的命令反馈和退出 PID/零进程结果。任何未执行、观察不稳定或与预期不一致的项目都必须原样记录，不得把本文、既有启动日志或自动回归结果当作 GUI 验收通过证明。
+
+# P1 SShapeVertical GUI/gameplay 待工作电脑验收
+
+## P1 状态与固定锚点
+
+本节只覆盖 P1 `SShapeVerticalCropMacro` 新增行为；全部项目均为未勾选的 `NOT RUN / NOT PASS`。沙盒自动测试、GitHub CI 和无 GUI 的 `runClient` 启动/日志验证都不能替代工作电脑上的可观察 GUI/gameplay 验收，也不能使任何复选框变为 PASS。
+
+- 已批准产品代码锚点 commit：`f44bf5238dec4c803b2354b89abc2fcc94b6109a`
+- 已批准产品代码锚点 tree：`0b41b1edaaf032ae918ce63f4887504731616a04`
+- 最终 P7 GUI 验收 commit：`待填写`
+- 最终 P7 GUI 验收 tree：`待填写`
+- 最终 P7 GUI 验收 JAR 路径/大小/SHA-256：`待填写`
+
+执行 P1 时复用 P0 #2～#3 和 #8～#18 的单人世界、命令反馈、生命周期、控制释放、日志与退出证据步骤，不重复执行无关的通用案例。P1 对新宏对象采用可区分原因、可嵌套的 Screen pause/resume：它仅在 P1 对象上取代 P0 #13/#15 的“Screen 一律终止且关闭后不恢复”预期；`stop`、世界卸载和断线仍是 terminal boundary，绝不允许恢复。
+
+## P1 未执行矩阵
+
+- [ ] P1-01 development-world gate — NOT RUN / NOT PASS
+  - 操作：分别组合验证 Fabric development environment、integrated server 和 JVM 属性 `farmhelper.developmentWorld=true`；只在三项同时成立的本地开发世界中触发开发传送，并逐一撤掉任一条件重试。
+  - 预期结果：三项必须同时成立才显示 `[DEV WORLD]` 并允许本地 `tp`；任一条件缺失都 fail closed，不显示 `[DEV WORLD]`，也不获得本地传送权限或发送替代远程命令。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写每个组合的画面、聊天反馈、JVM 参数与日志片段。
+
+- [ ] P1-02 config persistence and active non-mutation — NOT RUN / NOT PASS
+  - 操作：在 stopped 状态依次执行 `/fh macro mode 0`、`1`、`2`、`5`、`6`、`9`，并执行 `/fh spawn set`、`/fh rewarp add`、`/fh rewarp remove`、`/fh rewarp clear`；保存前后记录配置文件 SHA-256、`/fh status` 和 `/fh diagnostics`，退出并重启验证 roundtrip。另在 active 状态尝试改 mode 和 `/fh config reset`，最后在 stopped 状态执行 reset 并模拟可观察的保存失败边界。
+  - 预期结果：六种 mode、spawn 与 rewarp 在正常保存后重启一致；schema 中 `alwaysHoldW` 默认 `false`、`holdLeftClickWhenChangingRow` 默认 `true`。active mode/reset 被明确拒绝，macro generation、配置内容和文件 hash 均不变；stopped reset 要么原子提交完整默认值，要么失败并完整恢复旧配置，不得留下半写文件。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写各命令反馈、generation、重启前后配置内容与 SHA-256；不可安全复现的写盘失败保持 NOT RUN。
+
+- [ ] P1-03 start/pause/resume/Screen overlap/stop — NOT RUN / NOT PASS
+  - 操作：执行 `/fh macro start`，在 `300 ms` startup 窗口内及完成后观察 generation/输入；依次叠加 manual pause 与 Screen pause，以两种顺序逐个解除，再执行 `/fh macro stop` 后尝试 resume；复用 P0 #8、#11～#16 的可观察状态和控制释放证据。
+  - 预期结果：startup 满 `300 ms` 前无 farming 输入；嵌套 pause cause 全部清除前不得恢复。只由 Screen 引起或包含 Screen 的非终止暂停在关闭 Screen 后保持同一 generation，并保留 startup/row/rewarp/rotation 已消耗时长；manual cause 仍存在时不提前恢复。`stop` 是 terminal boundary，释放全部控制，后续 Screen 关闭或 `/fh macro resume` 都不能恢复旧 generation。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写命令反馈、状态/generation 时间线、视频和 held-input diagnostics。
+
+- [ ] P1-04 per-mode gameplay table — NOT RUN / NOT PASS
+  - 操作：下表每一行都要在独立 fresh start 中，对 LEFT/RIGHT 两种横向行进方向分别搭建成熟作物，覆盖正常收割、行末、换道、掉层、rewarp、pause/resume 和 stop；记录实际 yaw/pitch、按键与攻击。分别在 `alwaysHoldW=false/true` 下观察 W，不得把 W 描述为静态 forward assist。
+  - 预期结果：各 mode 只接受对应作物并满足角度区间。默认 W 是上游兼容的动态判定，`alwaysHoldW=true` 才是无条件覆盖：mode 1 南瓜/西瓜、mode 5/6 仙人掌及 Cocoa-LR 在无覆盖时不会动态加入 W；Melongkingde 仅在 exact position/front-space 规则满足时可动态加入 W。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写逐行双向视频、作物布局、角度/输入 diagnostics、行末/掉层/rewarp/pause/stop 时间线。
+
+| 状态 | mode | 作物与角度要求 | 双向独立验收范围 |
+|---|---:|---|---|
+| [ ] NOT RUN / NOT PASS | `0 NORMAL` | 成熟 wheat/carrot/potato/nether wart；`2.8 <= pitch < 3.3` | LEFT、RIGHT 各自完成收割、行末、换道、掉层、rewarp、pause、stop |
+| [ ] NOT RUN / NOT PASS | `1 PUMPKIN_MELON` | pumpkin/melon；`28 <= pitch < 30` | LEFT、RIGHT 各自完成全流程；默认不动态加 W |
+| [ ] NOT RUN / NOT PASS | `2 MELONGKINGDE` | pumpkin/melon；`-59.2 <= pitch < -58.2` | LEFT、RIGHT 各自完成全流程；只验证 exact position/front-space 动态 W |
+| [ ] NOT RUN / NOT PASS | `5 CACTUS` | 仅 cactus；`0 <= pitch < 0.5` | LEFT、RIGHT 各自完成全流程；默认不动态加 W |
+| [ ] NOT RUN / NOT PASS | `6 SUNTZU` | 仅 cactus；`-39.5 < pitch <= -38` | LEFT、RIGHT 各自完成全流程；默认不动态加 W |
+| [ ] NOT RUN / NOT PASS | `9 COCOA` | 成熟 cocoa；`pitch = -90` | Cocoa-LR 两方向各自完成全流程；默认不动态加 W |
+
+- [ ] P1-05 mature compatible/incompatible crop probes and gaps — NOT RUN / NOT PASS
+  - 操作：在 mode 0 精确对比 wheat/carrot/potato `age=7`、nether wart `age=3` 与各自未成熟 age；在 mode 1/2 对比 pumpkin/melon 与 stem/attached stem；在 mode 5/6 对比 cactus 与 nether wart；在 mode 9 对比 cocoa `age=2` 与未成熟 cocoa。把成熟兼容作物、成熟不兼容作物、未知/decoy 方块分别放在候选优先位置，并构造“有效作物暂时有 gap 但侧向路径仍可走”的布局。
+  - 预期结果：成熟兼容且直接可收获的作物为 READY，产生攻击/移动；未成熟作物不是 READY。mode 5/6 的 nether wart 必须拒绝；优先位置出现成熟不兼容作物时 fail closed，不能越过它猜测较低优先级目标；有效作物 gap 且侧向路径可继续时继续行进而不是误判 row end；未知观察和 decoy 位置一律 fail closed。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写精确方块/age 布局、逐 tick 输入/状态、视频和诊断；未知注入不得用于 GUI 验收。
+
+- [ ] P1-06 bidirectional row-end/lane/drop/timing — NOT RUN / NOT PASS
+  - 操作：LEFT/RIGHT 两侧分别构造“无作物但通路存在”和“路径确实阻塞”的行末；测量 row dwell 与换道 rotation，分别验证 forward/backward lane、`holdLeftClickWhenChangingRow` 开关、空中小落差、严格大落差、Y 边界和 grounded 大落差，并在 drop/lane 中途 pause/resume。
+  - 预期结果：row end 由路径阻塞决定，不因作物暂缺触发；row dwell 为 `400-599 ms`。forward lane 持有 `FORWARD+SPRINT` 并按设置可选 `ATTACK`，backward lane 持有 `BACKWARD`、不 sprint，并按设置可选 `ATTACK`。只有 airborne 且 drop `>0.75`、`Y<80` 才进入严格 drop，直到真实 `onGround` 前无输入；grounded drop `>1.5` 走独立分支。pause 立即释放控制，resume 保留同 generation 与剩余时序。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写双向布局、阻塞/通路截图、毫秒时间线、Y/onGround、按键/攻击与 pause/resume 视频。
+
+- [ ] P1-07 rewarp prerequisites/dwell/retry/landing/rotation — NOT RUN / NOT PASS
+  - 操作：验证空/非空 rewarp list 与未设/已设 spawn；站在 exact rewarp origin 静止触发并测量 dwell，分别在 dwell 中离开、移动或删除配置；传送后分别制造距 origin 的 `distanceSq > 2`、exact spawn、仍在原点、普通坠落/窒息和 flying 场景，观察 retry、落地、旋转与 farming 恢复。
+  - 预期结果：必须同时有非空 rewarp list 和 spawn；每次在 `400-749 ms` dwell 内持续重验 exact origin 与 stationary，离开、移动或移除配置立即取消。`distanceSq > 2` 或 exact spawn 任一成立即确认，否则 `5000 ms` 后 retry；普通 fall/suffocation 等待安全落地，flying 使用 `SNEAK 350-649 ms`。确认后等待 `1500 ms`，再有 post delay `600 ms`；spawn yaw/pitch 只作 warp metadata，恢复耕作时必须回到 farming angle。rotation 基础时长 `500-799 ms`，仅 yaw delta `>90` 时翻倍。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写配置/原点、位移、distanceSq、飞行/落地、retry 与 rotation 毫秒时间线及视频；`5000 ms` retry 如无法安全稳定复现可保留 automated-only/NOT RUN。
+
+- [ ] P1-08 lifecycle/UNKNOWN/no-input recovery — NOT RUN / NOT PASS
+  - 操作：只用自然发生的世界/玩家/连接缺失和 unloaded spatial evidence，覆盖 Screen pause/close、普通 fail-closed、row/rewarp dwell、manual stop、Save & Quit、断线与重载；观察 stall 的 recovery handoff。不得用注入、反射、调试器、盲输入或自建 UI 自动化制造 UNKNOWN。
+  - 预期结果：所有 pause、fail-closed、dwell、stop、world unload 和 disconnect 边界都释放托管控制。Screen-only pause 可在同 generation 恢复；stop/world/disconnect 等 terminal boundary 永不恢复旧对象。UNKNOWN 或 unloaded evidence 必须无输入并 fail closed；stall 只产生显式 no-input recovery handoff，绝不能私自按 `JUMP+ATTACK+反向移动`。自然不可复现或不安全的 UNKNOWN 路径保持 NOT RUN，可仅引用 automated regression，绝不伪造 PASS。
+  - 实际结果：NOT RUN / NOT PASS。
+  - 证据：待填写自然生命周期时间线、generation/terminal reason、held input、日志与退出零进程证明；不可自然复现项标注 automated-only/NOT RUN。
+
+## P1 填写规则
+
+工作电脑执行者必须先把本节 P7 commit/tree/JAR 占位符替换为唯一最终对象，再逐项以真实观察填写。任何未执行、仅由自动化覆盖、无法安全复现或证据不足的步骤继续保持 `[ ] NOT RUN / NOT PASS`；不得用本节文本、沙盒日志、CI 或自动测试代替 GUI/gameplay PASS。
