@@ -364,15 +364,23 @@ class SShapeSugarcaneMacroTest {
 
     @Test
     void stopStartGenerationAndPositionOrYawAnchorDriftRejectOldCapture() {
-        SShapeSugarcaneMacro restarted = readyMacro(new QueueRandom(), new QueueRandom());
+        QueueRandom restartLeaf = new QueueRandom();
+        QueueRandom restartEntropy = new QueueRandom();
+        SShapeSugarcaneMacro restarted = new SShapeSugarcaneMacro(
+                readySettings(), restartLeaf, restartEntropy);
+        restarted.onStart(0L);
         PlayerSnapshot stablePlayer = player(START, 45.0F, 0.0F, STILL);
+        assertEquals(SShapeSugarcaneMacro.State.STARTUP, restarted.state());
         SpatialCaptureRequest oldRequest = restarted.spatialRequest(
                 stablePlayer, EPOCH).orElseThrow();
         SpatialSnapshot oldCapture = captured(oldRequest, START, Map.of());
         restarted.onStop();
         restarted.onStart(1L);
+        assertEquals(SShapeSugarcaneMacro.State.STARTUP, restarted.state());
         assertEquals("spatial-unknown-or-stale",
                 restarted.tick(context(1L, stablePlayer, oldCapture, grounded())).status());
+        assertEquals(0, restartLeaf.draws());
+        assertEquals(0, restartEntropy.draws());
 
         SShapeSugarcaneMacro moved = readyMacro(new QueueRandom(), new QueueRandom());
         SpatialCaptureRequest positionRequest = moved.spatialRequest(
