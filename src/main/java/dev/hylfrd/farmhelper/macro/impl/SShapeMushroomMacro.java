@@ -268,14 +268,17 @@ public final class SShapeMushroomMacro implements Macro {
     }
 
     Optional<LookSide> lookSide() {
-        float difference = MacroAngles.shortestDelta(cardinalYaw, storedYaw);
-        if (Math.abs(difference - 45.0F) < 0.001F) {
-            return Optional.of(LookSide.RIGHT);
-        }
-        if (Math.abs(difference + 45.0F) < 0.001F) {
-            return Optional.of(LookSide.LEFT);
-        }
-        return Optional.empty();
+        float difference = RotationTask.normalizeYaw(storedYaw) - 90.0F;
+        int facing = ((int) Math.floor(
+                RelativeFrame.normalizeYaw(cardinalYaw) / 90.0D + 0.5D)) & 3;
+        return Optional.of(switch (facing) {
+            case 0 -> difference >= -130.0F && difference < -40.0F
+                    ? LookSide.RIGHT : LookSide.LEFT; // SOUTH
+            case 1 -> difference > 40.0F ? LookSide.RIGHT : LookSide.LEFT; // WEST
+            case 2 -> difference < -40.0F ? LookSide.RIGHT : LookSide.LEFT; // NORTH
+            case 3 -> difference > -140.0F ? LookSide.RIGHT : LookSide.LEFT; // EAST
+            default -> throw new IllegalStateException("unreachable horizontal facing");
+        });
     }
 
     private MacroDecision prerequisiteDecision(FarmingContext context) {
@@ -307,7 +310,8 @@ public final class SShapeMushroomMacro implements Macro {
         storedYaw = settings.customYaw()
                 ? RotationTask.normalizeYaw(settings.customYawLevel())
                 : MacroAngles.closestDiagonal(observed.rotation().yaw());
-        cardinalYaw = MacroAngles.closestCardinal(observed.rotation().yaw());
+        cardinalYaw = MacroAngles.closestCardinal(
+                settings.customYaw() ? storedYaw : observed.rotation().yaw());
         state = State.NONE;
         resetScan();
         if (settings.dontFixAfterWarping()
@@ -332,16 +336,19 @@ public final class SShapeMushroomMacro implements Macro {
     }
 
     private MacroDecision inspectCropTargets(Observed observed) {
-        TargetStatus right = targetStatus(observed, Side.RIGHT);
-        TargetStatus left = targetStatus(observed, Side.LEFT);
-        if (right == TargetStatus.MUSHROOM) {
+        ReadyStatus right = readyStatus(observed, Side.RIGHT);
+        if (right == ReadyStatus.UNKNOWN) {
+            return MacroDecision.failClosed("right-mushroom-ready-unknown");
+        }
+        if (right == ReadyStatus.READY) {
             return enterLane(State.RIGHT, observed);
         }
-        if (left == TargetStatus.MUSHROOM) {
-            return enterLane(State.LEFT, observed);
+        ReadyStatus left = readyStatus(observed, Side.LEFT);
+        if (left == ReadyStatus.UNKNOWN) {
+            return MacroDecision.failClosed("left-mushroom-ready-unknown");
         }
-        if (right == TargetStatus.UNKNOWN || left == TargetStatus.UNKNOWN) {
-            return MacroDecision.failClosed("mushroom-target-unknown");
+        if (left == ReadyStatus.READY) {
+            return enterLane(State.LEFT, observed);
         }
         scanPhase = ScanPhase.RIGHT_OBSTACLE;
         captures.advancePhase();
@@ -704,6 +711,8 @@ public final class SShapeMushroomMacro implements Macro {
                 if (scanPhase == ScanPhase.CROP_TARGETS) {
                     addMushroomTargets(blocks, position, cardinal, Side.RIGHT);
                     addMushroomTargets(blocks, position, cardinal, Side.LEFT);
+                    addWalkabilityBlocks(blocks, movedBody(position, cardinal, 1));
+                    addWalkabilityBlocks(blocks, movedBody(position, cardinal, -1));
                 } else {
                     Side side = scanPhase == ScanPhase.RIGHT_OBSTACLE ? Side.RIGHT : Side.LEFT;
                     addWalkabilityBlocks(blocks, movedBody(position, cardinal,
@@ -754,6 +763,16 @@ public final class SShapeMushroomMacro implements Macro {
             }
         }
         return unknown ? TargetStatus.UNKNOWN : TargetStatus.ABSENT;
+    }
+
+    private ReadyStatus readyStatus(Observed observed, Side side) {
+        TargetStatus target = targetStatus(observed, side);
+        SpaceStatus walkability = sideWalkability(observed, side, 1);
+        if (target == TargetStatus.UNKNOWN || walkability == SpaceStatus.UNKNOWN) {
+            return ReadyStatus.UNKNOWN;
+        }
+        return target == TargetStatus.MUSHROOM && walkability == SpaceStatus.PASSABLE
+                ? ReadyStatus.READY : ReadyStatus.NOT_READY;
     }
 
     private static boolean isMushroom(CropBlockKind kind) {
@@ -991,6 +1010,12 @@ public final class SShapeMushroomMacro implements Macro {
     private enum TargetStatus {
         MUSHROOM,
         ABSENT,
+        UNKNOWN
+    }
+
+    private enum ReadyStatus {
+        READY,
+        NOT_READY,
         UNKNOWN
     }
 

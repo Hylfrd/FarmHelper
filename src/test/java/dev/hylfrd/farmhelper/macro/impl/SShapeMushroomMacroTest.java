@@ -130,9 +130,115 @@ class SShapeMushroomMacroTest {
         MacroDecision failed = finishStartupWithObservations(unknown, 0.0F, Map.of(
                 target(0.0F, true, 1), Observation.unknown(),
                 target(0.0F, false, 1), Observation.present(crop("wheat"))));
-        assertEquals("mushroom-target-unknown", failed.status());
+        assertEquals("right-mushroom-ready-unknown", failed.status());
         assertEquals(SShapeMushroomMacro.State.NONE, unknown.state());
         assertEquals(SShapeMushroomMacro.ScanPhase.CROP_TARGETS, unknown.scanPhase());
+    }
+
+    @Test
+    void cropReadinessRequiresMatchingSideWalkabilityWithRightFirstUnknownSemantics() {
+        SShapeMushroomMacro rightReady = macro(0.0F);
+        MacroDecision rightSelected = finishStartupWithObservations(rightReady, 0.0F, Map.of(
+                target(0.0F, true, 1), Observation.present(crop("red_mushroom")),
+                sideBodyBlock(0.0F, false, 1), Observation.unknown()));
+        assertEquals(SShapeMushroomMacro.State.RIGHT, rightReady.state());
+        assertEquals(Set.of(InputAction.FORWARD, InputAction.ATTACK), rightSelected.inputs());
+
+        SShapeMushroomMacro blockedRight = macro(0.0F);
+        MacroDecision leftSelected = finishStartupWithObservations(blockedRight, 0.0F, Map.of(
+                target(0.0F, true, 1), Observation.present(crop("red_mushroom")),
+                target(0.0F, false, 1), Observation.present(crop("brown_mushroom")),
+                sideBodyBlock(0.0F, true, 1), Observation.present(full())));
+        assertEquals(SShapeMushroomMacro.State.LEFT, blockedRight.state());
+        assertEquals(Set.of(InputAction.LEFT, InputAction.ATTACK), leftSelected.inputs());
+
+        SShapeMushroomMacro unknownRight = macro(0.0F);
+        MacroDecision rightUnknown = finishStartupWithObservations(unknownRight, 0.0F, Map.of(
+                target(0.0F, true, 1), Observation.present(crop("red_mushroom")),
+                target(0.0F, false, 1), Observation.present(crop("brown_mushroom")),
+                sideBodyBlock(0.0F, true, 1), Observation.unknown()));
+        assertEquals("right-mushroom-ready-unknown", rightUnknown.status());
+        assertEquals(SShapeMushroomMacro.State.NONE, unknownRight.state());
+        assertTrue(rightUnknown.inputs().isEmpty());
+
+        SShapeMushroomMacro absentButUnknownRight = macro(0.0F);
+        MacroDecision absentUnknown = finishStartupWithObservations(
+                absentButUnknownRight, 0.0F, Map.of(
+                        target(0.0F, false, 1), Observation.present(crop("brown_mushroom")),
+                        sideBodyBlock(0.0F, true, 1), Observation.unknown()));
+        assertEquals("right-mushroom-ready-unknown", absentUnknown.status());
+        assertEquals(SShapeMushroomMacro.State.NONE, absentButUnknownRight.state());
+
+        SShapeMushroomMacro blockedBoth = macro(0.0F);
+        MacroDecision neitherSelected = finishStartupWithObservations(blockedBoth, 0.0F, Map.of(
+                target(0.0F, true, 1), Observation.present(crop("red_mushroom")),
+                target(0.0F, false, 1), Observation.present(crop("brown_mushroom")),
+                sideBodyBlock(0.0F, true, 1), Observation.present(full()),
+                sideBodyBlock(0.0F, false, 1), Observation.present(full())));
+        assertEquals(SShapeMushroomMacro.State.NONE, blockedBoth.state());
+        assertEquals(SShapeMushroomMacro.ScanPhase.RIGHT_OBSTACLE, blockedBoth.scanPhase());
+        assertEquals("mushroom-target-absent", neitherSelected.status());
+
+        SShapeMushroomMacro unknownLeft = macro(0.0F);
+        MacroDecision leftUnknown = finishStartupWithObservations(unknownLeft, 0.0F, Map.of(
+                target(0.0F, false, 1), Observation.present(crop("brown_mushroom")),
+                sideBodyBlock(0.0F, false, 1), Observation.unknown()));
+        assertEquals("left-mushroom-ready-unknown", leftUnknown.status());
+        assertEquals(SShapeMushroomMacro.State.NONE, unknownLeft.state());
+    }
+
+    @Test
+    void customYawUsesConfiguredCardinalAndPinnedUpstreamLookThresholds() {
+        List<CustomLookCase> cases = List.of(
+                new CustomLookCase(0.0F, 0.0F, SShapeMushroomMacro.LookSide.RIGHT),
+                new CustomLookCase(-40.0F, 0.0F, SShapeMushroomMacro.LookSide.RIGHT),
+                new CustomLookCase(-40.001F, 0.0F, SShapeMushroomMacro.LookSide.LEFT),
+                new CustomLookCase(44.999F, 0.0F, SShapeMushroomMacro.LookSide.RIGHT),
+                new CustomLookCase(45.0F, 90.0F, SShapeMushroomMacro.LookSide.LEFT),
+                new CustomLookCase(90.0F, 90.0F, SShapeMushroomMacro.LookSide.LEFT),
+                new CustomLookCase(130.0F, 90.0F, SShapeMushroomMacro.LookSide.LEFT),
+                new CustomLookCase(Math.nextUp(130.0F), 90.0F, SShapeMushroomMacro.LookSide.RIGHT),
+                new CustomLookCase(134.9F, 90.0F, SShapeMushroomMacro.LookSide.RIGHT),
+                new CustomLookCase(135.0F, -180.0F, SShapeMushroomMacro.LookSide.LEFT),
+                new CustomLookCase(179.0F, -180.0F, SShapeMushroomMacro.LookSide.LEFT),
+                new CustomLookCase(180.0F, -180.0F, SShapeMushroomMacro.LookSide.RIGHT),
+                new CustomLookCase(-180.0F, -180.0F, SShapeMushroomMacro.LookSide.RIGHT),
+                new CustomLookCase(Math.nextDown(-135.0F), -180.0F,
+                        SShapeMushroomMacro.LookSide.RIGHT),
+                new CustomLookCase(-135.0F, -90.0F, SShapeMushroomMacro.LookSide.LEFT),
+                new CustomLookCase(-50.0F, -90.0F, SShapeMushroomMacro.LookSide.LEFT),
+                new CustomLookCase(-49.999F, -90.0F,
+                        SShapeMushroomMacro.LookSide.RIGHT),
+                new CustomLookCase(-45.0F, 0.0F, SShapeMushroomMacro.LookSide.LEFT));
+
+        for (CustomLookCase testCase : cases) {
+            SShapeMushroomMacro macro = customYawMacro(testCase.yaw());
+            step(macro, 0L, START, 17.0F, 0.0F, STILL, grounded(), Map.of());
+            assertEquals(testCase.cardinal(), macro.cardinalYaw(), "cardinal " + testCase.yaw());
+            assertEquals(testCase.side(), macro.lookSide().orElseThrow(), "look " + testCase.yaw());
+        }
+    }
+
+    @Test
+    void customYawTargetCaptureAndInputsUseConfiguredBasisNotObservedYaw() {
+        SShapeMushroomMacro custom45 = customYawMacro(45.0F);
+        MacroDecision right = finishStartupWithTargets(custom45, 0.0F,
+                Map.of(target(90.0F, true, 1), crop("red_mushroom")));
+        assertEquals(90.0F, custom45.cardinalYaw());
+        assertEquals(SShapeMushroomMacro.State.RIGHT, custom45.state());
+        assertEquals(Set.of(InputAction.RIGHT, InputAction.ATTACK), right.inputs());
+
+        SShapeMushroomMacro custom90 = customYawMacro(90.0F);
+        MacroDecision left = finishStartupWithTargets(custom90, 0.0F,
+                Map.of(target(90.0F, false, 1), crop("brown_mushroom")));
+        assertEquals(SShapeMushroomMacro.State.LEFT, custom90.state());
+        assertEquals(Set.of(InputAction.FORWARD, InputAction.ATTACK), left.inputs());
+
+        SShapeMushroomMacro custom0 = customYawMacro(0.0F);
+        MacroDecision observedDifferent = finishStartupWithTargets(custom0, 90.0F,
+                Map.of(target(0.0F, true, 1), crop("red_mushroom")));
+        assertEquals(0.0F, custom0.cardinalYaw());
+        assertEquals(Set.of(InputAction.FORWARD, InputAction.ATTACK), observedDifferent.inputs());
     }
 
     @Test
@@ -578,6 +684,18 @@ class SShapeMushroomMacroTest {
         return macro;
     }
 
+    private static SShapeMushroomMacro customYawMacro(float yaw) {
+        MacroSettings settings = validSettings();
+        settings.customYaw(true);
+        settings.customYawLevel(yaw);
+        settings.customPitch(true);
+        settings.customPitchLevel(0.0F);
+        SShapeMushroomMacro macro = new SShapeMushroomMacro(
+                settings, zeros(20), zeros(20));
+        macro.onStart();
+        return macro;
+    }
+
     private static MacroDecision finishStartupWithTargets(
             SShapeMushroomMacro macro,
             float observedYaw,
@@ -819,6 +937,13 @@ class SShapeMushroomMacroTest {
 
     private static QueueRandom zeros(int count) {
         return new QueueRandom(new double[count]);
+    }
+
+    private record CustomLookCase(
+            float yaw,
+            float cardinal,
+            SShapeMushroomMacro.LookSide side
+    ) {
     }
 
     private static final class QueueRandom implements dev.hylfrd.farmhelper.macro.MacroRandom {
