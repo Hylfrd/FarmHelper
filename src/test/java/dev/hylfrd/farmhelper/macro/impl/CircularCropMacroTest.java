@@ -92,7 +92,7 @@ class CircularCropMacroTest {
         MacroDecision zBoundary = step(macro, entered + 2L, START, 45.0F, 3.0F,
                 new MotionSnapshot(0.0D, 0.0D, -0.01D), grounded(), blocked);
         MacroDecision yBoundary = step(macro, entered + 3L, START, 45.0F, 3.0F,
-                new MotionSnapshot(0.0D, 0.01D, 0.0D), grounded(), blocked);
+                new MotionSnapshot(0.0D, 0.05D, 0.0D), grounded(), blocked);
 
         assertEquals("circular-corner-moving", xBoundary.status());
         assertEquals("circular-corner-moving", zBoundary.status());
@@ -136,6 +136,16 @@ class CircularCropMacroTest {
     }
 
     @Test
+    void verticalStaticUsesExactUpstreamDyIsRestWindows() {
+        assertVerticalRest(0.049D, true);
+        assertVerticalRest(0.05D, false);
+        assertVerticalRest(0.0779D, false);
+        assertVerticalRest(0.078D, true);
+        assertVerticalRest(0.079D, true);
+        assertVerticalRest(0.0791D, false);
+    }
+
+    @Test
     void passableAndUnknownNeverCountAsCornerCompletion() {
         QueueRandom leaf = zeros(4);
         CircularCropMacro macro = started(quietSettings(), leaf, zeros(4));
@@ -164,6 +174,54 @@ class CircularCropMacroTest {
         assertEquals("circular-direction-unknown", interrupted.status());
         assertEquals(CircularCropMacro.State.D, macro.state());
         assertFalse(macro.cornerDwellActive(), "unknown evidence cancels rather than ages dwell");
+    }
+
+    @Test
+    void knownMissingSupportTurnsButUnknownSupportNeverStartsOrContinuesDwell() {
+        QueueRandom knownLeaf = zeros(3);
+        CircularCropMacro known = started(quietSettings(), knownLeaf, zeros(2));
+        long knownAt = enterD(known, START) + 1L;
+        MacroDecision knownMissing = step(known, knownAt, START, 45.0F, 3.0F,
+                STILL, grounded(), knownMissingSupport(CircularCropMacro.State.D));
+        assertEquals("circular-corner-dwell", knownMissing.status());
+        assertTrue(known.cornerDwellActive());
+        MacroDecision turned = step(known,
+                knownAt + TimeUnit.MILLISECONDS.toNanos(400L),
+                START, 45.0F, 3.0F, STILL, grounded(),
+                knownMissingSupport(CircularCropMacro.State.D));
+        assertEquals(CircularCropMacro.State.S, known.state());
+        assertEquals(Set.of(InputAction.BACKWARD, InputAction.ATTACK), turned.inputs());
+
+        QueueRandom unknownLeaf = zeros(3);
+        CircularCropMacro unknown = started(quietSettings(), unknownLeaf, zeros(2));
+        long unknownAt = enterD(unknown, START) + 1L;
+        MacroDecision noStart = step(unknown, unknownAt, START, 45.0F, 3.0F,
+                STILL, grounded(), unknownSupport(CircularCropMacro.State.D));
+        assertEquals("circular-direction-unknown", noStart.status());
+        assertFalse(unknown.cornerDwellActive());
+        assertEquals(0, unknownLeaf.draws());
+
+        step(unknown, unknownAt + 1L, START, 45.0F, 3.0F,
+                STILL, grounded(), knownMissingSupport(CircularCropMacro.State.D));
+        assertTrue(unknown.cornerDwellActive());
+        assertEquals(1, unknownLeaf.draws());
+        MacroDecision noContinuation = step(unknown,
+                unknownAt + TimeUnit.SECONDS.toNanos(1L),
+                START, 45.0F, 3.0F, STILL, grounded(),
+                unknownSupport(CircularCropMacro.State.D));
+        assertEquals("circular-direction-unknown", noContinuation.status());
+        assertEquals(CircularCropMacro.State.D, unknown.state());
+        assertFalse(unknown.cornerDwellActive());
+        assertEquals(1, unknownLeaf.draws());
+
+        MacroDecision restarted = step(unknown,
+                unknownAt + TimeUnit.SECONDS.toNanos(1L) + 1L,
+                START, 45.0F, 3.0F, STILL, grounded(),
+                knownMissingSupport(CircularCropMacro.State.D));
+        assertEquals("circular-corner-dwell", restarted.status());
+        assertEquals(CircularCropMacro.State.D, unknown.state());
+        assertTrue(unknown.cornerDwellActive());
+        assertEquals(2, unknownLeaf.draws());
     }
 
     @Test
@@ -223,9 +281,11 @@ class CircularCropMacroTest {
         QueueRandom leaf = zeros(8);
         QueueRandom rotation = zeros(8);
         MacroSettings settings = quietSettings();
+        settings.customYawLevel(30.0F);
         settings.rotateAfterDrop(true);
         CircularCropMacro macro = started(settings, leaf, rotation);
-        long now = enterD(macro, layer);
+        long now = enterD(macro, layer, 30.0F, 3.0F);
+        assertEquals(30.0F, macro.storedYaw());
 
         CircularCropMacro exactMacro = started(quietSettings(), zeros(2), zeros(2));
         long exactNow = enterD(exactMacro, layer);
@@ -236,14 +296,14 @@ class CircularCropMacroTest {
         assertNotEquals("dropping", exactThreshold.status());
 
         PositionSnapshot falling = new PositionSnapshot(0.5D, 2.0D, 0.5D);
-        MacroDecision entry = step(macro, now + 1L, falling, 45.0F, 3.0F,
+        MacroDecision entry = step(macro, now + 1L, falling, 30.0F, 3.0F,
                 STILL, airborne(), Map.of());
         assertEquals("dropping", entry.status());
         assertTrue(entry.inputs().isEmpty());
         assertEquals(CircularCropMacro.State.DROPPING, macro.state());
 
         PositionSnapshot landed = new PositionSnapshot(0.5D, 1.0D, 0.5D);
-        MacroDecision deep = step(macro, now + 2L, landed, 45.0F, 3.0F,
+        MacroDecision deep = step(macro, now + 2L, landed, 30.0F, 3.0F,
                 STILL, grounded(), Map.of());
         var request = deep.rotation().orElseThrow();
         assertEquals(CircularCropMacro.State.NONE, macro.state());
@@ -293,17 +353,18 @@ class CircularCropMacroTest {
         settings.clearRewarps();
         settings.spawn(new RewarpPosition(10, 1, 10));
         assertTrue(settings.addRewarp(new RewarpPosition(0, 1, 0)));
+        settings.customYawLevel(30.0F);
         settings.rotateAfterWarped(true);
         QueueRandom leaf = zeros(8);
         QueueRandom rotation = zeros(8);
         CircularCropMacro macro = started(settings, leaf, rotation);
 
-        step(macro, 0L, START, 45.0F, 3.0F, STILL, grounded(), Map.of());
+        step(macro, 0L, START, 30.0F, 3.0F, STILL, grounded(), Map.of());
         long dwellAt = 1L;
         assertEquals("rewarp-dwell", step(macro, dwellAt, START,
-                45.0F, 3.0F, STILL, grounded(), Map.of()).status());
+                30.0F, 3.0F, STILL, grounded(), Map.of()).status());
         long warpAt = dwellAt + TimeUnit.MILLISECONDS.toNanos(400L);
-        assertTrue(step(macro, warpAt, START, 45.0F, 3.0F,
+        assertTrue(step(macro, warpAt, START, 30.0F, 3.0F,
                 STILL, grounded(), Map.of()).warp().isPresent());
 
         PositionSnapshot spawn = new PositionSnapshot(10.5D, 1.0D, 10.5D);
@@ -317,10 +378,10 @@ class CircularCropMacroTest {
 
         var request = correction.rotation().orElseThrow();
         assertEquals("post-rewarp-circular-back", correction.status());
-        assertEquals(-135.0F, request.yaw());
+        assertEquals(-150.0F, request.yaw());
         assertEquals(RotationProfile.BACK, request.profile());
         assertEquals(1_100L, request.durationMillis(), "raw 500ms doubles before shared scaling");
-        assertEquals(-90.0F, macro.cardinalYaw());
+        assertEquals(-180.0F, macro.cardinalYaw());
         assertEquals(new BlockPosition(10, 1, 10), macro.spatialAnchor().orElseThrow());
         assertEquals(2, leaf.draws(), "dwell and one terminal Back duration");
         assertEquals(2, rotation.draws());
@@ -335,13 +396,47 @@ class CircularCropMacroTest {
 
         MacroDecision completed = step(macro,
                 postAt + TimeUnit.MILLISECONDS.toNanos(600L) + 2L,
-                spawn, -135.0F, 3.0F, STILL, grounded(), Map.of(),
+                spawn, -150.0F, 3.0F, STILL, grounded(), Map.of(),
                 MacroRotationLeaseState.terminal(
                         request.requestToken(), RotationTerminalReason.COMPLETED, 10L));
         assertEquals(Set.of(InputAction.RIGHT, InputAction.ATTACK), completed.inputs());
         assertTrue(completed.rotation().isEmpty());
         assertEquals(CircularCropMacro.State.D, macro.state());
         assertEquals(2, leaf.draws());
+        assertEquals(2, rotation.draws());
+    }
+
+    @Test
+    void rewarpWithoutRotationPreservesNonDiagonalCustomYawAndCardinal() {
+        MacroSettings settings = quietSettings();
+        settings.clearRewarps();
+        settings.spawn(new RewarpPosition(10, 1, 10));
+        assertTrue(settings.addRewarp(new RewarpPosition(0, 1, 0)));
+        settings.customYawLevel(30.0F);
+        settings.rotateAfterWarped(false);
+        QueueRandom leaf = zeros(5);
+        QueueRandom rotation = zeros(4);
+        CircularCropMacro macro = started(settings, leaf, rotation);
+
+        step(macro, 0L, START, 30.0F, 3.0F, STILL, grounded(), Map.of());
+        long dwellAt = 1L;
+        step(macro, dwellAt, START, 30.0F, 3.0F, STILL, grounded(), Map.of());
+        long warpAt = dwellAt + TimeUnit.MILLISECONDS.toNanos(400L);
+        step(macro, warpAt, START, 30.0F, 3.0F, STILL, grounded(), Map.of());
+        PositionSnapshot spawn = new PositionSnapshot(10.5D, 1.0D, 10.5D);
+        long landedAt = warpAt + 1L;
+        step(macro, landedAt, spawn, 0.0F, 3.0F, STILL, grounded(), Map.of());
+        long postAt = landedAt + TimeUnit.MILLISECONDS.toNanos(1_500L);
+        step(macro, postAt, spawn, 0.0F, 3.0F, STILL, grounded(), Map.of());
+        MacroDecision correction = step(macro,
+                postAt + TimeUnit.MILLISECONDS.toNanos(600L),
+                spawn, 0.0F, 3.0F, STILL, grounded(), Map.of());
+
+        assertEquals("post-rewarp-saved-back", correction.status());
+        assertEquals(30.0F, correction.rotation().orElseThrow().yaw());
+        assertEquals(30.0F, macro.storedYaw());
+        assertEquals(0.0F, macro.cardinalYaw());
+        assertEquals(2, leaf.draws(), "dwell and one saved-target duration");
         assertEquals(2, rotation.draws());
     }
 
@@ -433,6 +528,48 @@ class CircularCropMacroTest {
     }
 
     @Test
+    void pauseResumeAndStopStartRejectCrossGenerationCaptureAndRotationReplay() {
+        QueueRandom leaf = zeros(6);
+        QueueRandom entropy = zeros(6);
+        CircularCropMacro macro = started(validSettings(), leaf, entropy);
+        PlayerSnapshot player = player(START, 0.0F, 0.0F, STILL);
+        SpatialCaptureRequest startupCapture = macro.spatialRequest(player, EPOCH).orElseThrow();
+        MacroDecision startup = macro.tick(context(
+                0L, player, captured(startupCapture, START, Map.of()), grounded(),
+                MacroRotationLeaseState.idle(0L)));
+        var oldRotation = startup.rotation().orElseThrow();
+        SpatialCaptureRequest oldCapture = macro.spatialRequest(player, EPOCH).orElseThrow();
+        SpatialSnapshot oldSnapshot = captured(oldCapture, START, Map.of());
+        int leafDraws = leaf.draws();
+        int entropyDraws = entropy.draws();
+
+        macro.onPause(Set.of(MacroPauseCause.SCREEN_OPEN), 1L);
+        macro.onResume(10L);
+        MacroDecision pausedReplay = macro.tick(context(
+                11L, player, oldSnapshot, grounded(),
+                MacroRotationLeaseState.active(oldRotation.requestToken(), false, 2L)));
+        assertEquals("spatial-unknown-or-stale", pausedReplay.status());
+        assertTrue(pausedReplay.inputs().isEmpty());
+        assertTrue(pausedReplay.rotation().isEmpty(),
+                "stale capture cannot revive its old rotation request");
+        assertEquals(leafDraws, leaf.draws());
+        assertEquals(entropyDraws, entropy.draws());
+
+        macro.onStop(MacroTerminalReason.WORLD_CHANGE);
+        macro.onStart();
+        assertTrue(macro.pendingRotation().isEmpty());
+        MacroDecision stoppedReplay = macro.tick(context(
+                12L, player, oldSnapshot, grounded(),
+                MacroRotationLeaseState.active(oldRotation.requestToken(), false, 3L)));
+        assertEquals("spatial-unknown-or-stale", stoppedReplay.status());
+        assertTrue(stoppedReplay.inputs().isEmpty());
+        assertTrue(stoppedReplay.rotation().isEmpty());
+        assertTrue(macro.pendingRotation().isEmpty());
+        assertEquals(leafDraws, leaf.draws());
+        assertEquals(entropyDraws, entropy.draws());
+    }
+
+    @Test
     void staleTokenWorldBoundsBodyAndPhaseFailClosedAndTerminalStopInvalidatesRun() {
         assertStale(StaleKind.TOKEN);
         assertStale(StaleKind.WORLD);
@@ -458,8 +595,17 @@ class CircularCropMacroTest {
     }
 
     private static long enterD(CircularCropMacro macro, PositionSnapshot position) {
-        step(macro, 0L, position, 45.0F, 3.0F, STILL, grounded(), Map.of());
-        MacroDecision d = step(macro, 1L, position, 45.0F, 3.0F,
+        return enterD(macro, position, 45.0F, 3.0F);
+    }
+
+    private static long enterD(
+            CircularCropMacro macro,
+            PositionSnapshot position,
+            float yaw,
+            float pitch
+    ) {
+        step(macro, 0L, position, yaw, pitch, STILL, grounded(), Map.of());
+        MacroDecision d = step(macro, 1L, position, yaw, pitch,
                 STILL, grounded(), Map.of());
         assertEquals(Set.of(InputAction.RIGHT, InputAction.ATTACK), d.inputs());
         assertEquals(CircularCropMacro.State.D, macro.state());
@@ -481,6 +627,21 @@ class CircularCropMacroTest {
         return completeAt;
     }
 
+    private static void assertVerticalRest(double verticalMotion, boolean expectedRest) {
+        QueueRandom leaf = zeros(2);
+        CircularCropMacro macro = started(quietSettings(), leaf, zeros(2));
+        long now = enterD(macro, START);
+        MacroDecision decision = step(macro, now + 1L, START, 45.0F, 3.0F,
+                new MotionSnapshot(0.0D, verticalMotion, 0.0D), grounded(),
+                blocked(CircularCropMacro.State.D));
+        assertEquals(expectedRest ? "circular-corner-dwell" : "circular-corner-moving",
+                decision.status(), "vertical motion " + verticalMotion);
+        assertEquals(expectedRest, macro.cornerDwellActive(),
+                "vertical motion " + verticalMotion);
+        assertEquals(expectedRest ? 1 : 0, leaf.draws(),
+                "vertical motion " + verticalMotion);
+    }
+
     private static void assertDirection(
             CircularCropMacro macro,
             CircularCropMacro.State expected
@@ -492,6 +653,23 @@ class CircularCropMacroTest {
             CircularCropMacro.State direction
     ) {
         return Map.of(directionBlock(direction), Observation.present(full()));
+    }
+
+    private static Map<BlockPosition, Observation<BlockStateSnapshot>> knownMissingSupport(
+            CircularCropMacro.State direction
+    ) {
+        return Map.of(supportBlock(direction), Observation.present(air()));
+    }
+
+    private static Map<BlockPosition, Observation<BlockStateSnapshot>> unknownSupport(
+            CircularCropMacro.State direction
+    ) {
+        return Map.of(supportBlock(direction), Observation.unknown());
+    }
+
+    private static BlockPosition supportBlock(CircularCropMacro.State direction) {
+        BlockPosition body = directionBlock(direction);
+        return new BlockPosition(body.x(), body.y() - 1, body.z());
     }
 
     private static Map<BlockPosition, Observation<BlockStateSnapshot>> blockedAt(

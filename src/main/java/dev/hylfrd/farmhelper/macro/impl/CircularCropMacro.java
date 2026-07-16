@@ -712,9 +712,11 @@ public final class CircularCropMacro implements Macro {
     }
 
     private static boolean upstreamStopped(MotionSnapshot motion) {
+        double vertical = Math.abs(motion.y());
         return Math.abs(motion.x()) < 0.01D
-                && Math.abs(motion.y()) < 0.01D
-                && Math.abs(motion.z()) < 0.01D;
+                && Math.abs(motion.z()) < 0.01D
+                && (vertical < 0.05D
+                    || (vertical >= 0.078D && vertical <= 0.079D));
     }
 
     private static State nextDirection(State current) {
