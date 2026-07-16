@@ -4,6 +4,7 @@ import dev.hylfrd.farmhelper.control.input.InputAction;
 import dev.hylfrd.farmhelper.control.rotation.RotationProfile;
 import dev.hylfrd.farmhelper.control.rotation.RotationTerminalReason;
 import dev.hylfrd.farmhelper.macro.FarmingContext;
+import dev.hylfrd.farmhelper.macro.MacroAngles;
 import dev.hylfrd.farmhelper.macro.MacroDecision;
 import dev.hylfrd.farmhelper.macro.MacroMode;
 import dev.hylfrd.farmhelper.macro.MacroPauseCause;
@@ -11,6 +12,7 @@ import dev.hylfrd.farmhelper.macro.MacroRecoveryReason;
 import dev.hylfrd.farmhelper.macro.MacroRotationLeaseState;
 import dev.hylfrd.farmhelper.macro.MacroSettings;
 import dev.hylfrd.farmhelper.macro.MacroTerminalReason;
+import dev.hylfrd.farmhelper.macro.MacroTiming;
 import dev.hylfrd.farmhelper.macro.PlayerPosture;
 import dev.hylfrd.farmhelper.macro.ServerResponsiveness;
 import dev.hylfrd.farmhelper.runtime.snapshot.MotionSnapshot;
@@ -25,10 +27,12 @@ import dev.hylfrd.farmhelper.runtime.spatial.BoxSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.ChunkPosition;
 import dev.hylfrd.farmhelper.runtime.spatial.ChunkSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.CollisionShapeSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.RelativeFrame;
 import dev.hylfrd.farmhelper.runtime.spatial.RewarpPosition;
 import dev.hylfrd.farmhelper.runtime.spatial.SpaceStatus;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.UpstreamCurrentYawFrame;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -152,6 +156,72 @@ class SShapeCocoaBeanMacroTest {
 
         assertFalse(SShapeCocoaBeanMacro.hugWindow(7, 0.0F, -2.2D, 0.0D));
         assertTrue(SShapeCocoaBeanMacro.hugWindow(7, 0.0F, 2.2D, 0.0D));
+    }
+
+    @Test
+    void lineCompletionAndUpdateUseObservedCardinalAcrossAllAxes() {
+        for (float currentYaw : List.of(0.0F, 90.0F, 180.0F, 270.0F)) {
+            float startupYaw = MacroAngles.closestCardinal(currentYaw + 90.0F);
+            assertNotEquals(MacroAngles.closestCardinal(currentYaw), startupYaw);
+            SShapeCocoaBeanMacro complete = alignedMacroAtYaw(
+                    validSettings(MacroMode.COCOA), zeros(30), zeros(20), START, startupYaw);
+            enterSwitchingLane(complete, START, startupYaw, currentYaw);
+            Map<BlockPosition, Observation<BlockStateSnapshot>> completeEvidence = new HashMap<>(
+                    walkability(START, startupYaw, true, false, true, true));
+            completeEvidence.put(UpstreamCurrentYawFrame.from(currentYaw).blockAt(
+                    START.x(), START.y(), START.z(), -1, 0, 1), Observation.present(full()));
+
+            MacroDecision invoked = step(complete, 5L, START, currentYaw, -70.0F,
+                    STILL, grounded(), completeEvidence);
+
+            assertEquals(SShapeCocoaBeanMacro.State.FORWARD, complete.state(),
+                    "invoke yaw=" + currentYaw);
+            assertEquals("line-change-complete", invoked.status());
+            assertTrue(invoked.inputs().isEmpty());
+
+            SShapeCocoaBeanMacro update = alignedMacroAtYaw(
+                    validSettings(MacroMode.COCOA), zeros(30), zeros(20), START, startupYaw);
+            enterSwitchingLane(update, START, startupYaw, currentYaw);
+            MacroDecision updated = step(update, 5L, START, currentYaw, -70.0F,
+                    STILL, grounded(),
+                    walkability(START, startupYaw, true, false, false, true));
+            assertEquals(SShapeCocoaBeanMacro.State.FORWARD, update.state(),
+                    "update yaw=" + currentYaw);
+            assertTrue(updated.inputs().containsAll(
+                    Set.of(InputAction.FORWARD, InputAction.ATTACK)));
+            assertFalse(updated.inputs().contains(InputAction.RIGHT));
+        }
+    }
+
+    @Test
+    void productionWallHugUsesObservedCardinalForBothModesAcrossAllAxes() {
+        for (MacroMode mode : List.of(MacroMode.COCOA, MacroMode.COCOA_TRAPDOORS)) {
+            for (float currentYaw : List.of(0.0F, 90.0F, 180.0F, 270.0F)) {
+                float startupYaw = MacroAngles.closestCardinal(currentYaw + 90.0F);
+                PositionSnapshot position = currentYaw == 0.0F
+                        ? new PositionSnapshot(0.2D, 1.0D, 0.5D)
+                        : currentYaw == 90.0F
+                                ? new PositionSnapshot(0.5D, 1.0D, 0.2D)
+                                : currentYaw == 180.0F
+                                        ? new PositionSnapshot(0.6D, 1.0D, 0.5D)
+                                        : new PositionSnapshot(0.5D, 1.0D, 0.6D);
+                SShapeCocoaBeanMacro macro = alignedMacroAtYaw(
+                        validSettings(mode), zeros(20), zeros(20), position, startupYaw);
+                Map<BlockPosition, Observation<BlockStateSnapshot>> evidence = new HashMap<>(
+                        walkability(position, startupYaw, true, false, true, true));
+                evidence.put(UpstreamCurrentYawFrame.from(currentYaw).blockAt(
+                        position.x(), position.y(), position.z(), -1, 0, 0),
+                        Observation.present(mode == MacroMode.COCOA_TRAPDOORS
+                                ? trapdoorFull() : full()));
+
+                MacroDecision decision = step(macro, 2L, position, currentYaw, -70.0F,
+                        STILL, grounded(), evidence);
+
+                assertEquals(SShapeCocoaBeanMacro.State.FORWARD, macro.state());
+                assertEquals(Set.of(InputAction.FORWARD, InputAction.ATTACK, InputAction.LEFT),
+                        decision.inputs(), "mode=" + mode + " yaw=" + currentYaw);
+            }
+        }
     }
 
     @Test
@@ -437,43 +507,124 @@ class SShapeCocoaBeanMacroTest {
     }
 
     @Test
-    void sharedRewarpDwellRequestLandingAndPostDelaySmoke() {
+    void sharedRewarpRestoresSavedRotationAndBlocksUntilCompleted() {
         QueueRandom leaf = zeros(20);
         QueueRandom entropy = zeros(10);
-        SShapeCocoaBeanMacro macro = new SShapeCocoaBeanMacro(
-                rewarpSettings(), leaf, entropy);
-        macro.onStart();
-        MacroDecision initial = step(macro, 0L, START, 0.0F, 0.0F,
-                STILL, grounded(), Map.of());
-        var initialRotation = initial.rotation().orElseThrow();
-        MacroDecision dwell = step(macro, 1L, START,
-                initialRotation.yaw(), initialRotation.pitch(), STILL, grounded(), Map.of(),
-                MacroRotationLeaseState.terminal(initialRotation.requestToken(),
-                        RotationTerminalReason.COMPLETED, 1L));
-        assertEquals("rewarp-dwell", dwell.status());
-        assertEquals(SShapeCocoaBeanMacro.State.REWARP_DWELL, macro.state());
+        Correction correction = reachPostRewarpCorrection(
+                rewarpSettings(), leaf, entropy, 0.0F, -70.0F);
+        var request = correction.decision().rotation().orElseThrow();
+        assertEquals(0.0F, request.yaw());
+        assertEquals(-70.0F, request.pitch());
+        assertEquals(RotationProfile.BACK, request.profile());
+        assertEquals(MacroTiming.scaledRotationMillis(
+                500L, 50L, 0.0F, 0.0F), request.durationMillis());
+        assertEquals(SShapeCocoaBeanMacro.State.POST_REWARP_ALIGNING,
+                correction.macro().state());
+        assertTrue(correction.decision().inputs().isEmpty());
 
-        long warpAt = 1L + TimeUnit.MILLISECONDS.toNanos(400L);
-        MacroDecision warp = step(macro, warpAt, START, 0.0F, -70.0F,
-                STILL, grounded(), Map.of());
-        assertTrue(warp.warp().isPresent());
-        assertEquals(SShapeCocoaBeanMacro.State.REWARPING, macro.state());
+        MacroDecision active = step(correction.macro(), correction.nowNanos() + 1L,
+                correction.spawn(), 0.0F, -70.0F, STILL, grounded(), Map.of(),
+                MacroRotationLeaseState.active(request.requestToken(), false, 2L));
+        assertEquals(request, active.rotation().orElseThrow());
+        MacroDecision completed = step(correction.macro(), correction.nowNanos() + 2L,
+                correction.spawn(), request.yaw(), request.pitch(), STILL, grounded(), Map.of(),
+                MacroRotationLeaseState.terminal(request.requestToken(),
+                        RotationTerminalReason.COMPLETED, 3L));
+        assertEquals(SShapeCocoaBeanMacro.State.NONE, correction.macro().state());
+        assertEquals("post-rewarp-complete", completed.status());
+        assertTrue(completed.inputs().isEmpty());
+    }
 
-        PositionSnapshot spawn = new PositionSnapshot(10.5D, 1.0D, 10.5D);
-        long landedAt = warpAt + 1L;
-        MacroDecision landed = step(macro, landedAt, spawn, 0.0F, -70.0F,
-                STILL, grounded(), Map.of());
-        assertEquals(SShapeCocoaBeanMacro.State.AFTER_WARP, macro.state());
-        assertTrue(landed.inputs().isEmpty());
+    @Test
+    void rotateAfterWarpTurnsSavedYawBy180AndDoublesLargeYawDuration() {
+        MacroSettings settings = rewarpSettings();
+        settings.rotateAfterWarped(true);
+        Correction correction = reachPostRewarpCorrection(
+                settings, zeros(20), zeros(10), 0.0F, -70.0F);
 
-        long postAt = landedAt + SShapeCocoaBeanMacro.AFTER_WARP_NANOS;
-        assertEquals("post-rewarp", step(macro, postAt, spawn, 0.0F, -70.0F,
-                STILL, grounded(), Map.of()).status());
-        MacroDecision complete = step(macro,
-                postAt + SShapeCocoaBeanMacro.POST_REWARP_NANOS,
-                spawn, 0.0F, -70.0F, STILL, grounded(), Map.of());
-        assertEquals(SShapeCocoaBeanMacro.State.NONE, macro.state());
-        assertEquals("post-rewarp-complete", complete.status());
+        var request = correction.decision().rotation().orElseThrow();
+        assertEquals(-180.0F, request.yaw());
+        assertEquals(-70.0F, request.pitch());
+        assertEquals(MacroTiming.scaledRotationMillis(
+                1_000L, 50L, -180.0F, 0.0F), request.durationMillis());
+        assertTrue(correction.decision().inputs().isEmpty());
+    }
+
+    @Test
+    void postRewarpSuppressionUsesCombinedStrictThresholdAndPitchMismatchRotates() {
+        MacroSettings suppressed = rewarpSettings();
+        suppressed.dontFixAfterWarping(true);
+        QueueRandom suppressedLeaf = zeros(20);
+        QueueRandom suppressedEntropy = zeros(10);
+        Correction below = reachPostRewarpCorrection(
+                suppressed, suppressedLeaf, suppressedEntropy, 0.5F, -69.5F);
+        assertEquals("post-rewarp-fix-suppressed", below.decision().status());
+        assertTrue(below.decision().rotation().isEmpty());
+        assertEquals(SShapeCocoaBeanMacro.State.NONE, below.macro().state());
+        assertEquals(3, suppressedLeaf.draws());
+        assertEquals(2, suppressedEntropy.draws());
+
+        MacroSettings threshold = rewarpSettings();
+        threshold.dontFixAfterWarping(true);
+        Correction exact = reachPostRewarpCorrection(
+                threshold, zeros(20), zeros(10), 0.0F, -69.0F);
+        assertTrue(exact.decision().rotation().isPresent());
+        assertEquals(SShapeCocoaBeanMacro.State.POST_REWARP_ALIGNING, exact.macro().state());
+
+        MacroSettings pitchMismatch = rewarpSettings();
+        pitchMismatch.dontFixAfterWarping(true);
+        Correction mismatch = reachPostRewarpCorrection(
+                pitchMismatch, zeros(20), zeros(10), 0.1F, -68.9F);
+        assertTrue(mismatch.decision().rotation().isPresent());
+    }
+
+    @Test
+    void postRewarpAcknowledgementsRetryWithoutDuplicateDrawsAndCancelFailClosed() {
+        QueueRandom leaf = zeros(20);
+        QueueRandom entropy = zeros(10);
+        Correction correction = reachPostRewarpCorrection(
+                rewarpSettings(), leaf, entropy, 10.0F, -60.0F);
+        var request = correction.decision().rotation().orElseThrow();
+        int leafDraws = leaf.draws();
+        int entropyDraws = entropy.draws();
+
+        MacroDecision stale = step(correction.macro(), correction.nowNanos() + 1L,
+                correction.spawn(), 10.0F, -60.0F, STILL, grounded(), Map.of(),
+                MacroRotationLeaseState.terminal(request.requestToken() + 1L,
+                        RotationTerminalReason.COMPLETED, 2L));
+        assertEquals("post-rewarp-rotation-acknowledgement-stale", stale.status());
+        assertTrue(stale.rotation().isEmpty());
+        MacroDecision retry = step(correction.macro(), correction.nowNanos() + 2L,
+                correction.spawn(), 10.0F, -60.0F, STILL, grounded(), Map.of(),
+                MacroRotationLeaseState.terminal(request.requestToken(),
+                        RotationTerminalReason.OWNER_CANCELLED, 3L));
+        assertEquals(request, retry.rotation().orElseThrow());
+        correction.macro().onPause(Set.of(MacroPauseCause.SCREEN_OPEN),
+                correction.nowNanos() + 3L);
+        correction.macro().onResume(correction.nowNanos() + 1_000L);
+        MacroDecision afterPause = step(correction.macro(), correction.nowNanos() + 1_001L,
+                correction.spawn(), 10.0F, -60.0F, STILL, grounded(), Map.of(),
+                MacroRotationLeaseState.active(request.requestToken(), false, 4L));
+        assertEquals(request, afterPause.rotation().orElseThrow());
+        assertEquals(leafDraws, leaf.draws());
+        assertEquals(entropyDraws, entropy.draws());
+
+        Correction cancelled = reachPostRewarpCorrection(
+                rewarpSettings(), zeros(20), zeros(10), 10.0F, -60.0F);
+        var cancelledRequest = cancelled.decision().rotation().orElseThrow();
+        MacroDecision rejected = step(cancelled.macro(), cancelled.nowNanos() + 1L,
+                cancelled.spawn(), 10.0F, -60.0F, STILL, grounded(), Map.of(),
+                MacroRotationLeaseState.terminal(cancelledRequest.requestToken(),
+                        RotationTerminalReason.APPLICATION_FAILED, 2L));
+        assertEquals("post-rewarp-rotation-cancelled", rejected.status());
+        assertTrue(rejected.inputs().isEmpty());
+        assertEquals(SShapeCocoaBeanMacro.State.POST_REWARP_ALIGNING,
+                cancelled.macro().state());
+        MacroDecision missing = step(cancelled.macro(), cancelled.nowNanos() + 2L,
+                cancelled.spawn(), 10.0F, -60.0F, STILL, grounded(), Map.of(),
+                MacroRotationLeaseState.idle(3L));
+        assertEquals("post-rewarp-rotation-missing", missing.status());
+        assertTrue(missing.inputs().isEmpty());
     }
 
     @Test
@@ -572,9 +723,19 @@ class SShapeCocoaBeanMacroTest {
             QueueRandom entropy,
             PositionSnapshot position
     ) {
+        return alignedMacroAtYaw(settings, leaf, entropy, position, 0.0F);
+    }
+
+    private static SShapeCocoaBeanMacro alignedMacroAtYaw(
+            MacroSettings settings,
+            QueueRandom leaf,
+            QueueRandom entropy,
+            PositionSnapshot position,
+            float startupYaw
+    ) {
         SShapeCocoaBeanMacro macro = new SShapeCocoaBeanMacro(settings, leaf, entropy);
         macro.onStart();
-        MacroDecision initial = step(macro, 0L, position, 0.0F, 0.0F,
+        MacroDecision initial = step(macro, 0L, position, startupYaw, 0.0F,
                 STILL, grounded(), Map.of(), MacroRotationLeaseState.idle(0L));
         var request = initial.rotation().orElseThrow();
         MacroDecision aligned = step(macro, 1L, position, request.yaw(), request.pitch(),
@@ -582,6 +743,57 @@ class SShapeCocoaBeanMacroTest {
                         request.requestToken(), RotationTerminalReason.COMPLETED, 1L));
         assertEquals(Set.of(InputAction.FORWARD, InputAction.ATTACK), aligned.inputs());
         return macro;
+    }
+
+    private static void enterSwitchingLane(
+            SShapeCocoaBeanMacro macro,
+            PositionSnapshot position,
+            float savedCardinal,
+            float observedYaw
+    ) {
+        step(macro, 2L, position, observedYaw, -70.0F,
+                STILL, grounded(),
+                walkability(position, savedCardinal, false, true, true, false));
+        step(macro, 3L, position, observedYaw, -70.0F,
+                STILL, grounded(),
+                walkability(position, savedCardinal, true, true, false, true));
+        step(macro, 4L, position, observedYaw, -70.0F,
+                STILL, grounded(),
+                walkability(position, savedCardinal, true, false, true, true));
+        assertEquals(SShapeCocoaBeanMacro.State.SWITCHING_LANE, macro.state());
+    }
+
+    private static Correction reachPostRewarpCorrection(
+            MacroSettings settings,
+            QueueRandom leaf,
+            QueueRandom entropy,
+            float observedYaw,
+            float observedPitch
+    ) {
+        SShapeCocoaBeanMacro macro = new SShapeCocoaBeanMacro(settings, leaf, entropy);
+        macro.onStart();
+        MacroDecision initial = step(macro, 0L, START, 10.0F, 0.0F,
+                STILL, grounded(), Map.of());
+        var initialRotation = initial.rotation().orElseThrow();
+        MacroDecision dwell = step(macro, 1L, START,
+                initialRotation.yaw(), initialRotation.pitch(), STILL, grounded(), Map.of(),
+                MacroRotationLeaseState.terminal(initialRotation.requestToken(),
+                        RotationTerminalReason.COMPLETED, 1L));
+        assertEquals("rewarp-dwell", dwell.status());
+        long warpAt = 1L + TimeUnit.MILLISECONDS.toNanos(400L);
+        assertTrue(step(macro, warpAt, START, 0.0F, -70.0F,
+                STILL, grounded(), Map.of()).warp().isPresent());
+        PositionSnapshot spawn = new PositionSnapshot(10.5D, 1.0D, 10.5D);
+        long landedAt = warpAt + 1L;
+        step(macro, landedAt, spawn, observedYaw, observedPitch,
+                STILL, grounded(), Map.of());
+        long postAt = landedAt + SShapeCocoaBeanMacro.AFTER_WARP_NANOS;
+        assertEquals("post-rewarp", step(macro, postAt, spawn, observedYaw, observedPitch,
+                STILL, grounded(), Map.of()).status());
+        long correctionAt = postAt + SShapeCocoaBeanMacro.POST_REWARP_NANOS;
+        MacroDecision correction = step(macro, correctionAt,
+                spawn, observedYaw, observedPitch, STILL, grounded(), Map.of());
+        return new Correction(macro, correction, spawn, correctionAt);
     }
 
     private static MacroSettings validSettings(MacroMode mode) {
@@ -618,6 +830,39 @@ class SShapeCocoaBeanMacroTest {
         }
         if (!left) {
             overrides.put(new BlockPosition(1, 1, 0), Observation.present(full()));
+        }
+        return overrides;
+    }
+
+    private static Map<BlockPosition, Observation<BlockStateSnapshot>> walkability(
+            PositionSnapshot position,
+            float savedCardinal,
+            boolean front,
+            boolean back,
+            boolean right,
+            boolean left
+    ) {
+        RelativeFrame frame = RelativeFrame.cardinal(savedCardinal);
+        Map<BlockPosition, Observation<BlockStateSnapshot>> overrides = new HashMap<>();
+        if (!front) {
+            overrides.put(frame.blockAt(
+                    position.x(), position.y(), position.z(), 0, 0, 1),
+                    Observation.present(full()));
+        }
+        if (!back) {
+            overrides.put(frame.blockAt(
+                    position.x(), position.y(), position.z(), 0, 0, -1),
+                    Observation.present(full()));
+        }
+        if (!right) {
+            overrides.put(frame.blockAt(
+                    position.x(), position.y(), position.z(), 1, 0, 0),
+                    Observation.present(full()));
+        }
+        if (!left) {
+            overrides.put(frame.blockAt(
+                    position.x(), position.y(), position.z(), -1, 0, 0),
+                    Observation.present(full()));
         }
         return overrides;
     }
@@ -748,6 +993,14 @@ class SShapeCocoaBeanMacroTest {
 
     private static QueueRandom zeros(int count) {
         return new QueueRandom(new double[count]);
+    }
+
+    private record Correction(
+            SShapeCocoaBeanMacro macro,
+            MacroDecision decision,
+            PositionSnapshot spawn,
+            long nowNanos
+    ) {
     }
 
     private static final class QueueRandom implements dev.hylfrd.farmhelper.macro.MacroRandom {

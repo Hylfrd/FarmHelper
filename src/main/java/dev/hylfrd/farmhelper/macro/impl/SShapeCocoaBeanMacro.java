@@ -142,7 +142,7 @@ public final class SShapeCocoaBeanMacro implements Macro {
             case REWARPING -> rewarp.shiftRequest(suspended);
             case AFTER_WARP, POST_REWARP -> recoveryUntil = shift(recoveryUntil, suspended);
             case STOPPED, STARTUP, NONE, BACKWARD, FORWARD, SWITCHING_SIDE,
-                    SWITCHING_LANE, DROPPING, RECOVERY_HANDOFF -> { }
+                    SWITCHING_LANE, DROPPING, POST_REWARP_ALIGNING, RECOVERY_HANDOFF -> { }
         }
         pausedAt = Long.MIN_VALUE;
         invalidateCapture();
@@ -218,10 +218,10 @@ public final class SShapeCocoaBeanMacro implements Macro {
             if (context.nowNanos() < recoveryUntil) {
                 return MacroDecision.failClosed("post-rewarp");
             }
-            clearWarpState();
-            transition(State.NONE, observed);
-            drop.arm(observed.position().y());
-            return MacroDecision.failClosed("post-rewarp-complete");
+            return beginPostRewarpCorrection(observed);
+        }
+        if (state == State.POST_REWARP_ALIGNING) {
+            return tickPostRewarpAlignment(context, observed);
         }
         if (state == State.DROPPING) {
             return tickDrop(observed, posture);
@@ -389,7 +389,7 @@ public final class SShapeCocoaBeanMacro implements Macro {
             case SWITCHING_LANE -> !back && !right && left ? State.FORWARD
                     : State.SWITCHING_LANE;
             case STOPPED, STARTUP, DROPPING, REWARP_DWELL, REWARPING, WARP_LANDING,
-                    AFTER_WARP, POST_REWARP, RECOVERY_HANDOFF -> current;
+                    AFTER_WARP, POST_REWARP, POST_REWARP_ALIGNING, RECOVERY_HANDOFF -> current;
         };
     }
 
@@ -458,8 +458,9 @@ public final class SShapeCocoaBeanMacro implements Macro {
         if (solid == Evidence.UNKNOWN) {
             return Evidence.UNKNOWN;
         }
+        float observedCardinal = MacroAngles.closestCardinal(observed.rotation().yaw());
         return solid == Evidence.YES && frontWalkable
-                && lineFraction(cardinalYaw, observed.position().x(), observed.position().z())
+                && lineFraction(observedCardinal, observed.position().x(), observed.position().z())
                 ? Evidence.YES : Evidence.NO;
     }
 
@@ -471,7 +472,8 @@ public final class SShapeCocoaBeanMacro implements Macro {
         if (solid != Evidence.YES) {
             return solid;
         }
-        return hugWindow(settings.macroMode().code(), cardinalYaw,
+        float observedCardinal = MacroAngles.closestCardinal(observed.rotation().yaw());
+        return hugWindow(settings.macroMode().code(), observedCardinal,
                 observed.position().x(), observed.position().z()) ? Evidence.YES : Evidence.NO;
     }
 
@@ -617,6 +619,59 @@ public final class SShapeCocoaBeanMacro implements Macro {
         invalidateCapture();
         return MacroDecision.failClosed("rewarp-confirmed-plot-"
                 + rewarp.confirmedSpawn().map(MacroSpawnPose::plot).orElse(-1));
+    }
+
+    private MacroDecision beginPostRewarpCorrection(Observed observed) {
+        if (farmingYaw == null || farmingPitch == null) {
+            return MacroDecision.failClosed("post-rewarp-target-unknown");
+        }
+        float targetYaw = farmingYaw;
+        if (settings.rotateAfterWarped()) {
+            targetYaw = RotationTask.normalizeYaw(targetYaw + 180.0F);
+            farmingYaw = targetYaw;
+            cardinalYaw = MacroAngles.closestCardinal(targetYaw);
+        }
+        float targetPitch = farmingPitch;
+        float yawDistance = Math.abs(MacroAngles.shortestDelta(
+                observed.rotation().yaw(), targetYaw));
+        float pitchDistance = Math.abs(observed.rotation().pitch() - targetPitch);
+        clearWarpState();
+        drop.arm(observed.position().y());
+        if (settings.dontFixAfterWarping()
+                && Math.hypot(yawDistance, pitchDistance) < 1.0D) {
+            transition(State.NONE, observed);
+            return MacroDecision.failClosed("post-rewarp-fix-suppressed");
+        }
+        long sampledMillis = sampleRotationMillis();
+        if (yawDistance > 90.0F) {
+            sampledMillis = Math.multiplyExact(sampledMillis, 2L);
+        }
+        rotation.begin(
+                observed.rotation().yaw(), observed.rotation().pitch(),
+                targetYaw, targetPitch, RotationProfile.BACK,
+                sampledMillis, rotationEntropy);
+        state = State.POST_REWARP_ALIGNING;
+        invalidateCapture();
+        return rotationDecision("post-rewarp-aligning");
+    }
+
+    private MacroDecision tickPostRewarpAlignment(FarmingContext context, Observed observed) {
+        if (rotation.pending().isEmpty()) {
+            return MacroDecision.failClosed("post-rewarp-rotation-missing");
+        }
+        return switch (rotation.observe(context)) {
+            case NONE -> MacroDecision.failClosed("post-rewarp-rotation-missing");
+            case ACTIVE, UNACKNOWLEDGED, RETRYABLE_CANCELLATION ->
+                    rotationDecision("post-rewarp-aligning");
+            case COMPLETED -> {
+                transition(State.NONE, observed);
+                drop.arm(observed.position().y());
+                yield MacroDecision.failClosed("post-rewarp-complete");
+            }
+            case CANCELLED -> MacroDecision.failClosed("post-rewarp-rotation-cancelled");
+            case STALE_ACKNOWLEDGEMENT ->
+                    MacroDecision.failClosed("post-rewarp-rotation-acknowledgement-stale");
+        };
     }
 
     private MacroDecision enterRecovery(MacroRecoveryReason reason, String status) {
@@ -858,6 +913,7 @@ public final class SShapeCocoaBeanMacro implements Macro {
         WARP_LANDING,
         AFTER_WARP,
         POST_REWARP,
+        POST_REWARP_ALIGNING,
         RECOVERY_HANDOFF
     }
 
