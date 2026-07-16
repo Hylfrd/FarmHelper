@@ -1300,19 +1300,45 @@ class SShapeVerticalCropMacroTest {
             assertFalse(outsideBand.inputs().contains(InputAction.FORWARD), mode.name());
         }
 
-        assertTrue(SShapeVerticalCropMacro.inForwardAssistBand(
-                new PositionSnapshot(0.5D, 1.0D, -0.5D), 0.0F));
-        assertTrue(SShapeVerticalCropMacro.inForwardAssistBand(
-                new PositionSnapshot(0.5D, 1.0D, 0.5D), 180.0F));
-        assertTrue(SShapeVerticalCropMacro.inForwardAssistBand(
-                new PositionSnapshot(0.5D, 1.0D, 0.5D), 90.0F));
-        assertTrue(SShapeVerticalCropMacro.inForwardAssistBand(
-                new PositionSnapshot(0.5D, 1.0D, 0.5D), 270.0F));
-        for (double boundary : List.of(-0.9D, -0.35D, 0.1D, 0.65D)) {
-            assertFalse(SShapeVerticalCropMacro.inForwardAssistBand(
-                    new PositionSnapshot(0.5D, 1.0D, boundary), 0.0F),
-                    "boundary=" + boundary);
+    }
+
+    @Test
+    void forwardAssistCardinalsUseDistinctOpenSignedRemainderBands() {
+        for (ForwardBandCardinal cardinal : List.of(
+                new ForwardBandCardinal(0.0F, true, true),
+                new ForwardBandCardinal(270.0F, false, true),
+                new ForwardBandCardinal(90.0F, false, false),
+                new ForwardBandCardinal(180.0F, true, false))) {
+            boolean groupA = cardinal.groupA();
+            assertForwardBand(cardinal, -0.8D, groupA);
+            assertForwardBand(cardinal, -0.2D, !groupA);
+            assertForwardBand(cardinal, 0.2D, groupA);
+            assertForwardBand(cardinal, 0.8D, !groupA);
+
+            List<Double> boundaries = groupA
+                    ? List.of(-0.9D, -0.35D, 0.1D, 0.65D)
+                    : List.of(-0.65D, -0.1D, 0.35D, 0.9D);
+            for (double boundary : boundaries) {
+                assertForwardBand(cardinal, boundary, false);
+            }
+
+            if (groupA) {
+                assertForwardBand(cardinal, Math.nextUp(-0.9D), true);
+                assertForwardBand(cardinal, Math.nextDown(-0.35D), true);
+                assertForwardBand(cardinal, Math.nextUp(0.1D), true);
+                assertForwardBand(cardinal, Math.nextDown(0.65D), true);
+            } else {
+                assertForwardBand(cardinal, Math.nextUp(-0.65D), true);
+                assertForwardBand(cardinal, Math.nextDown(-0.1D), true);
+                assertForwardBand(cardinal, Math.nextUp(0.35D), true);
+                assertForwardBand(cardinal, Math.nextDown(0.9D), true);
+            }
         }
+
+        assertFalse(SShapeVerticalCropMacro.inForwardAssistBand(
+                new PositionSnapshot(0.25D, 1.0D, -0.8D), 180.0F));
+        assertTrue(SShapeVerticalCropMacro.inForwardAssistBand(
+                new PositionSnapshot(0.25D, 1.0D, -0.2D), 180.0F));
     }
 
     @Test
@@ -1477,6 +1503,19 @@ class SShapeVerticalCropMacroTest {
                 moved, 0.0D, 2.8F, spatial(moved, wheat(), true),
                 new PlayerPosture(false, true, false))).status());
         assertEquals(5, index.get());
+    }
+
+    private static void assertForwardBand(
+            ForwardBandCardinal cardinal,
+            double signedRemainder,
+            boolean expected
+    ) {
+        PositionSnapshot position = cardinal.zAxis()
+                ? new PositionSnapshot(0.25D, 1.0D, signedRemainder)
+                : new PositionSnapshot(signedRemainder, 1.0D, 0.25D);
+        assertEquals(expected, SShapeVerticalCropMacro.inForwardAssistBand(
+                        position, cardinal.yaw()),
+                "yaw=" + cardinal.yaw() + " remainder=" + signedRemainder);
     }
 
     private static void assertRowDelay(double delayDraw, long beforeMillis, long atMillis) {
@@ -1806,6 +1845,9 @@ class SShapeVerticalCropMacroTest {
     }
 
     private record RelativeProbe(int right, int up, int forward) {
+    }
+
+    private record ForwardBandCardinal(float yaw, boolean zAxis, boolean groupA) {
     }
 
     private record CropFixture(String id, Map<String, String> properties, float pitch) {

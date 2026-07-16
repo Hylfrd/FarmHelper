@@ -888,9 +888,9 @@ public final class SShapeVerticalCropMacro implements Macro {
         double coordinate = cardinal == 0 || cardinal == 2
                 ? position.z() % 1.0D : position.x() % 1.0D;
         return switch (cardinal) {
-            case 0, 2, 3 -> coordinate > -0.9D && coordinate < -0.35D
+            case 0, 3 -> coordinate > -0.9D && coordinate < -0.35D
                     || coordinate > 0.1D && coordinate < 0.65D;
-            case 1 -> coordinate > -0.65D && coordinate < -0.1D
+            case 1, 2 -> coordinate > -0.65D && coordinate < -0.1D
                     || coordinate > 0.35D && coordinate < 0.9D;
             default -> false;
         };
