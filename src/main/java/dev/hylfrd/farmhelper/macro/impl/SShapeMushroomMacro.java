@@ -766,13 +766,18 @@ public final class SShapeMushroomMacro implements Macro {
     }
 
     private ReadyStatus readyStatus(Observed observed, Side side) {
-        TargetStatus target = targetStatus(observed, side);
         SpaceStatus walkability = sideWalkability(observed, side, 1);
-        if (target == TargetStatus.UNKNOWN || walkability == SpaceStatus.UNKNOWN) {
+        if (walkability == SpaceStatus.UNKNOWN) {
             return ReadyStatus.UNKNOWN;
         }
-        return target == TargetStatus.MUSHROOM && walkability == SpaceStatus.PASSABLE
-                ? ReadyStatus.READY : ReadyStatus.NOT_READY;
+        if (walkability == SpaceStatus.BLOCKED) {
+            return ReadyStatus.NOT_READY;
+        }
+        TargetStatus target = targetStatus(observed, side);
+        if (target == TargetStatus.UNKNOWN) {
+            return ReadyStatus.UNKNOWN;
+        }
+        return target == TargetStatus.MUSHROOM ? ReadyStatus.READY : ReadyStatus.NOT_READY;
     }
 
     private static boolean isMushroom(CropBlockKind kind) {

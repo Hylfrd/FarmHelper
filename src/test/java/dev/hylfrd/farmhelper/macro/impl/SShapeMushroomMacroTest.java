@@ -152,6 +152,16 @@ class SShapeMushroomMacroTest {
         assertEquals(SShapeMushroomMacro.State.LEFT, blockedRight.state());
         assertEquals(Set.of(InputAction.LEFT, InputAction.ATTACK), leftSelected.inputs());
 
+        SShapeMushroomMacro blockedRightUnknownCrop = macro(0.0F);
+        MacroDecision leftDespiteUnknownRightCrop = finishStartupWithObservations(
+                blockedRightUnknownCrop, 0.0F, Map.of(
+                        target(0.0F, true, 1), Observation.unknown(),
+                        target(0.0F, false, 1), Observation.present(crop("brown_mushroom")),
+                        sideBodyBlock(0.0F, true, 1), Observation.present(full())));
+        assertEquals(SShapeMushroomMacro.State.LEFT, blockedRightUnknownCrop.state());
+        assertEquals(Set.of(InputAction.LEFT, InputAction.ATTACK),
+                leftDespiteUnknownRightCrop.inputs());
+
         SShapeMushroomMacro unknownRight = macro(0.0F);
         MacroDecision rightUnknown = finishStartupWithObservations(unknownRight, 0.0F, Map.of(
                 target(0.0F, true, 1), Observation.present(crop("red_mushroom")),
@@ -178,6 +188,17 @@ class SShapeMushroomMacroTest {
         assertEquals(SShapeMushroomMacro.State.NONE, blockedBoth.state());
         assertEquals(SShapeMushroomMacro.ScanPhase.RIGHT_OBSTACLE, blockedBoth.scanPhase());
         assertEquals("mushroom-target-absent", neitherSelected.status());
+
+        SShapeMushroomMacro blockedLeftUnknownCrop = macro(0.0F);
+        MacroDecision blockedUnknownLeftIsNotReady = finishStartupWithObservations(
+                blockedLeftUnknownCrop, 0.0F, Map.of(
+                        target(0.0F, false, 1), Observation.unknown(),
+                        sideBodyBlock(0.0F, false, 1), Observation.present(full())));
+        assertEquals(SShapeMushroomMacro.State.NONE, blockedLeftUnknownCrop.state());
+        assertEquals(SShapeMushroomMacro.ScanPhase.RIGHT_OBSTACLE,
+                blockedLeftUnknownCrop.scanPhase());
+        assertEquals("mushroom-target-absent", blockedUnknownLeftIsNotReady.status());
+        assertTrue(blockedUnknownLeftIsNotReady.inputs().isEmpty());
 
         SShapeMushroomMacro unknownLeft = macro(0.0F);
         MacroDecision leftUnknown = finishStartupWithObservations(unknownLeft, 0.0F, Map.of(
