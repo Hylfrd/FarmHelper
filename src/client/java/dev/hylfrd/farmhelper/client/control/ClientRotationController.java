@@ -136,6 +136,13 @@ public final class ClientRotationController {
                 .isPresent();
     }
 
+    /** Owner-scoped cancellation used by navigation terminal cleanup. */
+    public boolean cancel(ControlOwner owner, RotationCancelReason reason) {
+        return controller.cancel(
+                Objects.requireNonNull(owner, "owner"),
+                Objects.requireNonNull(reason, "reason"));
+    }
+
     public void tick(Minecraft client) {
         Objects.requireNonNull(client, "client");
         tick(new MinecraftRotationView(client), () -> requireClientThread(client));

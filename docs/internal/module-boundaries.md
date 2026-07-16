@@ -29,7 +29,19 @@ settings key mapping and opens a new per-screen draft session; it does not own c
 - one `FarmHelperConfig`;
 - one `MacroManager`;
 - one owner-cancellable `ClientTaskQueue`;
+- one ticketed `NavigationController` and its bounded segmented spatial contract;
+- one bounded typed expected motion/rotation/teleport ledger shared with later Failsafes;
 - one `GameStateParser` and its current immutable parse result.
+
+Navigation exposes `ControlOwner` plus an exact positive generation/world-epoch ticket. Internal
+task identities are derived from that ticket. A terminal navigation boundary clears its exact task,
+input, rotation, and expectation ownership; global client cancellation also clears navigation and
+the expectation ledger independently so one failing participant cannot skip either release.
+
+Long logical captures use ordered immutable `SpatialSnapshot` segments. Individual segments retain
+the 8,192-cell and 256-block-axis limits. A body/collision query is valid only when one segment,
+including its bounded seam halo, wholly contains the query; unknown, missing, unloaded, conflicting,
+fluid, or collision-error evidence is never traversable.
 
 The ordered client tick captures lifecycle and immutable client/text snapshots, publishes the
 current parse result, advances due tasks, delivers runtime behavior, advances rotation, and finally

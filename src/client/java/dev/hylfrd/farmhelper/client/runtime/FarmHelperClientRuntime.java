@@ -27,6 +27,9 @@ import dev.hylfrd.farmhelper.control.input.ControlOwner;
 import dev.hylfrd.farmhelper.control.rotation.RotationCancelReason;
 import dev.hylfrd.farmhelper.macro.MacroTerminalReason;
 import dev.hylfrd.farmhelper.macro.MacroControlOwner;
+import dev.hylfrd.farmhelper.navigation.NavigationCancellationReason;
+import dev.hylfrd.farmhelper.navigation.NavigationResult;
+import dev.hylfrd.farmhelper.navigation.NavigationTicket;
 import dev.hylfrd.farmhelper.runtime.FarmHelperRuntime;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientCancellationFanout;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientCancellationReason;
@@ -92,11 +95,18 @@ public final class FarmHelperClientRuntime {
         configStore = new FarmHelperConfigStore(configPath);
         configLoadResult = configStore.load();
         ownershipFence = new ClientOwnershipFence();
-        core = new FarmHelperRuntime(configLoadResult.config(), ownershipFence);
         input = client == null
                 ? ClientInputController.detached(ownershipFence::requireAcquisitionAllowed)
                 : new ClientInputController(ownershipFence::requireAcquisitionAllowed);
         rotation = new ClientRotationController(ownershipFence::requireAcquisitionAllowed);
+        NavigationCleanupFence navigationCleanupFence = new NavigationCleanupFence(ownershipFence);
+        core = new FarmHelperRuntime(
+                configLoadResult.config(), ownershipFence,
+                navigationCleanupFence::begin,
+                (ticket, result) -> rotation.cancel(
+                        ticket.owner(), RotationCancelReason.OWNER_CANCELLED),
+                (ticket, result) -> input.release(ticket.owner()),
+                navigationCleanupFence::end);
         core.macroManager().installPauseObserver(this::releaseMacroControls);
         InventoryPort inventoryPort = suppliedInventoryPort != null
                 ? suppliedInventoryPort
@@ -109,6 +119,8 @@ public final class FarmHelperClientRuntime {
                 diagnostics, ownershipFence::requireAcquisitionAllowed);
         cancellationFanout = new ClientCancellationFanout(
                 this::cancelMacro,
+                this::cancelNavigation,
+                ignored -> core.expectedActions().clearAll(),
                 ignored -> core.invalidateGameState(),
                 reason -> inventory.cancelActive(inventoryReason(reason)),
                 reason -> rotation.cancel(rotationReason(reason)),
@@ -420,6 +432,19 @@ public final class FarmHelperClientRuntime {
         core.macroManager().stop(terminal);
     }
 
+    private void cancelNavigation(ClientCancellationReason reason) {
+        NavigationCancellationReason terminal = switch (reason) {
+            case MANUAL_STOP -> NavigationCancellationReason.STOPPED;
+            case SCREEN_CHANGED -> NavigationCancellationReason.SCREEN_CHANGED;
+            case WORLD_LOAD, WORLD_UNLOAD -> NavigationCancellationReason.WORLD_CHANGED;
+            case DISCONNECT -> NavigationCancellationReason.DISCONNECTED;
+            case CONNECTION_UNAVAILABLE -> NavigationCancellationReason.CONNECTION_LOST;
+            case EXCEPTION -> NavigationCancellationReason.FAILURE;
+            case CLIENT_STOP -> NavigationCancellationReason.CLIENT_EXIT;
+        };
+        core.navigationController().cancelActive(terminal);
+    }
+
     private void resetServerHeartbeat(ClientCancellationReason reason) {
         if (reason == ClientCancellationReason.SCREEN_CHANGED) {
             return;
@@ -531,6 +556,36 @@ public final class FarmHelperClientRuntime {
         @Override
         public Optional<InventoryCancelReason> closeScreen(ScreenIdentity expected) {
             return Optional.of(InventoryCancelReason.ADAPTER_EXCEPTION);
+        }
+    }
+
+    /** Fences callback reentry across the entire owner-scoped navigation terminal release. */
+    private static final class NavigationCleanupFence {
+        private final ClientOwnershipFence ownershipFence;
+        private ClientOwnershipFence.Boundary boundary;
+
+        private NavigationCleanupFence(ClientOwnershipFence ownershipFence) {
+            this.ownershipFence = Objects.requireNonNull(ownershipFence, "ownershipFence");
+        }
+
+        private synchronized void begin(NavigationTicket ticket, NavigationResult result) {
+            Objects.requireNonNull(ticket, "ticket");
+            Objects.requireNonNull(result, "result");
+            if (boundary != null) {
+                throw new IllegalStateException("navigation cleanup boundary already active");
+            }
+            boundary = ownershipFence.beginCancellation();
+        }
+
+        private synchronized void end(NavigationTicket ticket, NavigationResult result) {
+            Objects.requireNonNull(ticket, "ticket");
+            Objects.requireNonNull(result, "result");
+            ClientOwnershipFence.Boundary current = boundary;
+            boundary = null;
+            if (current == null) {
+                throw new IllegalStateException("navigation cleanup boundary is not active");
+            }
+            ownershipFence.endCancellation(current);
         }
     }
 }

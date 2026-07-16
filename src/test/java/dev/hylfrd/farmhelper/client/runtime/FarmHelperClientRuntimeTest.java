@@ -8,6 +8,7 @@ import dev.hylfrd.farmhelper.config.MacroLocationConfig;
 import dev.hylfrd.farmhelper.client.platform.ClientCommandScreenCloseGuard;
 import dev.hylfrd.farmhelper.client.platform.TestClientTickAdapterAccess;
 import dev.hylfrd.farmhelper.client.ui.command.ClientFarmHelperCommandService;
+import dev.hylfrd.farmhelper.control.expectation.ExpectedMotion;
 import dev.hylfrd.farmhelper.control.input.ControlOwner;
 import dev.hylfrd.farmhelper.control.input.InputAction;
 import dev.hylfrd.farmhelper.control.input.HotbarSelection;
@@ -34,6 +35,7 @@ import dev.hylfrd.farmhelper.macro.FeatureSuspension;
 import dev.hylfrd.farmhelper.runtime.gamestate.RawGameTextSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ClientSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ConnectionSnapshot;
+import dev.hylfrd.farmhelper.runtime.snapshot.MotionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.PlayerSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
@@ -437,13 +439,16 @@ class FarmHelperClientRuntimeTest {
             captureBlocked(blocked, () -> runtime.input().hold(owner, InputAction.USE));
             captureBlocked(blocked, () -> runtime.rotation().start(
                     owner, 0F, 0F, 90F, 0F, 1_000L));
+            captureBlocked(blocked, () -> runtime.core().expectedActions().publish(
+                    owner, 1L, runtime.lifecycle().worldEpoch(), 0L, Long.MAX_VALUE,
+                    new ExpectedMotion(new MotionSnapshot(0, 0, 0), 0)));
             throw new IllegalStateException("callback failed");
         });
         runtime.core().parseGameState(ClientSnapshot.unknown(), RawGameTextSnapshot.unknown(4L));
 
         runtime.disconnected();
 
-        assertEquals(5, blocked.size());
+        assertEquals(6, blocked.size());
         assertTrue(blocked.stream().allMatch(failure ->
                 "client transient ownership is fenced".equals(failure.getMessage())));
         assertFalse(runtime.core().macroManager().enabled());
@@ -649,6 +654,10 @@ class FarmHelperClientRuntimeTest {
                 () -> runtime.rotation().start(owner, 0F, 0F, 1F, 1F, 1L));
         assertThrows(IllegalStateException.class,
                 () -> runtime.inventory().start(operation(owner, 10L), ignored -> { }));
+        assertThrows(IllegalStateException.class,
+                () -> runtime.core().expectedActions().publish(
+                        owner, 1L, runtime.lifecycle().worldEpoch(), 0L, Long.MAX_VALUE,
+                        new ExpectedMotion(new MotionSnapshot(0, 0, 0), 0)));
     }
 
     private void assertTerminal(

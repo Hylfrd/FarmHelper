@@ -1,9 +1,13 @@
 package dev.hylfrd.farmhelper.runtime;
 
 import dev.hylfrd.farmhelper.config.FarmHelperConfig;
+import dev.hylfrd.farmhelper.control.expectation.ExpectedActionLedger;
 import dev.hylfrd.farmhelper.macro.MacroManager;
 import dev.hylfrd.farmhelper.macro.ServerResponsiveness;
 import dev.hylfrd.farmhelper.macro.ServerTimeTracker;
+import dev.hylfrd.farmhelper.navigation.NavigationController;
+import dev.hylfrd.farmhelper.navigation.NavigationTaskOwner;
+import dev.hylfrd.farmhelper.navigation.NavigationTerminalCleanup;
 import dev.hylfrd.farmhelper.runtime.gamestate.GameStateParseResult;
 import dev.hylfrd.farmhelper.runtime.gamestate.GameStateParser;
 import dev.hylfrd.farmhelper.runtime.gamestate.RawGameTextSnapshot;
@@ -21,6 +25,8 @@ public final class FarmHelperRuntime {
     private final FarmHelperConfig config;
     private final MacroManager macroManager;
     private final ClientTaskQueue taskQueue;
+    private final ExpectedActionLedger expectedActions;
+    private final NavigationController navigationController;
     private final MonotonicClock clock;
     private final ServerTimeTracker serverTimeTracker;
     private final GameStateParser gameStateParser;
@@ -39,17 +45,28 @@ public final class FarmHelperRuntime {
     }
 
     public FarmHelperRuntime(FarmHelperConfig config, ClientOwnershipFence ownershipFence) {
+        this(config, ownershipFence, new NavigationTerminalCleanup[0]);
+    }
+
+    public FarmHelperRuntime(
+            FarmHelperConfig config,
+            ClientOwnershipFence ownershipFence,
+            NavigationTerminalCleanup... navigationCleanups
+    ) {
         this(config, SystemMonotonicClock.INSTANCE,
                 ownershipFence::requireAcquisitionAllowed,
-                ownershipFence::runTaskCallback);
+                ownershipFence::runTaskCallback,
+                navigationCleanups);
     }
 
     private FarmHelperRuntime(
             FarmHelperConfig config,
             MonotonicClock clock,
             Runnable acquisitionGuard,
-            java.util.function.Consumer<Runnable> callbackRunner) {
-        this(config, new MacroManager(clock, acquisitionGuard), clock, acquisitionGuard, callbackRunner);
+            java.util.function.Consumer<Runnable> callbackRunner,
+            NavigationTerminalCleanup... navigationCleanups) {
+        this(config, new MacroManager(clock, acquisitionGuard), clock, acquisitionGuard,
+                callbackRunner, navigationCleanups);
     }
 
     FarmHelperRuntime(FarmHelperConfig config, MacroManager macroManager) {
@@ -66,6 +83,17 @@ public final class FarmHelperRuntime {
             MonotonicClock clock,
             Runnable acquisitionGuard,
             java.util.function.Consumer<Runnable> callbackRunner) {
+        this(config, macroManager, clock, acquisitionGuard, callbackRunner,
+                new NavigationTerminalCleanup[0]);
+    }
+
+    FarmHelperRuntime(
+            FarmHelperConfig config,
+            MacroManager macroManager,
+            MonotonicClock clock,
+            Runnable acquisitionGuard,
+            java.util.function.Consumer<Runnable> callbackRunner,
+            NavigationTerminalCleanup... navigationCleanups) {
         this.config = config;
         this.macroManager = macroManager;
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -74,6 +102,16 @@ public final class FarmHelperRuntime {
                 clock,
                 Objects.requireNonNull(acquisitionGuard, "acquisitionGuard"),
                 Objects.requireNonNull(callbackRunner, "callbackRunner"));
+        expectedActions = new ExpectedActionLedger(clock, acquisitionGuard);
+        Objects.requireNonNull(navigationCleanups, "navigationCleanups");
+        NavigationTerminalCleanup[] cleanups = new NavigationTerminalCleanup[
+                navigationCleanups.length + 2];
+        System.arraycopy(navigationCleanups, 0, cleanups, 0, navigationCleanups.length);
+        cleanups[navigationCleanups.length] =
+                (ticket, result) -> taskQueue.cancel(NavigationTaskOwner.from(ticket));
+        cleanups[navigationCleanups.length + 1] = (ticket, result) ->
+                expectedActions.clear(ticket.owner(), ticket.generation());
+        navigationController = new NavigationController(acquisitionGuard, cleanups);
         gameStateParser = new GameStateParser();
         synchronizeMacroSettings();
     }
@@ -88,6 +126,14 @@ public final class FarmHelperRuntime {
 
     public ClientTaskQueue taskQueue() {
         return taskQueue;
+    }
+
+    public ExpectedActionLedger expectedActions() {
+        return expectedActions;
+    }
+
+    public NavigationController navigationController() {
+        return navigationController;
     }
 
     public void serverJoined() {
