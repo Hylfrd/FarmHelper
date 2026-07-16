@@ -527,7 +527,7 @@ public final class SShapeSugarcaneMacro implements Macro {
 
     private MacroDecision finishPostRewarp(Observed observed) {
         if (settings.rotateAfterWarped()) {
-            farmingYaw = MacroAngles.closestDiagonal(farmingYaw + 180.0F);
+            farmingYaw = RotationTask.normalizeYaw(farmingYaw + 180.0F);
             cardinalYaw = MacroAngles.closestCardinal(farmingYaw);
         }
         rewarp.clear();
@@ -543,13 +543,9 @@ public final class SShapeSugarcaneMacro implements Macro {
             invalidateCapture();
             return MacroDecision.failClosed("post-rewarp-fix-suppressed");
         }
-        long duration = sampleRotationMillis();
-        if (yawDistance > 90.0F) {
-            duration = Math.multiplyExact(duration, 2L);
-        }
         rotation.begin(observed.rotation().yaw(), observed.rotation().pitch(),
                 farmingYaw, farmingPitch, RotationProfile.BACK,
-                duration, rotationEntropy);
+                sampleRotationMillis(), rotationEntropy);
         invalidateCapture();
         return rotationDecision(settings.rotateAfterWarped()
                 ? "post-rewarp-reversed-back" : "post-rewarp-saved-back");

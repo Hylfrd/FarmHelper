@@ -363,6 +363,36 @@ class SShapeSugarcaneMacroTest {
     }
 
     @Test
+    void stopStartGenerationAndPositionOrYawAnchorDriftRejectOldCapture() {
+        SShapeSugarcaneMacro restarted = readyMacro(new QueueRandom(), new QueueRandom());
+        PlayerSnapshot stablePlayer = player(START, 45.0F, 0.0F, STILL);
+        SpatialCaptureRequest oldRequest = restarted.spatialRequest(
+                stablePlayer, EPOCH).orElseThrow();
+        SpatialSnapshot oldCapture = captured(oldRequest, START, Map.of());
+        restarted.onStop();
+        restarted.onStart(1L);
+        assertEquals("spatial-unknown-or-stale",
+                restarted.tick(context(1L, stablePlayer, oldCapture, grounded())).status());
+
+        SShapeSugarcaneMacro moved = readyMacro(new QueueRandom(), new QueueRandom());
+        SpatialCaptureRequest positionRequest = moved.spatialRequest(
+                stablePlayer, EPOCH).orElseThrow();
+        SpatialSnapshot positionCapture = captured(positionRequest, START, Map.of());
+        PositionSnapshot driftedPosition = new PositionSnapshot(0.6D, 1.0D, 0.5D);
+        PlayerSnapshot driftedPlayer = player(driftedPosition, 45.0F, 0.0F, STILL);
+        assertEquals("spatial-unknown-or-stale",
+                moved.tick(context(2L, driftedPlayer, positionCapture, grounded())).status());
+
+        SShapeSugarcaneMacro turned = readyMacro(new QueueRandom(), new QueueRandom());
+        SpatialCaptureRequest yawRequest = turned.spatialRequest(
+                stablePlayer, EPOCH).orElseThrow();
+        SpatialSnapshot yawCapture = captured(yawRequest, START, Map.of());
+        PlayerSnapshot turnedPlayer = player(START, 46.0F, 0.0F, STILL);
+        assertEquals("spatial-unknown-or-stale",
+                turned.tick(context(3L, turnedPlayer, yawCapture, grounded())).status());
+    }
+
+    @Test
     void missingCapturedChunkAndUnknownSupportReleaseAllControls() {
         SShapeSugarcaneMacro macro = readyMacro(new QueueRandom(), new QueueRandom());
         PlayerSnapshot player = player(START, 45.0F, 0.0F, STILL);
@@ -444,6 +474,42 @@ class SShapeSugarcaneMacroTest {
         assertEquals(request, waiting.rotation().orElseThrow());
         assertEquals(leafDraws, leaf.draws());
         assertEquals(entropyDraws, entropy.draws());
+    }
+
+    @Test
+    void rotateAfterWarpKeepsCustomYawAndUsesOneUnmultipliedDurationSample() {
+        MacroSettings settings = readySettings();
+        settings.customYawLevel(12.0F);
+        settings.rotateAfterWarped(true);
+        settings.clearRewarps();
+        settings.spawn(new RewarpPosition(10, 1, 10));
+        assertTrue(settings.addRewarp(new RewarpPosition(0, 1, 0)));
+        QueueRandom leaf = new QueueRandom(0.0D, 0.0D);
+        QueueRandom entropy = new QueueRandom(0.0D, 0.0D);
+        SShapeSugarcaneMacro macro = readyMacro(settings, leaf, entropy);
+
+        assertEquals("rewarp-dwell", step(macro, 1L, START, 12.0F, 0.0F,
+                STILL, grounded(), Map.of()).status());
+        assertTrue(step(macro, TimeUnit.MILLISECONDS.toNanos(400L) + 1L,
+                START, 12.0F, 0.0F, STILL, grounded(), Map.of()).warp().isPresent());
+        PositionSnapshot moved = new PositionSnapshot(2.5D, 1.0D, 0.5D);
+        long landedAt = TimeUnit.MILLISECONDS.toNanos(400L) + 2L;
+        step(macro, landedAt, moved, 12.0F, 0.0F, STILL, grounded(), Map.of());
+        step(macro, landedAt + TimeUnit.MILLISECONDS.toNanos(1_500L),
+                moved, 12.0F, 0.0F, STILL, grounded(), Map.of());
+        MacroDecision correction = step(macro,
+                landedAt + TimeUnit.MILLISECONDS.toNanos(2_100L),
+                moved, 12.0F, 0.0F, STILL, grounded(), Map.of());
+
+        var request = correction.rotation().orElseThrow();
+        assertEquals(-168.0F, request.yaw());
+        assertEquals(0.0F, request.pitch());
+        assertEquals(550L, request.durationMillis(),
+                "one 500ms leaf sample receives only the shared 180-degree scaling");
+        assertEquals(RotationProfile.BACK, request.profile());
+        assertEquals(-0.25F, request.backModifier());
+        assertEquals(2, leaf.draws(), "rewarp dwell then rotation duration");
+        assertEquals(2, entropy.draws(), "Back modifier then minimum floor");
     }
 
     private static Map<BlockPosition, Observation<BlockStateSnapshot>> blockedMinusThenPlus() {
