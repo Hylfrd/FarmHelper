@@ -1323,15 +1323,23 @@ class SShapeVerticalCropMacroTest {
             }
 
             if (groupA) {
+                assertForwardBand(cardinal, Math.nextDown(-0.9D), false);
                 assertForwardBand(cardinal, Math.nextUp(-0.9D), true);
                 assertForwardBand(cardinal, Math.nextDown(-0.35D), true);
+                assertForwardBand(cardinal, Math.nextUp(-0.35D), false);
+                assertForwardBand(cardinal, Math.nextDown(0.1D), false);
                 assertForwardBand(cardinal, Math.nextUp(0.1D), true);
                 assertForwardBand(cardinal, Math.nextDown(0.65D), true);
+                assertForwardBand(cardinal, Math.nextUp(0.65D), false);
             } else {
+                assertForwardBand(cardinal, Math.nextDown(-0.65D), false);
                 assertForwardBand(cardinal, Math.nextUp(-0.65D), true);
                 assertForwardBand(cardinal, Math.nextDown(-0.1D), true);
+                assertForwardBand(cardinal, Math.nextUp(-0.1D), false);
+                assertForwardBand(cardinal, Math.nextDown(0.35D), false);
                 assertForwardBand(cardinal, Math.nextUp(0.35D), true);
                 assertForwardBand(cardinal, Math.nextDown(0.9D), true);
+                assertForwardBand(cardinal, Math.nextUp(0.9D), false);
             }
         }
 
