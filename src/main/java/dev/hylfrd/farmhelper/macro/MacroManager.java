@@ -22,6 +22,28 @@ import java.util.function.Consumer;
 
 public final class MacroManager implements MacroLifecycleTarget {
     private static final Runnable NOOP_OBSERVER = () -> { };
+    private static final MacroLifecycleParticipant NOOP_LIFECYCLE_PARTICIPANT =
+            new MacroLifecycleParticipant() {
+                @Override
+                public void started(long generation, long nowNanos) {
+                }
+
+                @Override
+                public void paused(
+                        long generation,
+                        long nowNanos,
+                        Set<MacroPauseCause> causes
+                ) {
+                }
+
+                @Override
+                public void resumed(long generation, long nowNanos) {
+                }
+
+                @Override
+                public void stopped(long generation, MacroTerminalReason reason) {
+                }
+            };
     private Macro activeMacro;
     private final Macro fixedMacro;
     private final MacroRegistry registry;
@@ -33,6 +55,7 @@ public final class MacroManager implements MacroLifecycleTarget {
     private MacroTerminalReason lastTerminalReason;
     private String lastStatus = "stopped";
     private Runnable pauseObserver = NOOP_OBSERVER;
+    private MacroLifecycleParticipant lifecycleParticipant = NOOP_LIFECYCLE_PARTICIPANT;
 
     public MacroManager() {
         this(SystemMonotonicClock.INSTANCE, () -> { });
@@ -148,6 +171,13 @@ public final class MacroManager implements MacroLifecycleTarget {
         return Optional.ofNullable(lastTerminalReason);
     }
 
+    /**
+     * Reads the active macro's existing crop state; the manager does not cache or infer it.
+     */
+    public Optional<MacroCrop> activeCrop() {
+        return enabled() ? activeMacro.activeCrop() : Optional.empty();
+    }
+
     public MacroSettings settings() {
         return settings;
     }
@@ -171,6 +201,15 @@ public final class MacroManager implements MacroLifecycleTarget {
             throw new IllegalStateException("macro pause observer is already installed");
         }
         pauseObserver = observer;
+    }
+
+    public void installLifecycleParticipant(MacroLifecycleParticipant participant) {
+        Objects.requireNonNull(participant, "participant");
+        if (lifecycleParticipant != NOOP_LIFECYCLE_PARTICIPANT
+                && lifecycleParticipant != participant) {
+            throw new IllegalStateException("macro lifecycle participant is already installed");
+        }
+        lifecycleParticipant = participant;
     }
 
     public Optional<SpatialCaptureRequest> spatialRequest(
@@ -278,17 +317,20 @@ public final class MacroManager implements MacroLifecycleTarget {
         lastTerminalReason = null;
         lastStatus = "starting";
         activeMacro.onStart(nowNanos);
+        lifecycleParticipant.started(generation, nowNanos);
     }
 
     @Override
     public void pause(long generation, long nowNanos, Set<MacroPauseCause> causes) {
         activeMacro.onPause(causes, nowNanos);
         pauseObserver.run();
+        lifecycleParticipant.paused(generation, nowNanos, causes);
     }
 
     @Override
     public void resume(long generation, long nowNanos) {
         activeMacro.onResume(nowNanos);
+        lifecycleParticipant.resumed(generation, nowNanos);
     }
 
     @Override
@@ -300,6 +342,7 @@ public final class MacroManager implements MacroLifecycleTarget {
             runningTicks = 0L;
             lastStatus = "stopped:" + reason.name().toLowerCase();
             settings.thaw();
+            lifecycleParticipant.stopped(generation, reason);
         }
     }
 }

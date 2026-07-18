@@ -25,8 +25,15 @@ import dev.hylfrd.farmhelper.control.inventory.InventoryScreenSnapshot;
 import dev.hylfrd.farmhelper.control.inventory.ScreenIdentity;
 import dev.hylfrd.farmhelper.control.input.ControlOwner;
 import dev.hylfrd.farmhelper.control.rotation.RotationCancelReason;
+import dev.hylfrd.farmhelper.feature.desync.DesyncCheckResult;
+import dev.hylfrd.farmhelper.feature.desync.DesyncChecker;
+import dev.hylfrd.farmhelper.feature.desync.DesyncClick;
+import dev.hylfrd.farmhelper.macro.MacroCrop;
+import dev.hylfrd.farmhelper.macro.MacroLifecycleParticipant;
+import dev.hylfrd.farmhelper.macro.MacroPauseCause;
 import dev.hylfrd.farmhelper.macro.MacroTerminalReason;
 import dev.hylfrd.farmhelper.macro.MacroControlOwner;
+import dev.hylfrd.farmhelper.macro.ServerResponsiveness;
 import dev.hylfrd.farmhelper.navigation.NavigationCancellationReason;
 import dev.hylfrd.farmhelper.navigation.NavigationResult;
 import dev.hylfrd.farmhelper.navigation.NavigationTicket;
@@ -37,15 +44,28 @@ import dev.hylfrd.farmhelper.runtime.lifecycle.ClientOwnershipFence;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientRuntimeLifecycle;
 import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import dev.hylfrd.farmhelper.runtime.snapshot.ScreenSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.BlockPosition;
+import dev.hylfrd.farmhelper.runtime.spatial.BlockStateSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.BoxSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.CropObservation;
+import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
 import dev.hylfrd.farmhelper.runtime.spatial.SpatialSnapshotCapturePort;
+import dev.hylfrd.farmhelper.runtime.spatial.SpatialSnapshot;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 
 /** Composition root and sole owner of mutable services for one client session. */
 public final class FarmHelperClientRuntime {
@@ -58,31 +78,44 @@ public final class FarmHelperClientRuntime {
     private final ClientRotationController rotation;
     private final MacroRotationLeaseTracker macroRotationLease = new MacroRotationLeaseTracker();
     private final InventoryController inventory;
+    private final DesyncChecker desyncChecker;
     private final ClientCancellationFanout cancellationFanout;
     private final ClientRuntimeLifecycle lifecycle;
     private final SpatialSnapshotCapturePort spatialSnapshots;
+    private final BooleanSupplier failsafeActive;
     private boolean disconnectLatched;
     private boolean serverHeartbeatJoined;
+    private long desyncCaptureToken;
 
     public FarmHelperClientRuntime() {
         this(FabricLoader.getInstance().getConfigDir().resolve(FarmHelper.MOD_ID + ".json"),
-                Minecraft.getInstance(), null, null, null);
+                Minecraft.getInstance(), null, null, null, () -> false);
     }
 
     FarmHelperClientRuntime(Path configPath) {
-        this(configPath, null, UnavailableInventoryPort.INSTANCE, defaultDiagnostics(), null);
+        this(configPath, null, UnavailableInventoryPort.INSTANCE, defaultDiagnostics(), null,
+                () -> false);
     }
 
     FarmHelperClientRuntime(
             Path configPath,
             InventoryPort inventoryPort,
             Consumer<InventoryDiagnostic> diagnostics) {
-        this(configPath, null, inventoryPort, diagnostics, null);
+        this(configPath, null, inventoryPort, diagnostics, null, () -> false);
     }
 
     FarmHelperClientRuntime(Path configPath, SpatialSnapshotCapturePort spatialSnapshots) {
         this(configPath, null, UnavailableInventoryPort.INSTANCE, defaultDiagnostics(),
-                spatialSnapshots);
+                spatialSnapshots, () -> false);
+    }
+
+    FarmHelperClientRuntime(
+            Path configPath,
+            SpatialSnapshotCapturePort spatialSnapshots,
+            BooleanSupplier failsafeActive
+    ) {
+        this(configPath, null, UnavailableInventoryPort.INSTANCE, defaultDiagnostics(),
+                spatialSnapshots, failsafeActive);
     }
 
     private FarmHelperClientRuntime(
@@ -90,8 +123,10 @@ public final class FarmHelperClientRuntime {
             Minecraft client,
             InventoryPort suppliedInventoryPort,
             Consumer<InventoryDiagnostic> suppliedDiagnostics,
-            SpatialSnapshotCapturePort suppliedSpatialSnapshots) {
+            SpatialSnapshotCapturePort suppliedSpatialSnapshots,
+            BooleanSupplier suppliedFailsafeActive) {
         attachedClient = client;
+        failsafeActive = suppliedFailsafeActive == null ? () -> false : suppliedFailsafeActive;
         configStore = new FarmHelperConfigStore(configPath);
         configLoadResult = configStore.load();
         ownershipFence = new ClientOwnershipFence();
@@ -108,6 +143,7 @@ public final class FarmHelperClientRuntime {
                 (ticket, result) -> input.release(ticket.owner()),
                 navigationCleanupFence::end);
         core.macroManager().installPauseObserver(this::releaseMacroControls);
+        desyncChecker = new DesyncChecker(configLoadResult.config(), core.macroManager());
         InventoryPort inventoryPort = suppliedInventoryPort != null
                 ? suppliedInventoryPort
                 : new MinecraftInventoryPort(Objects.requireNonNull(client, "client"));
@@ -126,8 +162,34 @@ public final class FarmHelperClientRuntime {
                 reason -> rotation.cancel(rotationReason(reason)),
                 reason -> input.releaseAll(inputReason(reason)),
                 ignored -> core.taskQueue().cancelAll(),
+                this::cancelDesync,
                 this::resetServerHeartbeat);
         lifecycle = new ClientRuntimeLifecycle(this::cancelOwnership);
+        core.macroManager().installLifecycleParticipant(new MacroLifecycleParticipant() {
+            @Override
+            public void started(long generation, long nowNanos) {
+                desyncChecker.start(generation, lifecycle.worldEpoch());
+            }
+
+            @Override
+            public void paused(
+                    long generation,
+                    long nowNanos,
+                    Set<MacroPauseCause> causes
+            ) {
+                desyncChecker.pause();
+            }
+
+            @Override
+            public void resumed(long generation, long nowNanos) {
+                desyncChecker.resume();
+            }
+
+            @Override
+            public void stopped(long generation, MacroTerminalReason reason) {
+                desyncChecker.stop();
+            }
+        });
         spatialSnapshots = suppliedSpatialSnapshots != null
                 ? suppliedSpatialSnapshots
                 : client == null
@@ -158,6 +220,10 @@ public final class FarmHelperClientRuntime {
 
     public SpatialSnapshotCapturePort spatialSnapshots() {
         return spatialSnapshots;
+    }
+
+    DesyncChecker desyncChecker() {
+        return desyncChecker;
     }
 
     public ClientRuntimeLifecycle lifecycle() {
@@ -407,6 +473,63 @@ public final class FarmHelperClientRuntime {
         core.receivedServerTimePacket();
     }
 
+    /** Typed client-thread ingress for the mapped startDestroyBlock hook. */
+    public DesyncCheckResult recordClick(BlockPos position, Direction direction) {
+        requireAttachedClientThread();
+        Objects.requireNonNull(position, "position");
+        Objects.requireNonNull(direction, "direction");
+        return recordClick(new BlockPosition(position.getX(), position.getY(), position.getZ()));
+    }
+
+    /**
+     * Domain-facing ingress used by focused tests and the client adapter. All Minecraft state is
+     * converted through the existing bounded spatial port before DesyncChecker sees it.
+     */
+    DesyncCheckResult recordClick(BlockPosition position) {
+        requireAttachedClientThread();
+        Objects.requireNonNull(position, "position");
+        if (!core.config().checkDesync()) {
+            return DesyncCheckResult.DISABLED;
+        }
+        if (desyncChecker.state() == DesyncChecker.State.STOPPED) {
+            return DesyncCheckResult.STOPPED;
+        }
+
+        long generation = core.macroManager().generation();
+        long worldEpoch = lifecycle.worldEpoch();
+        Optional<MacroCrop> activeCrop = core.macroManager().activeCrop();
+        if (activeCrop.isEmpty()) {
+            return DesyncCheckResult.ACTIVE_CROP_UNKNOWN;
+        }
+
+        Set<BlockPosition> positions = new LinkedHashSet<>(
+                desyncChecker.acceptedClickPositions());
+        positions.add(position);
+        Observation<SpatialSnapshot> observed = captureDesyncSpatial(worldEpoch, positions);
+        Observation<BlockStateSnapshot> clickedBlock = observed.isPresent()
+                ? observed.get().block(worldEpoch, position)
+                : Observation.unknown();
+        Function<BlockPosition, Observation<BlockStateSnapshot>> currentBlocks = observed.isPresent()
+                ? candidate -> observed.get().block(worldEpoch, candidate)
+                : ignored -> Observation.unknown();
+        boolean failsafe = observeFailsafe();
+        boolean connectionReady = lifecycle.connectionReady();
+        ServerResponsiveness responsiveness = core.serverResponsiveness(connectionReady);
+        return desyncChecker.recordClick(
+                new DesyncClick(generation, worldEpoch, position, clickedBlock),
+                activeCrop.orElseThrow(), failsafe, connectionReady, responsiveness,
+                currentBlocks, core.nowNanos());
+    }
+
+    /** Advances delayed Desync recovery once from the existing runtime-delivery tick phase. */
+    public DesyncCheckResult tickDesync() {
+        requireAttachedClientThread();
+        boolean connectionReady = lifecycle.connectionReady();
+        return desyncChecker.tickRecovery(
+                core.nowNanos(), core.macroManager().generation(), lifecycle.worldEpoch(),
+                connectionReady, core.serverResponsiveness(connectionReady));
+    }
+
     /** Screen presence pauses the macro run but never discards its private generation. */
     public void observeMacroScreen(Observation<ScreenSnapshot> screen) {
         requireAttachedClientThread();
@@ -430,6 +553,15 @@ public final class FarmHelperClientRuntime {
             case SCREEN_CHANGED -> throw new AssertionError("screen changes are state-preserving");
         };
         core.macroManager().stop(terminal);
+    }
+
+    private void cancelDesync(ClientCancellationReason reason) {
+        switch (reason) {
+            case SCREEN_CHANGED -> desyncChecker.pause();
+            case WORLD_LOAD, WORLD_UNLOAD -> desyncChecker.worldChanged(lifecycle.worldEpoch());
+            case DISCONNECT, CONNECTION_UNAVAILABLE -> desyncChecker.connectionLost();
+            case MANUAL_STOP, EXCEPTION, CLIENT_STOP -> desyncChecker.stop();
+        }
     }
 
     private void cancelNavigation(ClientCancellationReason reason) {
@@ -535,6 +667,61 @@ public final class FarmHelperClientRuntime {
         if (attachedClient != null) {
             requireClientThread(attachedClient);
         }
+    }
+
+    private boolean observeFailsafe() {
+        try {
+            return failsafeActive.getAsBoolean();
+        } catch (RuntimeException | Error failure) {
+            return true;
+        }
+    }
+
+    private Observation<SpatialSnapshot> captureDesyncSpatial(
+            long worldEpoch,
+            Collection<BlockPosition> positions
+    ) {
+        if (positions.isEmpty()) {
+            return Observation.unknown();
+        }
+        try {
+            Set<BlockPosition> bounded = Set.copyOf(positions);
+            SpatialCaptureRequest request = new SpatialCaptureRequest(
+                    worldEpoch, nextDesyncCaptureToken(), bounds(bounded), bounded);
+            Observation<SpatialSnapshot> captured = spatialSnapshots.capture(request);
+            return captured == null ? Observation.unknown() : captured;
+        } catch (RuntimeException | Error failure) {
+            return Observation.unknown();
+        }
+    }
+
+    private long nextDesyncCaptureToken() {
+        if (desyncCaptureToken == Long.MAX_VALUE) {
+            desyncCaptureToken = 1L;
+        } else {
+            desyncCaptureToken++;
+        }
+        return desyncCaptureToken;
+    }
+
+    private static BoxSnapshot bounds(Collection<BlockPosition> positions) {
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (BlockPosition position : positions) {
+            minX = Math.min(minX, position.x());
+            minY = Math.min(minY, position.y());
+            minZ = Math.min(minZ, position.z());
+            maxX = Math.max(maxX, position.x());
+            maxY = Math.max(maxY, position.y());
+            maxZ = Math.max(maxZ, position.z());
+        }
+        return new BoxSnapshot(
+                minX, minY, minZ,
+                (double) maxX + 1.0D, (double) maxY + 1.0D, (double) maxZ + 1.0D);
     }
 
     private enum UnavailableInventoryPort implements InventoryPort {

@@ -7,6 +7,7 @@ import dev.hylfrd.farmhelper.macro.FarmingContext;
 import dev.hylfrd.farmhelper.macro.LaneChangeDirection;
 import dev.hylfrd.farmhelper.macro.Macro;
 import dev.hylfrd.farmhelper.macro.MacroAngles;
+import dev.hylfrd.farmhelper.macro.MacroCrop;
 import dev.hylfrd.farmhelper.macro.MacroDecision;
 import dev.hylfrd.farmhelper.macro.MacroPauseCause;
 import dev.hylfrd.farmhelper.macro.MacroRandom;
@@ -103,6 +104,14 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     @Override
     public String id() {
         return "s-shape-melon-pumpkin-default";
+    }
+
+    /** Melon and pumpkin use the same non-air Desync evidence rule. */
+    @Override
+    public Optional<MacroCrop> activeCrop() {
+        return state == State.STOPPED
+                ? Optional.empty()
+                : Optional.of(MacroCrop.MELON);
     }
 
     @Override

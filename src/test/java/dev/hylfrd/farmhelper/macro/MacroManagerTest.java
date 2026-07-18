@@ -12,6 +12,7 @@ import dev.hylfrd.farmhelper.runtime.spatial.SpatialCaptureRequest;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -23,6 +24,71 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MacroManagerTest {
+    @Test
+    void activeCropDelegatesToRunStateAndLeavesAmbiguousModesUnknown() {
+        assertActiveCrop(MacroMode.SUGAR_CANE, MacroCrop.SUGAR_CANE);
+        assertActiveCrop(MacroMode.COCOA, MacroCrop.COCOA);
+        assertActiveCrop(MacroMode.MELON_PUMPKIN_DEFAULT, MacroCrop.MELON);
+        assertActiveCrop(MacroMode.MUSHROOM, MacroCrop.RED_MUSHROOM);
+
+        for (MacroMode mode : List.of(
+                MacroMode.VERTICAL_NORMAL,
+                MacroMode.VERTICAL_PUMPKIN_MELON,
+                MacroMode.VERTICAL_MELONGKINGDE,
+                MacroMode.VERTICAL_CACTUS,
+                MacroMode.VERTICAL_SUNTZU,
+                MacroMode.VERTICAL_COCOA_LEFT_RIGHT,
+                MacroMode.CIRCULAR)) {
+            MacroManager manager = manager(mode);
+            manager.start();
+            assertTrue(manager.activeCrop().isEmpty(), mode.name());
+            manager.stop();
+            assertTrue(manager.activeCrop().isEmpty(), mode.name());
+        }
+    }
+
+    @Test
+    void lifecycleParticipantRunsAfterMacroCleanupAndOnlyOncePerTransition() {
+        List<String> events = new ArrayList<>();
+        Macro macro = new Macro() {
+            @Override public String id() { return "lifecycle-order"; }
+            @Override public void onStart() { events.add("macro-start"); }
+            @Override public void onPause(Set<MacroPauseCause> causes) {
+                events.add("macro-pause");
+            }
+            @Override public void onResume() { events.add("macro-resume"); }
+            @Override public void onStop() { events.add("macro-stop"); }
+        };
+        MacroManager manager = new MacroManager(macro, () -> { });
+        manager.installLifecycleParticipant(new MacroLifecycleParticipant() {
+            @Override public void started(long generation, long nowNanos) {
+                events.add("participant-start");
+            }
+            @Override public void paused(
+                    long generation, long nowNanos, Set<MacroPauseCause> causes) {
+                events.add("participant-pause");
+            }
+            @Override public void resumed(long generation, long nowNanos) {
+                events.add("participant-resume");
+            }
+            @Override public void stopped(long generation, MacroTerminalReason reason) {
+                events.add("participant-stop");
+            }
+        });
+
+        manager.start();
+        manager.manualPause();
+        manager.manualResume();
+        manager.stop(MacroTerminalReason.CLIENT_STOP);
+        manager.stop(MacroTerminalReason.CLIENT_STOP);
+
+        assertEquals(List.of(
+                "macro-start", "participant-start",
+                "macro-pause", "participant-pause",
+                "macro-resume", "participant-resume",
+                "macro-stop", "participant-stop"), events);
+    }
+
     @Test
     void lifecycleHasOneStateAuthorityForEnvironmentPauseAndTerminalStop() {
         MacroManager manager = new MacroManager();
@@ -311,6 +377,20 @@ class MacroManagerTest {
             case MUSHROOM_SDS -> "s-shape-mushroom-sds";
             case CIRCULAR -> "circular-crop";
         };
+    }
+
+    private static void assertActiveCrop(MacroMode mode, MacroCrop expected) {
+        MacroManager manager = manager(mode);
+        manager.start();
+        assertEquals(Optional.of(expected), manager.activeCrop(), mode.name());
+        manager.stop();
+        assertTrue(manager.activeCrop().isEmpty(), mode.name());
+    }
+
+    private static MacroManager manager(MacroMode mode) {
+        MacroManager manager = new MacroManager();
+        manager.updateSettings(settings -> settings.macroMode(mode));
+        return manager;
     }
 
     private static FarmingContext context(Observation<PlayerSnapshot> player) {

@@ -9,6 +9,14 @@ import java.util.Set;
 public interface Macro {
     String id();
 
+    /**
+     * The crop selected by this run, when its existing state can identify one safely.
+     * Multi-crop and not-yet-selected runs deliberately remain unknown.
+     */
+    default Optional<MacroCrop> activeCrop() {
+        return Optional.empty();
+    }
+
     void onStart();
 
     default void onStart(long nowNanos) {

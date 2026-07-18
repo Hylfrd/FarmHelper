@@ -6,6 +6,7 @@ import dev.hylfrd.farmhelper.control.rotation.RotationProfile;
 import dev.hylfrd.farmhelper.macro.FarmingContext;
 import dev.hylfrd.farmhelper.macro.Macro;
 import dev.hylfrd.farmhelper.macro.MacroAngles;
+import dev.hylfrd.farmhelper.macro.MacroCrop;
 import dev.hylfrd.farmhelper.macro.MacroDecision;
 import dev.hylfrd.farmhelper.macro.MacroPauseCause;
 import dev.hylfrd.farmhelper.macro.MacroRandom;
@@ -94,6 +95,14 @@ public final class SShapeMushroomMacro implements Macro {
     @Override
     public String id() {
         return "s-shape-mushroom";
+    }
+
+    /** Both mushroom colors share the same Desync matching rule. */
+    @Override
+    public Optional<MacroCrop> activeCrop() {
+        return state == State.STOPPED
+                ? Optional.empty()
+                : Optional.of(MacroCrop.RED_MUSHROOM);
     }
 
     @Override

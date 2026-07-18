@@ -153,6 +153,7 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
 
     @Override
     public void deliverRuntimeTick(ClientSnapshot snapshot, GameStateParseResult gameState) {
+        runtime.tickDesync();
         Observation<SpatialSnapshot> spatial = captureMacroSpatial(runtime, snapshot);
         boolean developmentGarden = developmentGarden();
         Observation<Boolean> inGarden = developmentGarden

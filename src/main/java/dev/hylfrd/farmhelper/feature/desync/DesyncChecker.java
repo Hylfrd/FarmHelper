@@ -14,6 +14,7 @@ import dev.hylfrd.farmhelper.runtime.spatial.CropObservation;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
 import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
@@ -61,6 +62,11 @@ public final class DesyncChecker {
         return acceptedClicks.size();
     }
 
+    /** Snapshot of the current bounded window for one client-thread batch capture. */
+    public List<BlockPosition> acceptedClickPositions() {
+        return acceptedClicks.stream().map(DesyncClick::position).toList();
+    }
+
     public long macroGeneration() {
         return macroGeneration;
     }
@@ -85,8 +91,25 @@ public final class DesyncChecker {
         if (!macroManager.enabled()) {
             throw new IllegalStateException("cannot start DesyncChecker for a stopped macro");
         }
+        start(macroManager.generation(), worldEpoch);
+    }
+
+    /** Starts a fresh window fenced to the lifecycle callback's exact macro generation. */
+    public void start(long macroGeneration, long worldEpoch) {
+        if (macroGeneration <= 0L) {
+            throw new IllegalArgumentException("macro generation must be positive");
+        }
+        if (worldEpoch < 0L) {
+            throw new IllegalArgumentException("world epoch must not be negative");
+        }
+        if (!macroManager.enabled()) {
+            throw new IllegalStateException("cannot start DesyncChecker for a stopped macro");
+        }
+        if (macroManager.generation() != macroGeneration) {
+            throw new IllegalArgumentException("macro generation is stale");
+        }
         stop();
-        macroGeneration = macroManager.generation();
+        this.macroGeneration = macroGeneration;
         this.worldEpoch = worldEpoch;
         state = State.COLLECTING;
     }

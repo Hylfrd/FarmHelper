@@ -103,6 +103,7 @@ public final class TestClientTickAdapterAccess {
                     ClientSnapshot observed,
                     GameStateParseResult gameState
             ) {
+                runtime.tickDesync();
                 runtime.core().macroManager().tick(
                         observed, new FarmingContext(
                                 runtime.core().nowNanos(), runtime.lifecycle().worldEpoch(),

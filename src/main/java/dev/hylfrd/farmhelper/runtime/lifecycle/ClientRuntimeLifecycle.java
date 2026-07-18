@@ -24,6 +24,11 @@ public final class ClientRuntimeLifecycle {
         return worldEpoch;
     }
 
+    /** The last client-thread connection observation is known-present. */
+    public boolean connectionReady() {
+        return connectionObserved && connectionState == Observation.State.PRESENT;
+    }
+
     public void worldLoaded() {
         if (worldPresent) {
             worldUnloaded();

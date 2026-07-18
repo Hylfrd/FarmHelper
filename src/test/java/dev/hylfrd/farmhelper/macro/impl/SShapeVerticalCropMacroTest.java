@@ -8,6 +8,7 @@ import dev.hylfrd.farmhelper.control.input.InputAction;
 import dev.hylfrd.farmhelper.control.rotation.RotationTerminalReason;
 import dev.hylfrd.farmhelper.macro.FarmingContext;
 import dev.hylfrd.farmhelper.macro.MacroDecision;
+import dev.hylfrd.farmhelper.macro.MacroCrop;
 import dev.hylfrd.farmhelper.macro.MacroRecoveryReason;
 import dev.hylfrd.farmhelper.macro.MacroSettings;
 import dev.hylfrd.farmhelper.macro.PlayerPosture;
@@ -747,6 +748,7 @@ class SShapeVerticalCropMacroTest {
         SShapeVerticalCropMacro macro = macro(VerticalCropMode.NORMAL);
         macro.tick(context(0L, START, 0.0D, 2.8F, spatial(START, wheat(), true)));
         assertEquals(SShapeVerticalCropMacro.State.FARMING, macro.state());
+        assertEquals(java.util.Optional.of(MacroCrop.WHEAT), macro.activeCrop());
 
         long pauseAt = TimeUnit.MILLISECONDS.toNanos(100L);
         long resumeAt = TimeUnit.MILLISECONDS.toNanos(1_100L);
@@ -763,6 +765,7 @@ class SShapeVerticalCropMacroTest {
 
         macro.onStop(dev.hylfrd.farmhelper.macro.MacroTerminalReason.DISCONNECT);
         assertEquals(SShapeVerticalCropMacro.State.STOPPED, macro.state());
+        assertTrue(macro.activeCrop().isEmpty());
         macro.onStart();
         assertEquals(SShapeVerticalCropMacro.State.ALIGNING, macro.state());
     }

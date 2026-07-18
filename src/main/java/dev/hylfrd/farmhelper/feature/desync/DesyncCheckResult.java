@@ -4,6 +4,7 @@ package dev.hylfrd.farmhelper.feature.desync;
 public enum DesyncCheckResult {
     DISABLED,
     STOPPED,
+    ACTIVE_CROP_UNKNOWN,
     STALE_IDENTITY,
     MACRO_INACTIVE,
     CLICK_BLOCK_UNKNOWN,

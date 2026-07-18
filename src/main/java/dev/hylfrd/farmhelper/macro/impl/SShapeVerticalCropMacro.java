@@ -3,6 +3,7 @@ package dev.hylfrd.farmhelper.macro.impl;
 import dev.hylfrd.farmhelper.control.input.InputAction;
 import dev.hylfrd.farmhelper.macro.FarmingContext;
 import dev.hylfrd.farmhelper.macro.Macro;
+import dev.hylfrd.farmhelper.macro.MacroCrop;
 import dev.hylfrd.farmhelper.macro.MacroDecision;
 import dev.hylfrd.farmhelper.macro.MacroRandom;
 import dev.hylfrd.farmhelper.macro.MacroSettings;
@@ -104,6 +105,12 @@ public final class SShapeVerticalCropMacro implements Macro {
     @Override
     public String id() {
         return "s-shape-vertical";
+    }
+
+    /** The selected row crop is the macro's existing authoritative farming state. */
+    @Override
+    public Optional<MacroCrop> activeCrop() {
+        return Optional.ofNullable(rowCropKind).flatMap(MacroCrop::fromBlockKind);
     }
 
     @Override
