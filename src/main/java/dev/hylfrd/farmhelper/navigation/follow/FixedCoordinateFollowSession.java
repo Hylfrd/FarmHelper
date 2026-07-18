@@ -3,37 +3,36 @@ package dev.hylfrd.farmhelper.navigation.follow;
 import dev.hylfrd.farmhelper.control.input.ControlOwner;
 import dev.hylfrd.farmhelper.navigation.NavigationCancellationReason;
 import dev.hylfrd.farmhelper.navigation.NavigationController;
+import dev.hylfrd.farmhelper.navigation.NavigationGoal;
 import dev.hylfrd.farmhelper.navigation.NavigationHandle;
 import dev.hylfrd.farmhelper.navigation.NavigationOptions;
 import dev.hylfrd.farmhelper.navigation.NavigationPhase;
 import dev.hylfrd.farmhelper.navigation.NavigationRequest;
 import dev.hylfrd.farmhelper.navigation.NavigationStartObservation;
 import dev.hylfrd.farmhelper.navigation.NavigationStatus;
-import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
-import dev.hylfrd.farmhelper.runtime.snapshot.PositionSnapshot;
 
 import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Threadless target-follow state. The shared navigation handle remains the sole request,
- * generation, replacement, cancellation, and lifecycle authority.
+ * Fixed-coordinate follow state mapped to upstream {@code findPath(Vec3, follow=true, ...)}.
+ * The raw goal is never projected or accumulated; the shared handle owns every replacement.
  */
-public final class TargetFollowSession {
+public final class FixedCoordinateFollowSession {
     public static final int RECALCULATION_START_TICKS = 12;
 
-    private final FollowTargetIdentity targetIdentity;
+    private final NavigationGoal goal;
     private final NavigationOptions options;
     private NavigationHandle handle;
     private int startTicks;
     private FollowTerminationReason terminationReason;
 
-    private TargetFollowSession(
-            FollowTargetIdentity targetIdentity,
+    private FixedCoordinateFollowSession(
+            NavigationGoal goal,
             NavigationOptions options,
             NavigationHandle handle
     ) {
-        this.targetIdentity = Objects.requireNonNull(targetIdentity, "targetIdentity");
+        this.goal = Objects.requireNonNull(goal, "goal");
         this.options = Objects.requireNonNull(options, "options");
         this.handle = Objects.requireNonNull(handle, "handle");
         if (handle.status().flatMap(NavigationStatus::terminalResult).isPresent()) {
@@ -41,35 +40,34 @@ public final class TargetFollowSession {
         }
     }
 
-    public static TargetFollowSession start(
+    public static FixedCoordinateFollowSession start(
             NavigationController controller,
             ControlOwner owner,
+            long worldEpoch,
+            NavigationGoal goal,
             NavigationOptions options,
-            FollowTargetSnapshot target,
-            PositionSnapshot followerPosition,
             NavigationStartObservation observation
     ) {
         Objects.requireNonNull(controller, "controller");
         Objects.requireNonNull(owner, "owner");
+        Objects.requireNonNull(goal, "goal");
         Objects.requireNonNull(options, "options");
-        Objects.requireNonNull(target, "target");
-        Objects.requireNonNull(followerPosition, "followerPosition");
         Objects.requireNonNull(observation, "observation");
         if (!options.follow()) {
-            throw new IllegalArgumentException("target follow requires options.follow=true");
+            throw new IllegalArgumentException("coordinate follow requires options.follow=true");
         }
-        NavigationRequest request = new NavigationRequest(
-                owner, target.worldEpoch(), target.navigationGoal(followerPosition), options);
-        return new TargetFollowSession(
-                target.identity(), options, controller.start(request, observation));
+        NavigationRequest request =
+                new NavigationRequest(owner, worldEpoch, goal, options);
+        return new FixedCoordinateFollowSession(
+                goal, options, controller.start(request, observation));
     }
 
     public NavigationHandle handle() {
         return handle;
     }
 
-    public FollowTargetIdentity targetIdentity() {
-        return targetIdentity;
+    public NavigationGoal goal() {
+        return goal;
     }
 
     public NavigationOptions options() {
@@ -83,13 +81,7 @@ public final class TargetFollowSession {
     /**
      * Advances exactly one START-phase client tick. END ticks must never call this method.
      */
-    public FollowUpdate onStartTick(
-            Observation<FollowTargetSnapshot> targetObservation,
-            Observation<PositionSnapshot> followerPosition,
-            NavigationStartObservation startObservation
-    ) {
-        Objects.requireNonNull(targetObservation, "targetObservation");
-        Objects.requireNonNull(followerPosition, "followerPosition");
+    public FollowUpdate onStartTick(NavigationStartObservation startObservation) {
         Objects.requireNonNull(startObservation, "startObservation");
         if (terminationReason != null) {
             return FollowUpdate.terminated(terminationReason);
@@ -100,34 +92,11 @@ public final class TargetFollowSession {
             return terminateWithoutCancellation(terminalFromHandle(status));
         }
         NavigationStatus current = status.orElseThrow();
-
         if (!startObservation.world().isPresent()
                 || startObservation.world().get().epoch() != handle.ticket().worldEpoch()) {
             return terminateWithCancellation(
                     FollowTerminationReason.WORLD_CHANGED,
                     NavigationCancellationReason.WORLD_CHANGED);
-        }
-        if (targetObservation.isUnknown()) {
-            return terminateWithCancellation(
-                    FollowTerminationReason.TARGET_UNKNOWN,
-                    NavigationCancellationReason.FAILURE);
-        }
-        if (targetObservation.isAbsent()) {
-            return terminateWithCancellation(
-                    FollowTerminationReason.TARGET_LOST,
-                    NavigationCancellationReason.FAILURE);
-        }
-
-        FollowTargetSnapshot target = targetObservation.get();
-        if (target.worldEpoch() != handle.ticket().worldEpoch()) {
-            return terminateWithCancellation(
-                    FollowTerminationReason.WORLD_CHANGED,
-                    NavigationCancellationReason.WORLD_CHANGED);
-        }
-        if (!target.identity().equals(targetIdentity)) {
-            return terminateWithCancellation(
-                    FollowTerminationReason.TARGET_CHANGED,
-                    NavigationCancellationReason.FAILURE);
         }
 
         startTicks++;
@@ -140,16 +109,11 @@ public final class TargetFollowSession {
         if (isRecalculationBusy(current.phase())) {
             return FollowUpdate.deferred(handle.ticket());
         }
-        if (!followerPosition.isPresent()) {
-            return terminateWithCancellation(
-                    FollowTerminationReason.FOLLOWER_POSITION_UNAVAILABLE,
-                    NavigationCancellationReason.FAILURE);
-        }
 
         NavigationRequest replacementRequest = new NavigationRequest(
                 current.request().owner(),
-                target.worldEpoch(),
-                target.navigationGoal(followerPosition.get()),
+                handle.ticket().worldEpoch(),
+                goal,
                 options);
         Optional<NavigationHandle> replacement =
                 handle.replace(replacementRequest, startObservation);

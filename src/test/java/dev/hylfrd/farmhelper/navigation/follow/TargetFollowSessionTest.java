@@ -221,6 +221,46 @@ class TargetFollowSessionTest {
     }
 
     @Test
+    void externalReplacementIsStaleAndNeverTouchesTheReplacement() {
+        NavigationController controller = new NavigationController();
+        TargetFollowSession session =
+                start(controller, stationary(10.0D, 64.0D, 0.0D), OPTIONS);
+        NavigationHandle oldHandle = session.handle();
+        var externalRequest = new dev.hylfrd.farmhelper.navigation.NavigationRequest(
+                OWNER, EPOCH, new NavigationGoal(99.0D, 70.0D, -4.0D), OPTIONS);
+        NavigationHandle replacement =
+                oldHandle.replace(externalRequest, eligible(EPOCH)).orElseThrow();
+
+        FollowUpdate update = session.onStartTick(
+                Observation.present(stationary(10.0D, 64.0D, 0.0D)),
+                Observation.present(FOLLOWER),
+                eligible(EPOCH));
+
+        assertEquals(FollowTerminationReason.STALE_NAVIGATION,
+                update.terminationReason().orElseThrow());
+        assertEquals(NavigationCancellationReason.REPLACED, cancellation(oldHandle));
+        assertEquals(replacement.ticket(), controller.activeTicket().orElseThrow());
+        assertTrue(replacement.status().orElseThrow().active());
+        assertEquals(FollowTerminationReason.STALE_NAVIGATION,
+                session.cancel(NavigationCancellationReason.FAILURE)
+                        .terminationReason().orElseThrow());
+        assertEquals(replacement.ticket(), controller.activeTicket().orElseThrow());
+        assertTrue(replacement.status().orElseThrow().active());
+
+        NavigationController directCancelController = new NavigationController();
+        TargetFollowSession directCancelSession = start(
+                directCancelController, stationary(10.0D, 64.0D, 0.0D), OPTIONS);
+        NavigationHandle directCancelReplacement = directCancelSession.handle()
+                .replace(externalRequest, eligible(EPOCH)).orElseThrow();
+        assertEquals(FollowTerminationReason.STALE_NAVIGATION,
+                directCancelSession.cancel(NavigationCancellationReason.FAILURE)
+                        .terminationReason().orElseThrow());
+        assertEquals(directCancelReplacement.ticket(),
+                directCancelController.activeTicket().orElseThrow());
+        assertTrue(directCancelReplacement.status().orElseThrow().active());
+    }
+
+    @Test
     void rejectsNonFollowOptionsAndInitialWorldMismatchThroughSharedController() {
         NavigationOptions notFollowing = new NavigationOptions(
                 NavigationMode.FLY, false, true, 0.0D, 1.0D, true,
