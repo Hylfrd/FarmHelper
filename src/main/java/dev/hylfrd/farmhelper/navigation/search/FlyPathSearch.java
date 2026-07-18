@@ -20,8 +20,8 @@ import java.util.function.LongSupplier;
  * Pure bounded A* search preserving the upstream flight-node order and closest-partial behavior.
  *
  * <p>The caller supplies an immutable segmented capture. Search never reads Minecraft state and
- * never starts a background thread. Equal priorities retain discovery order, which makes the
- * upstream DOWN/UP/NORTH/SOUTH/WEST/EAST tie behavior repeatable.</p>
+ * never starts a background thread. Equal priorities follow vanilla Path's strict-comparison,
+ * non-FIFO heap behavior while preserving DOWN/UP/NORTH/SOUTH/WEST/EAST discovery order.</p>
  */
 public final class FlyPathSearch {
     public static final double MAX_DISTANCE = 1_500.0D;
