@@ -34,6 +34,8 @@ class FarmHelperConfigTest {
         config.setCustomPitchLevel(50.0F);
         config.setCustomYaw(true);
         config.setCustomYawLevel(90.0F);
+        config.setCheckDesync(false);
+        config.setDesyncPauseDelayMillis(9_000);
 
         config.reset();
 
@@ -49,6 +51,9 @@ class FarmHelperConfigTest {
         assertEquals(0.0F, config.customPitchLevel());
         assertFalse(config.customYaw());
         assertEquals(0.0F, config.customYawLevel());
+        assertTrue(config.checkDesync());
+        assertEquals(FarmHelperConfig.DEFAULT_DESYNC_PAUSE_DELAY_MILLIS,
+                config.desyncPauseDelayMillis());
     }
 
     @Test
@@ -56,15 +61,23 @@ class FarmHelperConfigTest {
         FarmHelperConfig config = new FarmHelperConfig();
         config.setAlwaysHoldW(true);
         config.setHoldLeftClickWhenChangingRow(false);
+        config.setCheckDesync(false);
+        config.setDesyncPauseDelayMillis(7_500);
 
         FarmHelperConfig copy = config.copy();
         config.setAlwaysHoldW(false);
         config.setHoldLeftClickWhenChangingRow(true);
+        config.setCheckDesync(true);
+        config.setDesyncPauseDelayMillis(5_000);
 
         assertTrue(copy.alwaysHoldW());
         assertFalse(copy.holdLeftClickWhenChangingRow());
+        assertFalse(copy.checkDesync());
+        assertEquals(7_500, copy.desyncPauseDelayMillis());
         assertFalse(config.alwaysHoldW());
         assertTrue(config.holdLeftClickWhenChangingRow());
+        assertTrue(config.checkDesync());
+        assertEquals(5_000, config.desyncPauseDelayMillis());
     }
 
     @Test
@@ -116,5 +129,39 @@ class FarmHelperConfigTest {
 
         assertEquals(-90.0F, config.customPitchLevel());
         assertEquals(180.0F, config.customYawLevel());
+    }
+
+    @Test
+    void desyncDelayAcceptsExactEndpointsAndRejectsOutOfRangeAtomically() {
+        FarmHelperConfig config = new FarmHelperConfig();
+
+        config.setDesyncPauseDelayMillis(FarmHelperConfig.MIN_DESYNC_PAUSE_DELAY_MILLIS);
+        assertEquals(FarmHelperConfig.MIN_DESYNC_PAUSE_DELAY_MILLIS,
+                config.desyncPauseDelayMillis());
+        config.setDesyncPauseDelayMillis(FarmHelperConfig.MAX_DESYNC_PAUSE_DELAY_MILLIS);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> config.setDesyncPauseDelayMillis(
+                        FarmHelperConfig.MIN_DESYNC_PAUSE_DELAY_MILLIS - 1));
+        assertThrows(IllegalArgumentException.class,
+                () -> config.setDesyncPauseDelayMillis(
+                        FarmHelperConfig.MAX_DESYNC_PAUSE_DELAY_MILLIS + 1));
+        assertEquals(FarmHelperConfig.MAX_DESYNC_PAUSE_DELAY_MILLIS,
+                config.desyncPauseDelayMillis());
+    }
+
+    @Test
+    void replaceWithCopiesDesyncConfiguration() {
+        FarmHelperConfig target = new FarmHelperConfig();
+        FarmHelperConfig replacement = new FarmHelperConfig();
+        replacement.setCheckDesync(false);
+        replacement.setDesyncPauseDelayMillis(8_000);
+
+        target.replaceWith(replacement);
+        replacement.setCheckDesync(true);
+        replacement.setDesyncPauseDelayMillis(5_000);
+
+        assertFalse(target.checkDesync());
+        assertEquals(8_000, target.desyncPauseDelayMillis());
     }
 }

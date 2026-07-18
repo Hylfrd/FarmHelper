@@ -31,6 +31,9 @@ public final class FarmHelperConfigStore {
     private static final Set<String> VERSION_THREE_ROOT_FIELDS = Set.of("schemaVersion", "rotation", "ui");
     private static final Set<String> VERSION_FOUR_ROOT_FIELDS = Set.of("schemaVersion", "rotation", "ui", "macro");
     private static final Set<String> VERSION_FIVE_ROOT_FIELDS = VERSION_FOUR_ROOT_FIELDS;
+    private static final Set<String> VERSION_SIX_ROOT_FIELDS = VERSION_FOUR_ROOT_FIELDS;
+    private static final Set<String> CURRENT_ROOT_FIELDS = Set.of(
+            "schemaVersion", "rotation", "ui", "macro", "desync");
     private static final Set<String> ROTATION_FIELDS = Set.of("targetYaw", "targetPitch");
     private static final Set<String> UI_FIELDS = Set.of("openSettingsKey");
     private static final Set<String> VERSION_FOUR_MACRO_FIELDS = Set.of("mode", "spawn", "rewarps");
@@ -40,6 +43,7 @@ public final class FarmHelperConfigStore {
             "mode", "spawn", "rewarps", "alwaysHoldW", "holdLeftClickWhenChangingRow",
             "rotateAfterWarped", "rotateAfterDrop", "dontFixAfterWarping",
             "customPitch", "customPitchLevel", "customYaw", "customYawLevel");
+    private static final Set<String> DESYNC_FIELDS = Set.of("checkDesync", "desyncPauseDelay");
     private static final Set<String> LOCATION_FIELDS = Set.of("x", "y", "z", "yaw", "pitch", "plot");
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
@@ -89,6 +93,7 @@ public final class FarmHelperConfigStore {
                 case 3 -> readVersionThree(root);
                 case 4 -> readVersionFour(root);
                 case 5 -> readVersionFive(root);
+                case 6 -> readVersionSix(root);
                 case FarmHelperConfig.CURRENT_SCHEMA_VERSION -> readCurrent(root);
                 default -> throw new ConfigFormatException("No migration path for schema version " + schemaVersion);
             };
@@ -112,7 +117,7 @@ public final class FarmHelperConfigStore {
                 config.alwaysHoldW(), config.holdLeftClickWhenChangingRow(),
                 config.rotateAfterWarped(), config.rotateAfterDrop(), config.dontFixAfterWarping(),
                 config.customPitch(), config.customPitchLevel(), config.customYaw(),
-                config.customYawLevel());
+                config.customYawLevel(), config.checkDesync(), config.desyncPauseDelayMillis());
         byte[] json = (GSON.toJson(toJson(validated)) + System.lineSeparator()).getBytes(StandardCharsets.UTF_8);
 
         Path parent = configPath.getParent();
@@ -140,7 +145,34 @@ public final class FarmHelperConfigStore {
     }
 
     private static FarmHelperConfig readCurrent(JsonObject root) {
-        requireOnlyFields(root, VERSION_FIVE_ROOT_FIELDS, "configuration root");
+        requireOnlyFields(root, CURRENT_ROOT_FIELDS, "configuration root");
+        JsonObject desync = optionalObject(root, "desync");
+        boolean checkDesync = FarmHelperConfig.DEFAULT_CHECK_DESYNC;
+        int desyncPauseDelay = FarmHelperConfig.DEFAULT_DESYNC_PAUSE_DELAY_MILLIS;
+        if (desync != null) {
+            requireOnlyFields(desync, DESYNC_FIELDS, "desync");
+            checkDesync = optionalBoolean(
+                    desync, "checkDesync", FarmHelperConfig.DEFAULT_CHECK_DESYNC);
+            desyncPauseDelay = optionalInteger(
+                    desync, "desyncPauseDelay",
+                    FarmHelperConfig.DEFAULT_DESYNC_PAUSE_DELAY_MILLIS);
+        }
+        return readVersionSixFields(root, checkDesync, desyncPauseDelay);
+    }
+
+    private static FarmHelperConfig readVersionSix(JsonObject root) {
+        requireOnlyFields(root, VERSION_SIX_ROOT_FIELDS, "schema 6 configuration root");
+        return readVersionSixFields(
+                root,
+                FarmHelperConfig.DEFAULT_CHECK_DESYNC,
+                FarmHelperConfig.DEFAULT_DESYNC_PAUSE_DELAY_MILLIS);
+    }
+
+    private static FarmHelperConfig readVersionSixFields(
+            JsonObject root,
+            boolean checkDesync,
+            int desyncPauseDelay
+    ) {
         JsonObject rotation = optionalObject(root, "rotation");
         float yaw = 0.0F;
         float pitch = 0.0F;
@@ -188,7 +220,8 @@ public final class FarmHelperConfigStore {
         }
         return FarmHelperConfig.fromPersisted(yaw, pitch, openSettingsKey, mode, spawn, rewarps,
                 alwaysHoldW, holdLeftClickWhenChangingRow, rotateAfterWarped, rotateAfterDrop,
-                dontFixAfterWarping, customPitch, customPitchLevel, customYaw, customYawLevel);
+                dontFixAfterWarping, customPitch, customPitchLevel, customYaw, customYawLevel,
+                checkDesync, desyncPauseDelay);
     }
 
     private static FarmHelperConfig readVersionFive(JsonObject root) {
@@ -361,6 +394,11 @@ public final class FarmHelperConfigStore {
         macro.addProperty("customYaw", config.customYaw());
         macro.addProperty("customYawLevel", config.customYawLevel());
         root.add("macro", macro);
+
+        JsonObject desync = new JsonObject();
+        desync.addProperty("checkDesync", config.checkDesync());
+        desync.addProperty("desyncPauseDelay", config.desyncPauseDelayMillis());
+        root.add("desync", desync);
         return root;
     }
 

@@ -8,8 +8,12 @@ import dev.hylfrd.farmhelper.macro.MacroMode;
 
 /** Mutable, version-independent runtime view of FarmHelper's local settings. */
 public final class FarmHelperConfig {
-    public static final int CURRENT_SCHEMA_VERSION = 6;
+    public static final int CURRENT_SCHEMA_VERSION = 7;
     public static final int DEFAULT_OPEN_SETTINGS_KEY = 344;
+    public static final boolean DEFAULT_CHECK_DESYNC = true;
+    public static final int MIN_DESYNC_PAUSE_DELAY_MILLIS = 3_000;
+    public static final int MAX_DESYNC_PAUSE_DELAY_MILLIS = 10_000;
+    public static final int DEFAULT_DESYNC_PAUSE_DELAY_MILLIS = 5_000;
 
     private float targetYaw = 0.0F;
     private float targetPitch = 0.0F;
@@ -26,6 +30,8 @@ public final class FarmHelperConfig {
     private float customPitchLevel;
     private boolean customYaw;
     private float customYawLevel;
+    private boolean checkDesync = DEFAULT_CHECK_DESYNC;
+    private int desyncPauseDelayMillis = DEFAULT_DESYNC_PAUSE_DELAY_MILLIS;
 
     public int schemaVersion() {
         return CURRENT_SCHEMA_VERSION;
@@ -144,6 +150,28 @@ public final class FarmHelperConfig {
                 "customYawLevel");
     }
 
+    public boolean checkDesync() {
+        return checkDesync;
+    }
+
+    public void setCheckDesync(boolean checkDesync) {
+        this.checkDesync = checkDesync;
+    }
+
+    public int desyncPauseDelayMillis() {
+        return desyncPauseDelayMillis;
+    }
+
+    public void setDesyncPauseDelayMillis(int desyncPauseDelayMillis) {
+        if (desyncPauseDelayMillis < MIN_DESYNC_PAUSE_DELAY_MILLIS
+                || desyncPauseDelayMillis > MAX_DESYNC_PAUSE_DELAY_MILLIS) {
+            throw new IllegalArgumentException("desyncPauseDelayMillis must be between "
+                    + MIN_DESYNC_PAUSE_DELAY_MILLIS + " and "
+                    + MAX_DESYNC_PAUSE_DELAY_MILLIS);
+        }
+        this.desyncPauseDelayMillis = desyncPauseDelayMillis;
+    }
+
     public Optional<MacroLocationConfig> macroSpawn() {
         return Optional.ofNullable(macroSpawn);
     }
@@ -197,13 +225,16 @@ public final class FarmHelperConfig {
         customPitchLevel = 0.0F;
         customYaw = false;
         customYawLevel = 0.0F;
+        checkDesync = DEFAULT_CHECK_DESYNC;
+        desyncPauseDelayMillis = DEFAULT_DESYNC_PAUSE_DELAY_MILLIS;
     }
 
     public FarmHelperConfig copy() {
         return fromPersisted(targetYaw, targetPitch, openSettingsKey,
                 macroMode, macroSpawn, macroRewarps, alwaysHoldW,
                 holdLeftClickWhenChangingRow, rotateAfterWarped, rotateAfterDrop,
-                dontFixAfterWarping, customPitch, customPitchLevel, customYaw, customYawLevel);
+                dontFixAfterWarping, customPitch, customPitchLevel, customYaw, customYawLevel,
+                checkDesync, desyncPauseDelayMillis);
     }
 
     public void replaceWith(FarmHelperConfig replacement) {
@@ -224,6 +255,8 @@ public final class FarmHelperConfig {
         customPitchLevel = replacement.customPitchLevel;
         customYaw = replacement.customYaw;
         customYawLevel = replacement.customYawLevel;
+        checkDesync = replacement.checkDesync;
+        desyncPauseDelayMillis = replacement.desyncPauseDelayMillis;
     }
 
     static FarmHelperConfig fromPersisted(float targetYaw, float targetPitch) {
@@ -278,6 +311,32 @@ public final class FarmHelperConfig {
             boolean customYaw,
             float customYawLevel
     ) {
+        return fromPersisted(targetYaw, targetPitch, openSettingsKey, macroMode,
+                macroSpawn, macroRewarps, alwaysHoldW, holdLeftClickWhenChangingRow,
+                rotateAfterWarped, rotateAfterDrop, dontFixAfterWarping,
+                customPitch, customPitchLevel, customYaw, customYawLevel,
+                DEFAULT_CHECK_DESYNC, DEFAULT_DESYNC_PAUSE_DELAY_MILLIS);
+    }
+
+    static FarmHelperConfig fromPersisted(
+            float targetYaw,
+            float targetPitch,
+            int openSettingsKey,
+            int macroMode,
+            MacroLocationConfig macroSpawn,
+            List<MacroLocationConfig> macroRewarps,
+            boolean alwaysHoldW,
+            boolean holdLeftClickWhenChangingRow,
+            boolean rotateAfterWarped,
+            boolean rotateAfterDrop,
+            boolean dontFixAfterWarping,
+            boolean customPitch,
+            float customPitchLevel,
+            boolean customYaw,
+            float customYawLevel,
+            boolean checkDesync,
+            int desyncPauseDelayMillis
+    ) {
         requireFinite(targetYaw, "rotation.targetYaw");
         requireFinite(targetPitch, "rotation.targetPitch");
         if (targetYaw < -180.0F || targetYaw >= 180.0F) {
@@ -309,6 +368,8 @@ public final class FarmHelperConfig {
         config.setCustomPitchLevel(customPitchLevel);
         config.customYaw = customYaw;
         config.setCustomYawLevel(customYawLevel);
+        config.checkDesync = checkDesync;
+        config.setDesyncPauseDelayMillis(desyncPauseDelayMillis);
         return config;
     }
 

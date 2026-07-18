@@ -54,13 +54,16 @@ class FarmHelperConfigStoreTest {
     @Test
     void missingCurrentFieldsUseTypedDefaults() throws IOException {
         Path path = temporaryDirectory.resolve("farmhelper.json");
-        Files.writeString(path, "{\"schemaVersion\":6}", StandardCharsets.UTF_8);
+        Files.writeString(path, "{\"schemaVersion\":7}", StandardCharsets.UTF_8);
 
         ConfigLoadResult result = new FarmHelperConfigStore(path).load();
 
         assertEquals(ConfigLoadStatus.LOADED, result.status());
         assertEquals(0.0F, result.config().targetYaw());
         assertEquals(0.0F, result.config().targetPitch());
+        assertTrue(result.config().checkDesync());
+        assertEquals(FarmHelperConfig.DEFAULT_DESYNC_PAUSE_DELAY_MILLIS,
+                result.config().desyncPauseDelayMillis());
     }
 
     @Test
@@ -189,7 +192,8 @@ class FarmHelperConfigStoreTest {
         assertEquals(ConfigLoadStatus.MIGRATED, result.status());
         assertEquals(45.5F, result.config().targetYaw());
         assertEquals(-30.0F, result.config().targetPitch());
-        assertTrue(migrated.contains("\"schemaVersion\": 6"));
+        assertTrue(migrated.contains(
+                "\"schemaVersion\": " + FarmHelperConfig.CURRENT_SCHEMA_VERSION));
         assertTrue(migrated.contains("\"rotation\""));
         assertFalse(migrated.contains("\"targetYaw\": 45.5\n"));
     }
@@ -268,7 +272,8 @@ class FarmHelperConfigStoreTest {
         assertEquals(ConfigLoadStatus.MIGRATED, result.status());
         assertEquals(45.0F, result.config().targetYaw());
         assertEquals(FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY, result.config().openSettingsKey());
-        assertTrue(migrated.contains("\"schemaVersion\": 6"));
+        assertTrue(migrated.contains(
+                "\"schemaVersion\": " + FarmHelperConfig.CURRENT_SCHEMA_VERSION));
         assertTrue(migrated.contains("\"openSettingsKey\": 344"));
     }
 
@@ -340,7 +345,8 @@ class FarmHelperConfigStoreTest {
         assertFalse(result.config().alwaysHoldW());
         assertTrue(result.config().holdLeftClickWhenChangingRow());
         String migrated = Files.readString(path, StandardCharsets.UTF_8);
-        assertTrue(migrated.contains("\"schemaVersion\": 6"));
+        assertTrue(migrated.contains(
+                "\"schemaVersion\": " + FarmHelperConfig.CURRENT_SCHEMA_VERSION));
         assertTrue(migrated.contains("\"alwaysHoldW\": false"));
         assertTrue(migrated.contains("\"holdLeftClickWhenChangingRow\": true"));
     }
@@ -393,7 +399,7 @@ class FarmHelperConfigStoreTest {
         assertFalse(result.config().customYaw());
         assertEquals(0.0F, result.config().customYawLevel());
         assertTrue(Files.readString(path, StandardCharsets.UTF_8)
-                .contains("\"schemaVersion\": 6"));
+                .contains("\"schemaVersion\": " + FarmHelperConfig.CURRENT_SCHEMA_VERSION));
     }
 
     @Test
@@ -425,6 +431,82 @@ class FarmHelperConfigStoreTest {
         assertEquals(-90.0F, loaded.customPitchLevel());
         assertTrue(loaded.customYaw());
         assertEquals(180.0F, loaded.customYawLevel());
+    }
+
+    @Test
+    void migratesVersionSixWithRequiredDesyncDefaults() throws IOException {
+        Path path = temporaryDirectory.resolve("schema-six.json");
+        Files.writeString(path, """
+                {
+                  "schemaVersion": 6,
+                  "macro": {
+                    "mode": 3,
+                    "customYaw": true,
+                    "customYawLevel": 90
+                  }
+                }
+                """, StandardCharsets.UTF_8);
+
+        ConfigLoadResult result = new FarmHelperConfigStore(path).load();
+        String migrated = Files.readString(path, StandardCharsets.UTF_8);
+
+        assertEquals(ConfigLoadStatus.MIGRATED, result.status());
+        assertEquals(3, result.config().macroMode());
+        assertTrue(result.config().customYaw());
+        assertEquals(90.0F, result.config().customYawLevel());
+        assertTrue(result.config().checkDesync());
+        assertEquals(FarmHelperConfig.DEFAULT_DESYNC_PAUSE_DELAY_MILLIS,
+                result.config().desyncPauseDelayMillis());
+        assertTrue(migrated.contains(
+                "\"schemaVersion\": " + FarmHelperConfig.CURRENT_SCHEMA_VERSION));
+        assertTrue(migrated.contains("\"checkDesync\": true"));
+        assertTrue(migrated.contains("\"desyncPauseDelay\": 5000"));
+    }
+
+    @Test
+    void desyncConfigurationRoundTripsExactDelayEndpoints() throws IOException {
+        for (int delay : List.of(
+                FarmHelperConfig.MIN_DESYNC_PAUSE_DELAY_MILLIS,
+                FarmHelperConfig.MAX_DESYNC_PAUSE_DELAY_MILLIS)) {
+            Path path = temporaryDirectory.resolve("desync-" + delay + ".json");
+            FarmHelperConfig config = new FarmHelperConfig();
+            config.setCheckDesync(false);
+            config.setDesyncPauseDelayMillis(delay);
+
+            FarmHelperConfigStore store = new FarmHelperConfigStore(path);
+            store.save(config);
+            FarmHelperConfig loaded = store.load().config();
+
+            assertFalse(loaded.checkDesync(), Integer.toString(delay));
+            assertEquals(delay, loaded.desyncPauseDelayMillis());
+        }
+    }
+
+    @Test
+    void invalidDesyncFieldsAreBackedUpAndRecoveredToSafeDefaults() throws IOException {
+        List<String> invalidDesyncObjects = List.of(
+                "{\"checkDesync\":\"true\",\"desyncPauseDelay\":5000}",
+                "{\"checkDesync\":true,\"desyncPauseDelay\":2999}",
+                "{\"checkDesync\":true,\"desyncPauseDelay\":10001}",
+                "{\"checkDesync\":true,\"desyncPauseDelay\":5000.5}");
+
+        for (int index = 0; index < invalidDesyncObjects.size(); index++) {
+            Path path = temporaryDirectory.resolve("invalid-desync-" + index + ".json");
+            Files.writeString(path, """
+                    {
+                      "schemaVersion": 7,
+                      "desync": %s
+                    }
+                    """.formatted(invalidDesyncObjects.get(index)), StandardCharsets.UTF_8);
+
+            ConfigLoadResult result = new FarmHelperConfigStore(path).load();
+
+            assertEquals(ConfigLoadStatus.RECOVERED_DEFAULTS, result.status());
+            assertTrue(result.backup().isPresent());
+            assertTrue(result.config().checkDesync());
+            assertEquals(FarmHelperConfig.DEFAULT_DESYNC_PAUSE_DELAY_MILLIS,
+                    result.config().desyncPauseDelayMillis());
+        }
     }
 
     @Test
