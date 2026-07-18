@@ -66,14 +66,15 @@ public record PathSearchRequest(
     }
 
     /** Upstream executor distance from the player's feet-position vector to the raw target. */
-    public double directDistanceToGoal() {
+    public float directDistanceToGoal() {
         double x = (playerBody.minX() + playerBody.maxX()) / 2.0D;
         double y = playerBody.minY();
         double z = (playerBody.minZ() + playerBody.maxZ()) / 2.0D;
         double dx = goal.x() - x;
         double dy = goal.y() - y;
         double dz = goal.z() - z;
-        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        // Entity#getDistance widens MathHelper.sqrt_double's float result back to double.
+        return (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     public BoxSnapshot bodyAt(PathNode node) {

@@ -27,15 +27,15 @@ public record PathNode(int x, int y, int z) {
                 checkedFloor(goal.z() - entityWidth / 2.0D));
     }
 
-    double distanceTo(PathNode other) {
-        return Math.sqrt(squaredDistanceTo(other));
+    float distanceTo(PathNode other) {
+        return (float) Math.sqrt(squaredDistanceTo(other));
     }
 
-    double squaredDistanceTo(PathNode other) {
+    float squaredDistanceTo(PathNode other) {
         Objects.requireNonNull(other, "other");
-        double dx = (double) other.x - x;
-        double dy = (double) other.y - y;
-        double dz = (double) other.z - z;
+        float dx = (float) (other.x - x);
+        float dy = (float) (other.y - y);
+        float dz = (float) (other.z - z);
         return dx * dx + dy * dy + dz * dz;
     }
 

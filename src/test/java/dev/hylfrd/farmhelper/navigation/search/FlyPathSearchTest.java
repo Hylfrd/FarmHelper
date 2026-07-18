@@ -86,6 +86,18 @@ class FlyPathSearchTest {
         assertEquals(PathSearchOutcome.FOUND, searched.outcome());
         assertEquals(List.of(exactThreshold.startNode()), searched.path());
         assertEquals(1, searched.expandedNodes());
+
+        PathSearchRequest floatRoundedToOne = request(
+                spatial, body, new NavigationGoal(2.3D + (1.0D - 1.0E-8D), 2.0D, 2.3D));
+        assertEquals(1.0F, floatRoundedToOne.directDistanceToGoal());
+        assertEquals(PathSearchOutcome.FOUND,
+                new FlyPathSearch().search(floatRoundedToOne).outcome());
+
+        PathSearchRequest floatBelowOne = request(
+                spatial, body, new NavigationGoal(2.3D + (1.0D - 1.0E-7D), 2.0D, 2.3D));
+        assertTrue(floatBelowOne.directDistanceToGoal() < 1.0F);
+        assertEquals(PathSearchOutcome.ALREADY_AT_GOAL,
+                new FlyPathSearch().search(floatBelowOne).outcome());
     }
 
     @Test
@@ -109,6 +121,105 @@ class FlyPathSearchTest {
     }
 
     @Test
+    void vanillaHeapChoosesRightChildWhenEqualPrioritiesCompete() {
+        FlyPathSearch.UpstreamOpenHeap heap = new FlyPathSearch.UpstreamOpenHeap();
+        FlyPathSearch.NodeState first =
+                new FlyPathSearch.NodeState(new PathNode(1, 0, 0), 1.0F);
+        FlyPathSearch.NodeState left =
+                new FlyPathSearch.NodeState(new PathNode(2, 0, 0), 2.0F);
+        FlyPathSearch.NodeState right =
+                new FlyPathSearch.NodeState(new PathNode(3, 0, 0), 2.0F);
+        FlyPathSearch.NodeState last =
+                new FlyPathSearch.NodeState(new PathNode(4, 0, 0), 3.0F);
+        heap.add(first);
+        heap.add(left);
+        heap.add(right);
+        heap.add(last);
+
+        assertEquals(first, heap.dequeue());
+        assertEquals(right, heap.dequeue());
+        assertEquals(left, heap.dequeue());
+        assertEquals(last, heap.dequeue());
+        assertTrue(heap.isEmpty());
+    }
+
+    @Test
+    void allowsVanillaDetourCostBetweenMaxDistanceAndTwiceMaxDistance() {
+        BoxSnapshot logical = new BoxSnapshot(0, 0, 0, 8, 10, 8);
+        BoxSnapshot capture = expanded(logical);
+        Map<BlockPosition, Observation<BlockStateSnapshot>> cells =
+                new LinkedHashMap<>(allAir(capture));
+        for (int y = 0; y <= 5; y++) {
+            for (int z = 0; z < 8; z++) {
+                cells.put(new BlockPosition(3, y, z), Observation.present(solid()));
+            }
+        }
+        PathSearchRequest request = request(
+                snapshot(logical, segment(0, 10_002L, capture, Map.copyOf(cells))),
+                new BoxSnapshot(2, 2, 3, 2.6D, 3.8D, 3.6D),
+                new NavigationGoal(4.3D, 2.9D, 3.3D));
+
+        PathSearchResult result = new FlyPathSearch().search(request);
+        int pathCost = result.path().size() - 1;
+
+        assertEquals(PathSearchOutcome.FOUND, result.outcome());
+        assertTrue(pathCost > result.maxDistance());
+        assertTrue(pathCost < result.maxDistance() * 2.0D);
+        assertTrue(result.path().contains(new PathNode(3, 6, 3)));
+    }
+
+    @Test
+    void squaredPrioritySelectsFixedUpstreamRouteInsteadOfLinearAStarRoute() {
+        BoxSnapshot logical = new BoxSnapshot(0, 2, 0, 12, 4, 12);
+        BoxSnapshot capture = expanded(logical);
+        Map<BlockPosition, Observation<BlockStateSnapshot>> cells =
+                new LinkedHashMap<>(allAir(capture));
+        int[][] blocked = {
+                {0, 5}, {0, 6}, {0, 9}, {1, 9}, {10, 2}, {10, 7}, {10, 8},
+                {11, 2}, {2, 1}, {2, 3}, {3, 10}, {3, 3}, {4, 0}, {4, 11},
+                {4, 6}, {5, 10}, {5, 2}, {5, 6}, {6, 10}, {6, 2}, {6, 6},
+                {7, 2}, {7, 6}, {8, 10}, {8, 11}, {8, 6}, {8, 7}, {8, 8},
+                {9, 4}, {9, 7}
+        };
+        for (int[] position : blocked) {
+            cells.put(new BlockPosition(position[0], 2, position[1]),
+                    Observation.present(solid()));
+        }
+        PathSearchRequest request = request(
+                snapshot(logical, segment(0, 10_003L, capture, Map.copyOf(cells))),
+                new BoxSnapshot(1, 2, 1, 1.6D, 3.8D, 1.6D),
+                new NavigationGoal(10.3D, 2.9D, 10.3D));
+
+        PathSearchResult result = new FlyPathSearch().search(request);
+
+        assertEquals(PathSearchOutcome.FOUND, result.outcome());
+        // A linear g+h A* reaches this fixture in 18 steps; vanilla squared h selects 20.
+        assertEquals(List.of(
+                new PathNode(1, 2, 1),
+                new PathNode(1, 2, 2),
+                new PathNode(2, 2, 2),
+                new PathNode(3, 2, 2),
+                new PathNode(4, 2, 2),
+                new PathNode(4, 2, 3),
+                new PathNode(4, 2, 4),
+                new PathNode(4, 2, 5),
+                new PathNode(5, 2, 5),
+                new PathNode(6, 2, 5),
+                new PathNode(7, 2, 5),
+                new PathNode(8, 2, 5),
+                new PathNode(9, 2, 5),
+                new PathNode(9, 2, 6),
+                new PathNode(10, 2, 6),
+                new PathNode(11, 2, 6),
+                new PathNode(11, 2, 7),
+                new PathNode(11, 2, 8),
+                new PathNode(11, 2, 9),
+                new PathNode(11, 2, 10),
+                new PathNode(10, 2, 10)), result.path());
+        assertEquals(20, result.path().size() - 1);
+    }
+
+    @Test
     void returnsClosestPartialRouteAndNoPathUsingUpstreamExitSemantics() {
         BoxSnapshot logical = new BoxSnapshot(0, 0, 0, 8, 6, 6);
         BoxSnapshot capture = expanded(logical);
@@ -126,6 +237,8 @@ class FlyPathSearchTest {
         PathSearchResult partial = new FlyPathSearch().search(partialRequest);
         assertEquals(PathSearchOutcome.PARTIAL, partial.outcome());
         assertTrue(partial.path().size() >= 2);
+        assertEquals(new PathNode(4, 2, 1),
+                partial.path().get(partial.path().size() - 1));
         assertTrue(partial.path().get(partial.path().size() - 1)
                 .distanceTo(partialRequest.targetNode())
                 < partialRequest.startNode().distanceTo(partialRequest.targetNode()));
@@ -243,11 +356,11 @@ class FlyPathSearchTest {
         assertEquals(PathSearchOutcome.FOUND, exact.outcome());
         assertEquals(FlyPathSearch.MAX_DISTANCE, exact.maxDistance());
 
-        PathSearchResult over = new FlyPathSearch().search(request(
-                maximum, body, new NavigationGoal(1_503.3D, 1.9D, 1.3D)));
-        assertEquals(PathSearchOutcome.NO_PATH, over.outcome());
-        assertEquals(FlyPathSearch.MAX_DISTANCE, over.maxDistance());
-        assertEquals(1, over.expandedNodes());
+        PathSearchResult exactLinearBoundary = new FlyPathSearch().search(request(
+                maximum, body, new NavigationGoal(1_502.3D, 1.9D, 1.3D)));
+        assertEquals(PathSearchOutcome.NO_PATH, exactLinearBoundary.outcome());
+        assertEquals(FlyPathSearch.MAX_DISTANCE, exactLinearBoundary.maxDistance());
+        assertEquals(1, exactLinearBoundary.expandedNodes());
     }
 
     @Test
@@ -255,7 +368,8 @@ class FlyPathSearchTest {
         BoxSnapshot logical = new BoxSnapshot(0, 0, 0, 8, 6, 6);
         BoxSnapshot capture = expanded(logical);
         AtomicInteger calls = new AtomicInteger();
-        LongSupplier clock = () -> calls.getAndIncrement() == 0 ? 50L : 10_050L;
+        LongSupplier clock = () -> calls.getAndIncrement() == 0
+                ? 50L : 50L + FlyPathSearch.TIMEOUT_NANOS;
         PathSearchResult result = new FlyPathSearch(clock, 100).search(request(
                 snapshot(logical, segment(0, 50L, capture, allAir(capture))),
                 new BoxSnapshot(2, 2, 2, 2.6D, 3.8D, 2.6D),
@@ -264,6 +378,35 @@ class FlyPathSearchTest {
         assertEquals(PathSearchOutcome.TIMEOUT, result.outcome());
         assertEquals(FlyPathSearch.TIMEOUT_MILLIS, result.elapsedMillis());
         assertEquals(0, result.expandedNodes());
+    }
+
+    @Test
+    void monotonicTickerHandlesBackwardCorrectionAndLongWrap() {
+        BoxSnapshot logical = new BoxSnapshot(0, 0, 0, 8, 6, 6);
+        BoxSnapshot capture = expanded(logical);
+        PathSearchRequest request = request(
+                snapshot(logical, segment(0, 50_001L, capture, allAir(capture))),
+                new BoxSnapshot(2, 2, 2, 2.6D, 3.8D, 2.6D),
+                new NavigationGoal(6.3D, 2.9D, 2.3D));
+
+        long[] corrected = { 100L, 99L, 100L + FlyPathSearch.TIMEOUT_NANOS };
+        AtomicInteger correctedIndex = new AtomicInteger();
+        LongSupplier correctionTicker = () ->
+                corrected[Math.min(correctedIndex.getAndIncrement(), corrected.length - 1)];
+        PathSearchResult correction =
+                new FlyPathSearch(correctionTicker, 100).search(request);
+        assertEquals(PathSearchOutcome.TIMEOUT, correction.outcome());
+        assertEquals(FlyPathSearch.TIMEOUT_MILLIS, correction.elapsedMillis());
+        assertEquals(1, correction.expandedNodes());
+
+        long start = Long.MAX_VALUE - FlyPathSearch.TIMEOUT_NANOS / 2L;
+        long wrapped = start + FlyPathSearch.TIMEOUT_NANOS;
+        AtomicInteger wrapIndex = new AtomicInteger();
+        LongSupplier wrapTicker = () -> wrapIndex.getAndIncrement() == 0 ? start : wrapped;
+        PathSearchResult overflow = new FlyPathSearch(wrapTicker, 100).search(request);
+        assertEquals(PathSearchOutcome.TIMEOUT, overflow.outcome());
+        assertEquals(FlyPathSearch.TIMEOUT_MILLIS, overflow.elapsedMillis());
+        assertEquals(0, overflow.expandedNodes());
     }
 
     @Test
