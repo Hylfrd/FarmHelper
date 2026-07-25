@@ -31,7 +31,7 @@ dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-    implementation "com.google.code.gson:gson:2.13.1"
+    implementation "com.google.code.gson:gson:2.13.2"
 
     testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
@@ -83,6 +83,10 @@ publishing {
             from components.java
 
             pom {
+                name = "FarmHelper"
+                description = "A modern Fabric rewrite focused on core farming macro behavior."
+                url = "https://github.com/Hylfrd/FarmHelper"
+
                 licenses {
                     license {
                         name = "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International"

@@ -24,7 +24,7 @@
     },
     {
       "coordinate": "com.google.code.gson:gson",
-      "declaredVersion": "2.13.1",
+      "declaredVersion": "2.13.2",
       "resolvedVersion": "2.13.2",
       "source": "Maven Central",
       "direct": true,
@@ -40,8 +40,19 @@
       "configuration": "minecraft",
       "role": "Minecraft platform dependency",
       "license": {
-        "status": "pending",
-        "rationale": "The build declares only the project license; it provides no license provenance for this Minecraft dependency."
+        "status": "not-provided",
+        "rationale": "Neither this repository nor the authoritative Minecraft 26.1.2 metadata used by Fabric Loom states a license or redistribution grant for this platform artifact; no license is inferred.",
+        "evidence": [
+          "Repository LICENSE and NOTICE cover FarmHelper and upstream attribution, not this external platform dependency.",
+          "Fabric Loom metadata mojang_minecraft_info.json and the resolved minecraft-common-deobf-26.1.2.pom contain no license field for this artifact."
+        ]
+      },
+      "redistribution": {
+        "status": "not-redistributed",
+        "rationale": "The Minecraft platform artifact remains external to the runtime JAR; the project JAR task embeds only the repository LICENSE and NOTICE.",
+        "evidence": [
+          "build.gradle declares Minecraft through the minecraft configuration and adds only LICENSE and NOTICE to the runtime JAR."
+        ]
       },
       "provenance": {
         "status": "resolved",
