@@ -139,12 +139,14 @@ tasks.register("verifyDependencyProvenance") {
         def minecraftDependency = declaredMinecraftDependencies[0]
         def declaredMinecraftCoordinate =
                 "${minecraftDependency.group}:${minecraftDependency.name}:${minecraftDependency.version}"
-        def resolvedMinecraft = resolvedAll[
-                "${minecraftDependency.group}:${minecraftDependency.name}".toString()
-        ]
-        if (resolvedMinecraft == null) {
-            fail("minecraft dependency is absent from runtime resolution")
+        def resolvedMinecraftCandidates = resolvedAll.values().findAll { component ->
+            component.coordinate.startsWith("net.minecraft:minecraft-common-") &&
+                    component.version == minecraftDependency.version.toString()
         }
+        if (resolvedMinecraftCandidates.size() != 1) {
+            fail("expected one Loom-selected Minecraft platform component, found ${resolvedMinecraftCandidates.size()}")
+        }
+        def resolvedMinecraft = resolvedMinecraftCandidates[0]
         def platformEntries = provenance.platformDependencies
         if (!(platformEntries instanceof List) || platformEntries.size() != 1) {
             fail("platformDependencies must contain exactly one entry")
@@ -167,7 +169,7 @@ tasks.register("verifyDependencyProvenance") {
         }
 
         def loomVersion = project.property("loom_version").toString()
-        if (loomVersion.contains("SNAPSHOT") || loomVersion !=~ /^\d+\.\d+\.\d+$/) {
+        if (loomVersion.contains("SNAPSHOT") || !(loomVersion ==~ /^\d+\.\d+\.\d+$/)) {
             fail("loom_version must be a pinned release version")
         }
 
