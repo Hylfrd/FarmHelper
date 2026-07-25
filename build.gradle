@@ -41,6 +41,144 @@ tasks.named("test") {
     useJUnitPlatform()
 }
 
+def provenanceFile = layout.projectDirectory.file("dependency-provenance.json")
+
+tasks.register("verifyDependencyProvenance") {
+    group = "verification"
+    description = "Verifies dependency-provenance.json against direct Gradle inputs and resolution."
+    inputs.file(provenanceFile)
+    inputs.properties([
+        loomVersion: project.property("loom_version").toString(),
+        minecraftVersion: project.property("minecraft_version").toString()
+    ])
+
+    doLast {
+        def fail = { message ->
+            throw new GradleException("Dependency provenance verification failed: ${message}")
+        }
+        def provenance = new groovy.json.JsonSlurper().parse(provenanceFile.asFile)
+        if (provenance.schemaVersion != 1) {
+            fail("unsupported schemaVersion ${provenance.schemaVersion}")
+        }
+
+        def declaredRuntime = configurations.implementation.dependencies.collectEntries { dependency ->
+            if (dependency.group == null || dependency.name == null || dependency.version == null) {
+                fail("implementation contains an unqualified direct dependency")
+            }
+            def coordinate = "${dependency.group}:${dependency.name}".toString()
+            [(coordinate): dependency.version.toString()]
+        }
+        def resolveDirect = { configuration ->
+            configuration.incoming.resolutionResult.root.dependencies.collectEntries { dependencyResult ->
+                if (!(dependencyResult instanceof org.gradle.api.artifacts.result.ResolvedDependencyResult)) {
+                    fail("${configuration.name} contains an unresolved direct dependency")
+                }
+                def selected = dependencyResult.selected.id
+                if (!(selected instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier)) {
+                    fail("${configuration.name} resolved a non-module direct dependency")
+                }
+                def requested = dependencyResult.requested
+                def requestedCoordinate = "${requested.group}:${requested.module}".toString()
+                def selectedCoordinate = "${selected.group}:${selected.module}".toString()
+                def resolvedCoordinate = "${selected.group}:${selected.module}:${selected.version}".toString()
+                [(requestedCoordinate): [
+                    coordinate: selectedCoordinate,
+                    version: selected.version.toString(),
+                    resolvedCoordinate: resolvedCoordinate
+                ]]
+            }
+        }
+
+        def resolvedAll = resolveDirect(configurations.runtimeClasspath)
+        def resolvedRuntime = declaredRuntime.collectEntries { coordinate, ignoredVersion ->
+            if (!resolvedAll.containsKey(coordinate)) {
+                fail("implementation dependency ${coordinate} is absent from runtime resolution")
+            }
+            [(coordinate): resolvedAll[coordinate]]
+        }
+
+        def runtimeEntries = provenance.runtimeDependencies
+        if (!(runtimeEntries instanceof List)) {
+            fail("runtimeDependencies must be an array")
+        }
+        def runtimeByCoordinate = runtimeEntries.collectEntries { entry ->
+            [(entry.coordinate.toString()): entry]
+        }
+        if (runtimeByCoordinate.size() != runtimeEntries.size()) {
+            fail("runtimeDependencies contains duplicate coordinates")
+        }
+
+        def expectedSources = [
+            "net.fabricmc:fabric-loader": "Fabric Maven",
+            "net.fabricmc.fabric-api:fabric-api": "Fabric Maven",
+            "com.google.code.gson:gson": "Maven Central"
+        ]
+        if (runtimeByCoordinate.keySet().toList().sort() != declaredRuntime.keySet().toList().sort()) {
+            fail("runtimeDependencies coordinates do not match implementation")
+        }
+        runtimeByCoordinate.each { coordinate, entry ->
+            def resolved = resolvedRuntime[coordinate]
+            if (entry.declaredVersion.toString() != declaredRuntime[coordinate]) {
+                fail("${coordinate} declaredVersion is stale (provenance=${entry.declaredVersion}, build=${declaredRuntime[coordinate]})")
+            }
+            if (entry.resolvedVersion.toString() != resolved.version.toString()) {
+                fail("${coordinate} resolvedVersion is stale")
+            }
+            if (entry.source.toString() != expectedSources[coordinate]) {
+                fail("${coordinate} source is inconsistent")
+            }
+            if (entry.direct != true || entry.bundled != false) {
+                fail("${coordinate} must be direct and external to the runtime JAR")
+            }
+        }
+
+        def declaredMinecraftDependencies = configurations.minecraft.dependencies.toList()
+        if (declaredMinecraftDependencies.size() != 1) {
+            fail("minecraft must contain exactly one direct dependency")
+        }
+        def minecraftDependency = declaredMinecraftDependencies[0]
+        def declaredMinecraftCoordinate =
+                "${minecraftDependency.group}:${minecraftDependency.name}:${minecraftDependency.version}"
+        def resolvedMinecraft = resolvedAll[
+                "${minecraftDependency.group}:${minecraftDependency.name}".toString()
+        ]
+        if (resolvedMinecraft == null) {
+            fail("minecraft dependency is absent from runtime resolution")
+        }
+        def platformEntries = provenance.platformDependencies
+        if (!(platformEntries instanceof List) || platformEntries.size() != 1) {
+            fail("platformDependencies must contain exactly one entry")
+        }
+        def platform = platformEntries[0]
+        if (platform.coordinate.toString() != resolvedMinecraft.coordinate.toString() ||
+                platform.declaredVersion.toString() != minecraftDependency.version.toString() ||
+                platform.resolvedVersion.toString() != resolvedMinecraft.version.toString() ||
+                platform.configuration.toString() != "minecraft" ||
+                platform.provenance.declaredCoordinate.toString() != declaredMinecraftCoordinate ||
+                platform.provenance.resolvedCoordinate.toString() != resolvedMinecraft.resolvedCoordinate ||
+                platform.provenance.resolvedBy.toString() != "Fabric Loom") {
+            fail("platform dependency provenance is inconsistent with Gradle resolution")
+        }
+        if (platform.source.toString() != "Fabric Loom" ||
+                platform.direct != true || platform.bundled != false ||
+                platform.license.status.toString() != "not-provided" ||
+                platform.redistribution.status.toString() != "not-redistributed") {
+            fail("platform dependency license or redistribution metadata is inconsistent")
+        }
+
+        def loomVersion = project.property("loom_version").toString()
+        if (loomVersion.contains("SNAPSHOT") || loomVersion !=~ /^\d+\.\d+\.\d+$/) {
+            fail("loom_version must be a pinned release version")
+        }
+
+        logger.lifecycle("Dependency provenance verified: ${runtimeEntries.size()} runtime dependencies, 1 platform dependency, Loom ${loomVersion}.")
+    }
+}
+
+tasks.named("check") {
+    dependsOn("verifyDependencyProvenance")
+}
+
 tasks.named("processResources") {
     inputs.property "version", modVersion
 

@@ -14,6 +14,10 @@ The script performs no network access. It locates Loom's Minecraft metadata and
 libraries beneath `GRADLE_USER_HOME` (or the current user's default `.gradle`
 directory), verifies the full SHA-256 of the 26.1.2 common-deobfuscated JAR, and
 runs a temporary Java source file against that exact 51-JAR offline classpath.
+For every applicable library, the audit selects the cache artifact only when
+its Mojang metadata SHA-1 and byte size both match; missing, mismatched, or
+ambiguous same-coordinate cache artifacts fail the audit instead of being
+chosen by path ordering.
 No generated source or binary is retained in the repository.
 
 The Java audit invokes `PistonMovingBlockEntity.getExtendedProgress(float)` for
@@ -29,5 +33,5 @@ JAR hash is an assertion rather than informational output.
 Expected JAR SHA-256:
 
 ```text
-B61708F7D32C558419F7455F4A07D0F3659E8C5855AEFB96C4FAA5E567004141
+2692634287E54AABD918F6E68E1877C9BB8E36D81C7B9FE10460FA3B24DA04CD
 ```

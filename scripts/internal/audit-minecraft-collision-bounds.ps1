@@ -6,7 +6,7 @@ Set-StrictMode -Version Latest
 
 $expectedMinecraftVersion = '26.1.2'
 $expectedCommonJarSha256 =
-    'B61708F7D32C558419F7455F4A07D0F3659E8C5855AEFB96C4FAA5E567004141'
+    '2692634287E54AABD918F6E68E1877C9BB8E36D81C7B9FE10460FA3B24DA04CD'
 
 $javaProperties = (& java -XshowSettings:properties -version 2>&1) -join "`n"
 if ($LASTEXITCODE -ne 0) {
@@ -52,27 +52,133 @@ $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json
 $jars = [System.Collections.Generic.List[string]]::new()
 $jars.Add($commonJar)
 
+function Test-CurrentLibraryRules {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object] $Library
+    )
+
+    if (-not ($Library.PSObject.Properties.Name -contains 'rules')) {
+        return $true
+    }
+
+    $currentOs = if ($IsWindows) {
+        'windows'
+    } elseif ($IsLinux) {
+        'linux'
+    } elseif ($IsMacOS) {
+        'osx'
+    } else {
+        throw 'Unable to determine the current operating system for library rules.'
+    }
+
+    $allowed = $false
+    foreach ($rule in $Library.rules) {
+        $matches = $true
+        if ($null -ne $rule.os -and $null -ne $rule.os.name) {
+            $matches = $rule.os.name -eq $currentOs
+        }
+
+        if (-not $matches) {
+            continue
+        }
+
+        if ($rule.action -eq 'allow') {
+            $allowed = $true
+        } elseif ($rule.action -eq 'disallow') {
+            $allowed = $false
+        } else {
+            throw "Unsupported Minecraft library rule action '$($rule.action)'."
+        }
+    }
+
+    return $allowed
+}
+
+function Resolve-OfflineLibraryArtifact {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object] $Library
+    )
+
+    $parts = [string] $Library.name -split ':'
+    $directory = Join-Path $modules ($parts[0] + '\' + $parts[1] + '\' + $parts[2])
+    if (-not (Test-Path -LiteralPath $directory -PathType Container)) {
+        return $null
+    }
+
+    if (-not ($Library.PSObject.Properties.Name -contains 'downloads') -or
+        $null -eq $Library.downloads.artifact) {
+        throw "Minecraft library '$($Library.name)' has no artifact checksum metadata."
+    }
+
+    $artifactMetadata = $Library.downloads.artifact
+    $expectedFileName = Split-Path -Leaf ([string] $artifactMetadata.path)
+    $expectedSha1 = ([string] $artifactMetadata.sha1).ToLowerInvariant()
+    $expectedSize = [int64] $artifactMetadata.size
+    if ([string]::IsNullOrWhiteSpace($expectedFileName) -or
+        $expectedSha1 -notmatch '^[0-9a-f]{40}$' -or
+        $expectedSize -lt 0) {
+        throw "Invalid checksum metadata for Minecraft library '$($Library.name)'."
+    }
+
+    $candidates = @(
+        Get-ChildItem `
+            -LiteralPath $directory `
+            -Recurse `
+            -File `
+            -Filter $expectedFileName
+    )
+    if ($candidates.Count -eq 0) {
+        return $null
+    }
+
+    $matchingCandidates = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
+    foreach ($candidate in $candidates) {
+        if ($candidate.Length -ne $expectedSize) {
+            continue
+        }
+
+        $actualSha1 = (Get-FileHash -LiteralPath $candidate.FullName -Algorithm SHA1).Hash.ToLowerInvariant()
+        if ($actualSha1 -eq $expectedSha1) {
+            $matchingCandidates.Add($candidate)
+        }
+    }
+
+    if ($matchingCandidates.Count -eq 0) {
+        $candidatePaths = $candidates.FullName -join ', '
+        throw (
+            "No checksum-matching artifact for Minecraft library '$($Library.name)'. " +
+            "Expected SHA-1 $expectedSha1 and size $expectedSize; candidates: $candidatePaths."
+        )
+    }
+    if ($matchingCandidates.Count -gt 1) {
+        $matchingPaths = $matchingCandidates.FullName -join ', '
+        throw (
+            "Ambiguous checksum-matching artifacts for Minecraft library '$($Library.name)': " +
+            $matchingPaths
+        )
+    }
+
+    return $matchingCandidates[0].FullName
+}
+
 foreach ($library in $info.libraries) {
     $parts = $library.name -split ':'
     if ($parts.Count -ne 3) {
         continue
     }
 
-    $directory = Join-Path $modules ($parts[0] + '\' + $parts[1] + '\' + $parts[2])
-    if (-not (Test-Path -LiteralPath $directory -PathType Container)) {
+    if (-not (Test-CurrentLibraryRules -Library $library)) {
         continue
     }
 
-    $artifact = Get-ChildItem `
-        -LiteralPath $directory `
-        -Recurse `
-        -File `
-        -Filter "$($parts[1])-$($parts[2]).jar" |
-        Sort-Object -Property FullName |
-        Select-Object -First 1
-
-    if ($null -ne $artifact) {
-        $jars.Add($artifact.FullName)
+    $artifactPath = Resolve-OfflineLibraryArtifact -Library $library
+    if ($null -ne $artifactPath) {
+        if ($jars.Contains($artifactPath)) {
+            throw "Duplicate offline Minecraft classpath artifact: $artifactPath"
+        }
+        $jars.Add($artifactPath)
     }
 }
 
