@@ -217,6 +217,60 @@ tasks.named("jar", org.gradle.api.tasks.bundling.Jar) {
     }
 }
 
+def packagedClientJar = providers.gradleProperty("packagedClientJar")
+def packagedClientRunDir = providers.gradleProperty("packagedClientRunDir")
+
+tasks.register("verifyPackagedClient", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    group = "verification"
+    description = "Launches a production-mode client with one explicitly supplied FarmHelper JAR."
+
+    // This task deliberately does not assemble the candidate. The wrapper hashes the
+    // already-built artifact, then excludes jar during launch so the file cannot change.
+    getMods().setFrom(packagedClientJar.map { project.file(it) })
+    getRunDir().set(project.layout.dir(packagedClientRunDir.map { project.file(it) }))
+    getJvmArgs().addAll([
+        "-Dfabric.development=false",
+        "-Dfabric.noGui=true",
+        "-Dfabric.log.level=info",
+        "-Xlog:class+load=info:file=class-load.log"
+    ])
+    getJvmArgs().add(packagedClientRunDir.map {
+        "-Dfabric.modsFolder=${project.file(it).absolutePath}\\mods"
+    })
+    getProgramArgs().addAll([
+        "--username", "FarmHelperVerification",
+        "--uuid", "00000000-0000-0000-0000-000000000000",
+        "--accessToken", "offline-verification-token",
+        "--version", minecraftVersion,
+        "--versionType", "release"
+    ])
+
+    doFirst {
+        if (!packagedClientJar.isPresent() || !packagedClientRunDir.isPresent()) {
+            throw new GradleException(
+                    "verifyPackagedClient requires -PpackagedClientJar and -PpackagedClientRunDir")
+        }
+
+        def expectedJar = project.file(packagedClientJar.get()).canonicalFile
+        def configuredMods = getMods().files.collect { it.canonicalFile }
+        if (configuredMods.size() != 1 || configuredMods[0] != expectedJar) {
+            throw new GradleException(
+                    "verifyPackagedClient requires exactly one mod file: ${expectedJar}; " +
+                            "effective files were ${configuredMods}")
+        }
+
+        def expectedRunDir = project.file(packagedClientRunDir.get()).canonicalFile
+        if (getRunDir().get().asFile.canonicalFile != expectedRunDir) {
+            throw new GradleException(
+                    "verifyPackagedClient run directory was not bound to ${expectedRunDir}")
+        }
+
+        logger.lifecycle("Packaged client candidate: ${expectedJar}")
+        logger.lifecycle("Packaged client run directory: ${expectedRunDir}")
+        logger.lifecycle("Packaged client mode: production; fabric.development=false")
+    }
+}
+
 publishing {
     publications {
         create("mavenJava", MavenPublication) {
