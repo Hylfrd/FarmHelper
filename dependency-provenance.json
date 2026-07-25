@@ -1,5 +1,10 @@
 {
   "schemaVersion": 1,
+  "scope": {
+    "runtimeDependencies": "Direct implementation dependencies published as runtime dependencies and external to the runtime JAR.",
+    "platformDependencies": "Direct dependencies declared through Fabric Loom's minecraft configuration, tracked separately and external to the runtime JAR.",
+    "testDependencies": "Test-only dependencies are outside this runtime provenance record."
+  },
   "runtimeDependencies": [
     {
       "coordinate": "net.fabricmc:fabric-loader",
@@ -22,6 +27,29 @@
       "declaredVersion": "2.13.1",
       "resolvedVersion": "2.13.2",
       "source": "Maven Central",
+      "direct": true,
+      "bundled": false
+    }
+  ],
+  "platformDependencies": [
+    {
+      "coordinate": "net.minecraft:minecraft-common-043a8b3edf",
+      "declaredVersion": "26.1.2",
+      "resolvedVersion": "26.1.2",
+      "source": "Fabric Loom",
+      "configuration": "minecraft",
+      "role": "Minecraft platform dependency",
+      "license": {
+        "status": "pending",
+        "rationale": "The build declares only the project license; it provides no license provenance for this Minecraft dependency."
+      },
+      "provenance": {
+        "status": "resolved",
+        "declaredIn": "build.gradle:31",
+        "declaredCoordinate": "com.mojang:minecraft:26.1.2",
+        "resolvedCoordinate": "net.minecraft:minecraft-common-043a8b3edf:26.1.2",
+        "resolvedBy": "Fabric Loom"
+      },
       "direct": true,
       "bundled": false
     }
