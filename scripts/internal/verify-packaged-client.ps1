@@ -281,82 +281,6 @@ function Assert-CleanModsDirectory {
     }
 }
 
-function Install-ApprovedFabricApi {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $ModsDirectory,
-
-        [Parameter(Mandatory = $true)]
-        [pscustomobject] $Dependency
-    )
-
-    $sourceHash = (Get-FileHash -LiteralPath $Dependency.source -Algorithm SHA256).Hash.ToUpperInvariant()
-    if ($sourceHash -ne $Dependency.sha256) {
-        throw "Fabric API changed after cache audit: expected $($Dependency.sha256), found $sourceHash."
-    }
-
-    $destination = Join-Path $ModsDirectory "fabric-api-$($Dependency.version).jar"
-    if (Test-Path -LiteralPath $destination) {
-        throw "Refusing to overwrite an existing approved dependency: $destination"
-    }
-    Copy-Item -LiteralPath $Dependency.source -Destination $destination
-
-    $destinationHash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToUpperInvariant()
-    if ($destinationHash -ne $Dependency.sha256) {
-        throw "Staged Fabric API SHA-256 mismatch: expected $($Dependency.sha256), found $destinationHash."
-    }
-
-    return [IO.Path]::GetFullPath($destination)
-}
-
-function Assert-ApprovedRuntimeModsDirectory {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $ModsDirectory,
-
-        [Parameter(Mandatory = $true)]
-        [pscustomobject] $Dependency,
-
-        [Parameter(Mandatory = $true)]
-        [string] $StagedPath
-    )
-
-    $entries = @(Get-ChildItem -LiteralPath $ModsDirectory -Force)
-    if ($entries.Count -ne 1) {
-        throw "Mods directory is not allowlist-clean; expected exactly one approved dependency, found: $($entries.Name -join ', ')"
-    }
-
-    $entry = $entries[0]
-    if ($entry.PSIsContainer -or
-        -not $entry.FullName.Equals($StagedPath, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Unexpected entry in mods directory: $($entry.FullName)"
-    }
-
-    $metadata = Read-FabricModMetadata -Path $entry.FullName
-    if ([string] $metadata.id -eq 'farmhelper') {
-        throw "Duplicate FarmHelper mod in mods directory: $($entry.FullName)"
-    }
-    if ([string] $metadata.id -ne $Dependency.modId -or
-        [string] $metadata.version -ne $Dependency.modVersion) {
-        throw "Unexpected mod metadata in approved dependency path: $($entry.FullName)"
-    }
-
-    $actualHash = (Get-FileHash -LiteralPath $entry.FullName -Algorithm SHA256).Hash.ToUpperInvariant()
-    if ($actualHash -ne $Dependency.sha256) {
-        throw "Staged dependency SHA-256 mismatch: expected $($Dependency.sha256), found $actualHash."
-    }
-
-    return [ordered]@{
-        name = $entry.Name
-        path = [IO.Path]::GetFullPath($entry.FullName)
-        size = $entry.Length
-        sha256 = $actualHash
-        modId = [string] $metadata.id
-        modVersion = [string] $metadata.version
-        allowlisted = $true
-    }
-}
-
 function Assert-OfflineAssets {
     param(
         [Parameter(Mandatory = $true)]
@@ -594,8 +518,7 @@ $modsDirectoryEntries = @()
 $runtimeDependencyEvidence = [ordered]@{
     coordinate = $fabricApi.coordinate
     version = $fabricApi.version
-    sourcePath = $fabricApi.source
-    installedPath = $null
+    path = $fabricApi.source
     sha256 = $fabricApi.sha256
     size = $fabricApi.size
     modId = $fabricApi.modId
@@ -604,16 +527,6 @@ $runtimeDependencyEvidence = [ordered]@{
     direct = $fabricApi.direct
     bundled = $fabricApi.bundled
     allowlisted = $true
-}
-if (-not $PreflightOnly) {
-    $stagedFabricApi = Install-ApprovedFabricApi -ModsDirectory $modsDirectory -Dependency $fabricApi
-    $runtimeDependencyEvidence.installedPath = $stagedFabricApi
-    $modsDirectoryEntries = @(
-        Assert-ApprovedRuntimeModsDirectory `
-            -ModsDirectory $modsDirectory `
-            -Dependency $fabricApi `
-            -StagedPath $stagedFabricApi
-    )
 }
 $launcherLogDirectory = Join-Path (Split-Path -Parent $RunDirectory) 'launcher-logs'
 $runDirectoryName = Split-Path -Leaf $RunDirectory
@@ -637,7 +550,12 @@ $proof = [ordered]@{
         taskType = 'net.fabricmc.loom.task.prod.ClientProductionRunTask'
         mainClass = 'net.fabricmc.loader.impl.launch.knot.KnotClient'
         development = $false
-        addMods = [IO.Path]::GetFullPath($candidate.path)
+        addMods = @(
+            [IO.Path]::GetFullPath($candidate.path)
+            [IO.Path]::GetFullPath($fabricApi.source)
+        )
+        candidateAddMod = [IO.Path]::GetFullPath($candidate.path)
+        dependencyAddMods = @([IO.Path]::GetFullPath($fabricApi.source))
         classLoadLog = Join-Path $RunDirectory 'class-load.log'
         minecraftLog = Join-Path $RunDirectory 'logs\latest.log'
         gradleStdout = $gradleStdout
@@ -657,6 +575,7 @@ $gradleArguments = @(
     '--console=plain',
     '-x', 'jar',
     '--project-prop', "packagedClientJar=$($candidate.path)",
+    '--project-prop', "packagedClientDependency=$($fabricApi.source)",
     '--project-prop', "packagedClientRunDir=$([IO.Path]::GetFullPath($RunDirectory))",
     'verifyPackagedClient'
 )
@@ -718,6 +637,10 @@ try {
 $postHash = (Get-FileHash -LiteralPath $candidate.path -Algorithm SHA256).Hash.ToUpperInvariant()
 if ($postHash -ne $candidate.sha256) {
     throw "Candidate JAR changed during verification: expected $($candidate.sha256), found $postHash."
+}
+$postDependencyHash = (Get-FileHash -LiteralPath $fabricApi.source -Algorithm SHA256).Hash.ToUpperInvariant()
+if ($postDependencyHash -ne $fabricApi.sha256) {
+    throw "Approved Fabric API changed during verification: expected $($fabricApi.sha256), found $postDependencyHash."
 }
 
 $proof.status = 'passed'

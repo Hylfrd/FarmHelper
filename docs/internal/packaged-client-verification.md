@@ -32,16 +32,23 @@ cache fails instead of attempting a download.
 The run directory is a new directory below
 `build\verification\packaged-client`. It is the Minecraft `gameDir`, and the
 script does not copy accounts, servers, worlds, or user runtime configuration.
-The only mod directory entry is therefore zero; the candidate is supplied as
-the one explicit `fabric.addMods` path. The client is started without GUI
-input. After both proof signals are durable, the script terminates only the
-owned KnotClient descendant and records that controlled termination.
+Its `mods` directory must remain empty. FarmHelper is supplied as exactly one
+candidate `fabric.addMods` path, and the declared required platform dependency
+is supplied as the only other explicit production mod path:
+`net.fabricmc.fabric-api:fabric-api:0.153.0+26.1.2`, SHA-256
+`2A604CCC66C1294F860ACB8D0763C8887E927B3ED34AA262AC79E26D8626B94C`.
+The verifier requires that dependency to be present exactly once in the local
+Gradle cache and to agree with `dependency-provenance.json`; no arbitrary
+mods are copied or discovered. The client is started without GUI input. After
+both proof signals are durable, the script terminates only the owned
+KnotClient descendant and records that controlled termination.
 
 ## Machine-verifiable proof
 
-`evidence.json` records the candidate path, size, SHA-256, Minecraft/Loader
-versions, isolated paths, production task type, and the exact process command
-line. Two independent runtime signals are required:
+`evidence.json` records the candidate path, size, SHA-256, the allowlisted
+dependency coordinate/path/size/SHA-256, Minecraft/Loader versions, isolated
+paths, production task type, and the exact process command line. Two
+independent runtime signals are required:
 
 1. `logs\latest.log` contains `FarmHelper client initialized.` from the real
    client entrypoint.
@@ -49,9 +56,11 @@ line. Two independent runtime signals are required:
    `dev.hylfrd.farmhelper.client.FarmHelperClient` with a `file:` source that
    resolves to the candidate path exactly.
 
-The script hashes the candidate again after launch. The combination of a
-single effective production mod path, the exact class source, the entrypoint
-marker, and unchanged pre/post SHA-256 is the artifact-to-loaded-code proof.
+The script hashes the candidate and the approved dependency again after
+launch. The combination of exactly one FarmHelper candidate among the
+effective production mod paths, the allowlisted dependency, the exact class
+source, the entrypoint marker, and unchanged pre/post SHA-256 is the
+artifact-to-loaded-code proof.
 
 Use `-PreflightOnly -RunDirectory <existing-fixture>` to exercise the guarded
 selection checks without starting Minecraft. The focused negative harness is:

@@ -218,6 +218,7 @@ tasks.named("jar", org.gradle.api.tasks.bundling.Jar) {
 }
 
 def packagedClientJar = providers.gradleProperty("packagedClientJar")
+def packagedClientDependency = providers.gradleProperty("packagedClientDependency")
 def packagedClientRunDir = providers.gradleProperty("packagedClientRunDir")
 
 tasks.register("verifyPackagedClient", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
@@ -227,6 +228,7 @@ tasks.register("verifyPackagedClient", net.fabricmc.loom.task.prod.ClientProduct
     // This task deliberately does not assemble the candidate. The wrapper hashes the
     // already-built artifact, then excludes jar during launch so the file cannot change.
     getMods().setFrom(packagedClientJar.map { project.file(it) })
+    getMods().from(packagedClientDependency.map { project.file(it) })
     getRunDir().set(project.layout.dir(packagedClientRunDir.map { project.file(it) }))
     getJvmArgs().addAll([
         "-Dfabric.development=false",
@@ -246,16 +248,23 @@ tasks.register("verifyPackagedClient", net.fabricmc.loom.task.prod.ClientProduct
     ])
 
     doFirst {
-        if (!packagedClientJar.isPresent() || !packagedClientRunDir.isPresent()) {
+        if (!packagedClientJar.isPresent() || !packagedClientDependency.isPresent() ||
+                !packagedClientRunDir.isPresent()) {
             throw new GradleException(
-                    "verifyPackagedClient requires -PpackagedClientJar and -PpackagedClientRunDir")
+                    "verifyPackagedClient requires -PpackagedClientJar, -PpackagedClientDependency, " +
+                            "and -PpackagedClientRunDir")
         }
 
         def expectedJar = project.file(packagedClientJar.get()).canonicalFile
+        def expectedDependency = project.file(packagedClientDependency.get()).canonicalFile
         def configuredMods = getMods().files.collect { it.canonicalFile }
-        if (configuredMods.size() != 1 || configuredMods[0] != expectedJar) {
+        if (configuredMods.size() != 2 ||
+                configuredMods.count { it == expectedJar } != 1 ||
+                configuredMods.count { it == expectedDependency } != 1 ||
+                expectedJar == expectedDependency) {
             throw new GradleException(
-                    "verifyPackagedClient requires exactly one mod file: ${expectedJar}; " +
+                    "verifyPackagedClient requires exactly one candidate and one approved dependency: " +
+                            "${expectedJar}, ${expectedDependency}; " +
                             "effective files were ${configuredMods}")
         }
 
