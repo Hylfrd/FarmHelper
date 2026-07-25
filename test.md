@@ -43,7 +43,7 @@ SetIsBorderRequired failed: 不支持此接口 (0x80004002)
 
 ## 未执行的人工验收矩阵
 
-以下每项的“实际结果”和“证据”目前都必须保留为未执行。未来只能由能够稳定观察窗口的人类执行者填写。
+以下每项的“实际结果”和“证据”目前都必须保留为未执行。未来只能由能通过真实 `runClient` 加 Computer Use 稳定观察窗口的专用 Player，或 Apostrophe 明确指定的人类执行者填写。
 
 - [ ] 1. 核对版本与加载身份
   - 操作：在客户端主界面和 Mod 信息中核对 Minecraft、Fabric Loader 与 FarmHelper 版本，并与本页固定测试对象比对。
@@ -159,7 +159,7 @@ SetIsBorderRequired failed: 不支持此接口 (0x80004002)
 
 ## 未来执行记录规则
 
-若未来由人类手动执行本矩阵，必须保持 exact commit/tree/environment，逐项勾选，并把每项“实际结果”和“证据”替换为真实观察；证据至少包含截图或视频、日志路径与 SHA-256、必要的命令反馈和退出 PID/零进程结果。任何未执行、观察不稳定或与预期不一致的项目都必须原样记录，不得把本文、既有启动日志或自动回归结果当作 GUI 验收通过证明。
+若未来由专用 Player 通过真实 `runClient` 加 Computer Use 执行本矩阵，或由 Apostrophe 明确指定的人类手动执行，必须保持 exact commit/tree/environment，逐项勾选，并把每项“实际结果”和“证据”替换为真实观察；证据至少包含截图或视频、日志路径与 SHA-256、必要的命令反馈和退出 PID/零进程结果。任何未执行、观察不稳定或与预期不一致的项目都必须原样记录，不得把本文、既有启动日志或自动回归结果当作 GUI 验收通过证明。
 
 # P1 SShapeVertical GUI/gameplay 待工作电脑验收
 
