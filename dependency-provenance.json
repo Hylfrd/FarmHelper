@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "runtimeDependencies": [
+    {
+      "coordinate": "net.fabricmc:fabric-loader",
+      "declaredVersion": "0.19.3",
+      "resolvedVersion": "0.19.3",
+      "source": "Fabric Maven",
+      "direct": true,
+      "bundled": false
+    },
+    {
+      "coordinate": "net.fabricmc.fabric-api:fabric-api",
+      "declaredVersion": "0.153.0+26.1.2",
+      "resolvedVersion": "0.153.0+26.1.2",
+      "source": "Fabric Maven",
+      "direct": true,
+      "bundled": false
+    },
+    {
+      "coordinate": "com.google.code.gson:gson",
+      "declaredVersion": "2.13.1",
+      "resolvedVersion": "2.13.2",
+      "source": "Maven Central",
+      "direct": true,
+      "bundled": false
+    }
+  ]
+}

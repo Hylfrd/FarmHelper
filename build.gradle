@@ -3,7 +3,10 @@ plugins {
     id "maven-publish"
 }
 
-version = project.mod_version
+def modVersion = project.mod_version.toString()
+def minecraftVersion = project.minecraft_version.toString()
+
+version = modVersion
 group = project.maven_group
 
 base {
@@ -38,11 +41,11 @@ tasks.named("test") {
     useJUnitPlatform()
 }
 
-processResources {
-    inputs.property "version", project.version
+tasks.named("processResources") {
+    inputs.property "version", modVersion
 
     filesMatching("fabric.mod.json") {
-        expand "version": project.version
+        expand "version": modVersion
     }
 }
 
@@ -56,10 +59,38 @@ java {
     targetCompatibility = JavaVersion.VERSION_25
 }
 
+tasks.withType(org.gradle.api.tasks.bundling.AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+
+tasks.named("jar", org.gradle.api.tasks.bundling.Jar) {
+    description = "Assembles the deterministic FarmHelper runtime JAR."
+    archiveFileName.set("FarmHelper-${minecraftVersion}.jar")
+    duplicatesStrategy = org.gradle.api.file.DuplicatesStrategy.FAIL
+
+    from(layout.projectDirectory.file("LICENSE")) {
+        into("META-INF")
+    }
+    from(layout.projectDirectory.file("NOTICE")) {
+        into("META-INF")
+    }
+}
+
 publishing {
     publications {
         create("mavenJava", MavenPublication) {
             from components.java
+
+            pom {
+                licenses {
+                    license {
+                        name = "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International"
+                        url = "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+                        distribution = "repo"
+                    }
+                }
+            }
         }
     }
 }
