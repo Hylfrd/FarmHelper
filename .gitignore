@@ -6,3 +6,4 @@ build/
 .gradle/
 *.swp
 progress.md
+AGENTS.md
