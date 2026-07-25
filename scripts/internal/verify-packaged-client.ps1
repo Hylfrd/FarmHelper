@@ -468,6 +468,9 @@ function Find-OwnedGameProcess {
             continue
         }
         $commandLine = [string] $process.CommandLine
+        if ([string]::IsNullOrWhiteSpace($commandLine)) {
+            continue
+        }
         $normalizedCommand = Normalize-CommandLinePath -Path $commandLine
         if ($normalizedCommand.Contains('knotclient') -and $normalizedCommand.Contains($candidateText)) {
             return $process
