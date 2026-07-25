@@ -69,6 +69,16 @@ selection checks without starting Minecraft. The focused negative harness is:
 .\scripts\internal\test-packaged-client-harness.ps1
 ```
 
+For a reproducibility/content audit, preserve one JAR from the first offline
+clean build and compare it with the second build:
+
+```powershell
+.\scripts\internal\audit-packaged-jar.ps1 -FirstArtifact <first-jar-path>
+```
+
+The audit compares full SHA-256, size, ZIP entry metadata, required metadata,
+license/notice entries, and forbidden archive content.
+
 ## Deliberate modern packaging behavior
 
 Minecraft `26.1.2` is a non-obfuscated Loom environment in this project.
