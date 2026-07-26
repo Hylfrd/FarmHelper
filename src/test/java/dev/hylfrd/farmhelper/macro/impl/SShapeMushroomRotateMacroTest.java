@@ -205,17 +205,149 @@ class SShapeMushroomRotateMacroTest {
     }
 
     @Test
+    void detectedTransitionPreemptsWaitingAndProgressedRowChecks() {
+        for (boolean progressed : List.of(false, true)) {
+            QueueRandom leaf = zeros(20);
+            SShapeMushroomRotateMacro macro = macro(validSettings(false), leaf, zeros(20));
+            MacroDecision lane = chooseLane(macro, SShapeMushroomRotateMacro.State.LEFT,
+                    0.0F, START);
+            acknowledge(macro, lane.rotation().orElseThrow(), 2L, START,
+                    stableLaneSides(START, SShapeMushroomRotateMacro.State.LEFT));
+
+            PositionSnapshot position = progressed
+                    ? new PositionSnapshot(0.5D, 1.0D, 1.0D) : START;
+            MacroDecision decision = step(macro, 3L, position, -30.0F, 0.0F,
+                    STILL, grounded(), Map.of());
+
+            assertEquals(SShapeMushroomRotateMacro.State.RIGHT, macro.state(),
+                    progressed ? "PROGRESSED" : "WAITING");
+            assertEquals("mushroom-row-aligning-right", decision.status(),
+                    progressed ? "PROGRESSED" : "WAITING");
+            assertTrue(decision.inputs().isEmpty());
+            assertTrue(decision.rotation().isPresent());
+            assertEquals(RotationProfile.BACK,
+                    decision.rotation().orElseThrow().profile());
+        }
+    }
+
+    @Test
+    void unchangedLaneKeepsFarmingWhileWaitingOrProgressed() {
+        for (boolean progressed : List.of(false, true)) {
+            QueueRandom leaf = zeros(20);
+            QueueRandom entropy = zeros(20);
+            SShapeMushroomRotateMacro macro = macro(validSettings(false), leaf, entropy);
+            MacroDecision lane = chooseLane(macro, SShapeMushroomRotateMacro.State.LEFT,
+                    0.0F, START);
+            acknowledge(macro, lane.rotation().orElseThrow(), 2L, START,
+                    stableLaneSides(START, SShapeMushroomRotateMacro.State.LEFT));
+            int leafDraws = leaf.draws();
+            int entropyDraws = entropy.draws();
+
+            PositionSnapshot position = progressed
+                    ? new PositionSnapshot(0.5D, 1.0D, 1.0D) : START;
+            MacroDecision decision = step(macro, 3L, position, -30.0F, 0.0F,
+                    STILL, grounded(), stableLaneSides(position,
+                            SShapeMushroomRotateMacro.State.LEFT));
+
+            assertEquals(Set.of(InputAction.FORWARD, InputAction.ATTACK), decision.inputs(),
+                    progressed ? "PROGRESSED" : "WAITING");
+            assertEquals("farming-mushroom-rotate-left", decision.status(),
+                    progressed ? "PROGRESSED" : "WAITING");
+            assertTrue(decision.rotation().isEmpty());
+            assertEquals(SShapeMushroomRotateMacro.State.LEFT, macro.state());
+            assertEquals(leafDraws, leaf.draws());
+            assertEquals(entropyDraws, entropy.draws());
+        }
+    }
+
+    @Test
+    void unknownLaneEvidenceFailsClosedBeforeProgressContinuation() {
+        for (SShapeMushroomRotateMacro.State lane : List.of(
+                SShapeMushroomRotateMacro.State.LEFT,
+                SShapeMushroomRotateMacro.State.RIGHT)) {
+            QueueRandom leaf = zeros(20);
+            QueueRandom entropy = zeros(20);
+            SShapeMushroomRotateMacro macro = macro(validSettings(false), leaf, entropy);
+            MacroDecision selected = chooseLane(macro, lane, 0.0F, START);
+            acknowledge(macro, selected.rotation().orElseThrow(), 2L, START,
+                    stableLaneSides(START, lane));
+            int leafDraws = leaf.draws();
+            int entropyDraws = entropy.draws();
+
+            MacroDecision unknown = stepObservations(macro, PROGRESS_AT, START,
+                    lane == SShapeMushroomRotateMacro.State.LEFT ? -30.0F : 30.0F,
+                    0.0F, STILL, grounded(), unknownLaneEvidence(START, lane));
+
+            assertEquals("mushroom-lane-unknown", unknown.status());
+            assertTrue(unknown.inputs().isEmpty());
+            assertTrue(unknown.rotation().isEmpty());
+            assertEquals(lane, macro.state());
+            assertEquals(leafDraws, leaf.draws());
+            assertEquals(entropyDraws, entropy.draws());
+        }
+    }
+
+    @Test
+    void missedProgressIsConservativeAndStalledRecoveryWaitsForNoTransition() {
+        SShapeMushroomRotateMacro stalled = macro(validSettings(false), zeros(20), zeros(20));
+        MacroDecision lane = chooseLane(stalled, SShapeMushroomRotateMacro.State.LEFT,
+                0.0F, START);
+        acknowledge(stalled, lane.rotation().orElseThrow(), 2L, START,
+                stableLaneSides(START, SShapeMushroomRotateMacro.State.LEFT));
+
+        MacroDecision firstMiss = step(stalled, PROGRESS_AT, START, -30.0F, 0.0F,
+                STILL, grounded(), stableLaneSides(START,
+                        SShapeMushroomRotateMacro.State.LEFT));
+        assertEquals("row-stall-observed-1", firstMiss.status());
+        assertTrue(firstMiss.inputs().isEmpty());
+        assertTrue(firstMiss.rotation().isEmpty());
+        assertEquals(SShapeMushroomRotateMacro.State.LEFT, stalled.state());
+
+        MacroDecision secondMiss = step(stalled, PROGRESS_AT * 2L, START, -30.0F, 0.0F,
+                STILL, grounded(), stableLaneSides(START,
+                        SShapeMushroomRotateMacro.State.LEFT));
+        assertEquals("row-stall-observed-2", secondMiss.status());
+        assertTrue(secondMiss.inputs().isEmpty());
+        assertTrue(secondMiss.rotation().isEmpty());
+
+        MacroDecision recovery = step(stalled, PROGRESS_AT * 3L, START, -30.0F, 0.0F,
+                STILL, grounded(), stableLaneSides(START,
+                        SShapeMushroomRotateMacro.State.LEFT));
+        assertEquals(MacroRecoveryReason.ROW_STALLED,
+                recovery.recovery().orElseThrow().reason());
+        assertEquals(SShapeMushroomRotateMacro.State.RECOVERY_HANDOFF, stalled.state());
+        assertTrue(recovery.inputs().isEmpty());
+        assertTrue(recovery.rotation().isEmpty());
+
+        SShapeMushroomRotateMacro boundary = macro(validSettings(false), zeros(20), zeros(20));
+        MacroDecision boundaryLane = chooseLane(boundary,
+                SShapeMushroomRotateMacro.State.LEFT, 0.0F, START);
+        acknowledge(boundary, boundaryLane.rotation().orElseThrow(), 2L, START,
+                stableLaneSides(START, SShapeMushroomRotateMacro.State.LEFT));
+        step(boundary, PROGRESS_AT, START, -30.0F, 0.0F, STILL, grounded(),
+                stableLaneSides(START, SShapeMushroomRotateMacro.State.LEFT));
+        step(boundary, PROGRESS_AT * 2L, START, -30.0F, 0.0F, STILL, grounded(),
+                stableLaneSides(START, SShapeMushroomRotateMacro.State.LEFT));
+        MacroDecision transition = step(boundary, PROGRESS_AT * 3L, START,
+                -30.0F, 0.0F, STILL, grounded(), Map.of());
+        assertEquals(SShapeMushroomRotateMacro.State.RIGHT, boundary.state());
+        assertEquals("mushroom-row-aligning-right", transition.status());
+        assertTrue(transition.recovery().isEmpty());
+        assertTrue(transition.rotation().isPresent());
+    }
+
+    @Test
     void transitionTableUsesWalkabilityAndRepairedPitchFirstDrawOrder() {
         assertTransition(SShapeMushroomRotateMacro.State.LEFT, false, false,
                 SShapeMushroomRotateMacro.State.RIGHT, 28.0F);
         assertTransition(SShapeMushroomRotateMacro.State.LEFT, false, true,
-                SShapeMushroomRotateMacro.State.LEFT, -32.0F);
+                SShapeMushroomRotateMacro.State.LEFT, null);
         assertTransition(SShapeMushroomRotateMacro.State.LEFT, true, true,
                 SShapeMushroomRotateMacro.State.NONE, null);
         assertTransition(SShapeMushroomRotateMacro.State.RIGHT, false, false,
                 SShapeMushroomRotateMacro.State.LEFT, -32.0F);
         assertTransition(SShapeMushroomRotateMacro.State.RIGHT, true, false,
-                SShapeMushroomRotateMacro.State.RIGHT, 28.0F);
+                SShapeMushroomRotateMacro.State.RIGHT, null);
         assertTransition(SShapeMushroomRotateMacro.State.RIGHT, true, true,
                 SShapeMushroomRotateMacro.State.NONE, null);
 
@@ -233,6 +365,10 @@ class SShapeMushroomRotateMacroTest {
         assertEquals(0.5F, macro.storedPitch().orElseThrow());
         assertEquals(0.5F, request.pitch(), "same repaired pitch must be saved and requested");
         assertEquals(29.0F, request.yaw());
+        assertEquals(495L, request.durationMillis());
+        assertEquals(RotationProfile.BACK, request.profile());
+        assertEquals(-0.25F, request.backModifier());
+        assertEquals(request, macro.pendingRotation().orElseThrow());
         assertEquals(8, leaf.draws());
         assertEquals(6, entropy.draws());
     }
@@ -395,24 +531,19 @@ class SShapeMushroomRotateMacroTest {
     }
 
     @Test
-    void repeatedUnknownLaneEvidenceHandsOffRecoveryAndTerminalLifecycleReleasesEverything() {
+    void repeatedUnknownLaneEvidenceNeverFarmsOrRecoversAndTerminalLifecycleReleasesEverything() {
         SShapeMushroomRotateMacro macro = macro(validSettings(false), zeros(30), zeros(30));
         MacroDecision lane = chooseLane(macro, SShapeMushroomRotateMacro.State.RIGHT, 0.0F, START);
         acknowledge(macro, lane.rotation().orElseThrow(), 2L, START, blockedSides(START, 0.0F));
         long window = TimeUnit.MILLISECONDS.toNanos(500L);
         Map<BlockPosition, Observation<BlockStateSnapshot>> unknownLeft = Map.of(
                 sideBodyBlock(START, 0.0F, false, 1), Observation.unknown());
-        assertEquals("mushroom-lane-unknown", stepObservations(macro, window + 2L,
-                START, 30.0F, -1.0F, STILL, grounded(), unknownLeft).status());
-        assertEquals("mushroom-lane-unknown", stepObservations(macro, window * 2L + 2L,
-                START, 30.0F, -1.0F, STILL, grounded(), unknownLeft).status());
-        MacroDecision recovery = stepObservations(macro, window * 3L + 2L,
+        MacroDecision unknown = stepObservations(macro, window * 3L + 2L,
                 START, 30.0F, -1.0F, STILL, grounded(), unknownLeft);
-        assertEquals(MacroRecoveryReason.ROW_STALLED,
-                recovery.recovery().orElseThrow().reason());
-        assertEquals(SShapeMushroomRotateMacro.State.RECOVERY_HANDOFF, macro.state());
-        assertTrue(recovery.inputs().isEmpty());
-        assertTrue(recovery.rotation().isEmpty());
+        assertEquals("mushroom-lane-unknown", unknown.status());
+        assertEquals(SShapeMushroomRotateMacro.State.RIGHT, macro.state());
+        assertTrue(unknown.inputs().isEmpty());
+        assertTrue(unknown.rotation().isEmpty());
 
         macro.onStop();
         assertEquals(SShapeMushroomRotateMacro.State.STOPPED, macro.state());
@@ -746,6 +877,24 @@ class SShapeMushroomRotateMacroTest {
         return Map.of(
                 sideBodyBlock(origin, cardinal, false, 1), full(),
                 sideBodyBlock(origin, cardinal, true, 1), full());
+    }
+
+    private static Map<BlockPosition, BlockStateSnapshot> stableLaneSides(
+            PositionSnapshot origin,
+            SShapeMushroomRotateMacro.State lane
+    ) {
+        return Map.of(
+                sideBodyBlock(origin, 0.0F, lane == SShapeMushroomRotateMacro.State.LEFT, 1),
+                full());
+    }
+
+    private static Map<BlockPosition, Observation<BlockStateSnapshot>> unknownLaneEvidence(
+            PositionSnapshot origin,
+            SShapeMushroomRotateMacro.State lane
+    ) {
+        return Map.of(
+                sideBodyBlock(origin, 0.0F, lane == SShapeMushroomRotateMacro.State.LEFT, 1),
+                Observation.unknown());
     }
 
     private static BlockStateSnapshot crop(String name) {

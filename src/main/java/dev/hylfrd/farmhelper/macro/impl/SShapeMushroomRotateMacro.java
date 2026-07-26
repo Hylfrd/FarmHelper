@@ -405,39 +405,36 @@ public final class SShapeMushroomRotateMacro implements Macro {
     }
 
     private MacroDecision updateAndFarm(FarmingContext context, Observed observed) {
-        if (laneAligned) {
-            double coordinate = forwardCoordinate(observed.position(), observed.cardinalFrame());
-            switch (rowProgress.observeContinuous(context.nowNanos(), coordinate)) {
-                case WAITING, PROGRESSED -> {
-                    return farmInputs();
-                }
-                case STALLED -> {
-                    return enterRecovery(MacroRecoveryReason.ROW_STALLED, "row-stalled");
-                }
-                case MISSED -> { }
-            }
-        }
-
         State next = transitionDirection(observed);
         if (next == null) {
             return MacroDecision.failClosed("mushroom-lane-unknown");
         }
 
-        // Approved repair: sample and save pitch before any row yaw/duration draw.
-        storedPitch = targetPitch();
-        if (next == State.NONE) {
-            enterNone();
-            return MacroDecision.failClosed("mushroom-direction-recalculate");
+        if (next != state || !laneAligned) {
+            // Approved repair: sample and save pitch before any row yaw/duration draw.
+            storedPitch = targetPitch();
+            if (next == State.NONE) {
+                enterNone();
+                return MacroDecision.failClosed("mushroom-direction-recalculate");
+            }
+            state = next;
+            beginProgress(context.nowNanos(), observed);
+            float targetYaw = rowTarget(next, sampleYawJitter());
+            rotation.begin(observed.rotation().yaw(), observed.rotation().pitch(),
+                    targetYaw, storedPitch, RotationProfile.BACK,
+                    sampleRowRotationMillis(), rotationEntropy);
+            laneAligned = false;
+            invalidateCapture();
+            return rotationDecision("mushroom-row-aligning-" + next.name().toLowerCase());
         }
-        state = next;
-        beginProgress(context.nowNanos(), observed);
-        float targetYaw = rowTarget(next, sampleYawJitter());
-        rotation.begin(observed.rotation().yaw(), observed.rotation().pitch(),
-                targetYaw, storedPitch, RotationProfile.BACK,
-                sampleRowRotationMillis(), rotationEntropy);
-        laneAligned = false;
-        invalidateCapture();
-        return rotationDecision("mushroom-row-aligning-" + next.name().toLowerCase());
+
+        double coordinate = forwardCoordinate(observed.position(), observed.cardinalFrame());
+        return switch (rowProgress.observeContinuous(context.nowNanos(), coordinate)) {
+            case WAITING, PROGRESSED -> farmInputs();
+            case MISSED -> MacroDecision.failClosed(
+                    "row-stall-observed-" + rowProgress.misses());
+            case STALLED -> enterRecovery(MacroRecoveryReason.ROW_STALLED, "row-stalled");
+        };
     }
 
     private State transitionDirection(Observed observed) {
