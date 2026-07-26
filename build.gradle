@@ -222,14 +222,19 @@ def packagedClientJarSha256 = providers.gradleProperty("packagedClientJarSha256"
 def packagedClientDependency = providers.gradleProperty("packagedClientDependency")
 def packagedClientDependencySha256 = providers.gradleProperty("packagedClientDependencySha256")
 def packagedClientRunDir = providers.gradleProperty("packagedClientRunDir")
-def packagedClientHoldForPlayer = providers.gradleProperty("packagedClientHoldForPlayer").orElse("false")
 def approvedPackagedFabricApiSha256 =
         "2A604CCC66C1294F860ACB8D0763C8887E927B3ED34AA262AC79E26D8626B94C"
+
+def packagedClientProvenanceGate = tasks.register("verifyPackagedClientProvenanceGate") {
+    group = "verification"
+    description = "Runs the complete dependency provenance gate required by packaged verification."
+    dependsOn("verifyDependencyProvenance")
+}
 
 tasks.register("verifyPackagedClient", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
     group = "verification"
     description = "Launches a production-mode client with one explicitly supplied FarmHelper JAR."
-    dependsOn("verifyDependencyProvenance")
+    dependsOn(packagedClientProvenanceGate)
 
     // This task deliberately does not assemble the candidate. The wrapper hashes the
     // already-built artifact, then excludes jar during launch so the file cannot change.
@@ -238,12 +243,10 @@ tasks.register("verifyPackagedClient", net.fabricmc.loom.task.prod.ClientProduct
     getRunDir().set(project.layout.dir(packagedClientRunDir.map { project.file(it) }))
     getJvmArgs().addAll([
         "-Dfabric.development=false",
+        "-Dfabric.noGui=true",
         "-Dfabric.log.level=info",
         "-Xlog:class+load=info:file=class-load.log"
     ])
-    getJvmArgs().add(packagedClientHoldForPlayer.map {
-        if (it == "true") "-Dfabric.noGui=false" else "-Dfabric.noGui=true"
-    })
     getJvmArgs().add(packagedClientRunDir.map {
         "-Dfabric.modsFolder=${project.file(it).absolutePath}\\mods"
     })
@@ -323,9 +326,6 @@ tasks.register("verifyPackagedClient", net.fabricmc.loom.task.prod.ClientProduct
         def expectedJarSha256 = normalizeHash(packagedClientJarSha256.get(), "packagedClientJarSha256")
         def expectedDependencySha256 =
                 normalizeHash(packagedClientDependencySha256.get(), "packagedClientDependencySha256")
-        if (packagedClientHoldForPlayer.get() != "true" && packagedClientHoldForPlayer.get() != "false") {
-            fail("packagedClientHoldForPlayer must be true or false")
-        }
 
         def librariesDirectory = project.layout.buildDirectory.dir("libs").get().asFile.canonicalFile
         assertUnder(expectedJar, librariesDirectory, "candidate JAR")
@@ -390,10 +390,9 @@ tasks.register("verifyPackagedClient", net.fabricmc.loom.task.prod.ClientProduct
         logger.lifecycle("Packaged client candidate: ${expectedJar}")
         logger.lifecycle("Packaged client candidate SHA-256: ${expectedJarSha256}")
         logger.lifecycle("Packaged Fabric API: ${expectedDependency} (${approvedPackagedFabricApiSha256})")
-        logger.lifecycle("Packaged client provenance boundary: verifyDependencyProvenance")
+        logger.lifecycle("Packaged client provenance boundary: verifyPackagedClientProvenanceGate")
         logger.lifecycle("Packaged client run directory: ${expectedRunDir}")
-        logger.lifecycle("Packaged client mode: production; fabric.development=false; " +
-                "holdForPlayer=${packagedClientHoldForPlayer.get()}")
+        logger.lifecycle("Packaged client mode: production; fabric.development=false; fabric.noGui=true")
     }
 }
 

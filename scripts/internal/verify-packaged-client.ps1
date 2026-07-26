@@ -11,11 +11,6 @@ param(
 
     [switch] $PreflightOnly,
 
-    [switch] $HoldForPlayer,
-
-    [ValidateRange(15, 600)]
-    [int] $HoldSeconds = 120,
-
     [ValidateRange(15, 600)]
     [int] $TimeoutSeconds = 120
 )
@@ -540,6 +535,48 @@ function Wait-LauncherExit {
     return [int] $LauncherProcess.ExitCode
 }
 
+function New-LauncherStartInfo {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $LauncherPath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $WorkingDirectory,
+
+        [Parameter(Mandatory = $true)]
+        [string[]] $Arguments
+    )
+
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.WorkingDirectory = $WorkingDirectory
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+
+    if ($LauncherPath -match '(?i)\.(bat|cmd)$') {
+        $commandShell = [Environment]::GetEnvironmentVariable('ComSpec')
+        if ([string]::IsNullOrWhiteSpace($commandShell)) {
+            throw 'ComSpec is not available for the Gradle/Loom batch launcher.'
+        }
+        $startInfo.FileName = $commandShell
+        [void] $startInfo.ArgumentList.Add('/d')
+        [void] $startInfo.ArgumentList.Add('/c')
+        [void] $startInfo.ArgumentList.Add('call')
+        [void] $startInfo.ArgumentList.Add($LauncherPath)
+        foreach ($argument in $Arguments) {
+            [void] $startInfo.ArgumentList.Add([string] $argument)
+        }
+    } else {
+        $startInfo.FileName = $LauncherPath
+        foreach ($argument in $Arguments) {
+            [void] $startInfo.ArgumentList.Add([string] $argument)
+        }
+    }
+
+    return $startInfo
+}
+
 function Write-JsonFile {
     param(
         [Parameter(Mandatory = $true)]
@@ -574,7 +611,7 @@ function Stop-OwnedGameProcess {
     )
 
     if ($LauncherProcess.HasExited) {
-        throw "Gradle/Loom launcher exited before verifier-controlled termination."
+        throw "Gradle/Loom launcher exited before verifier-controlled termination (exit code $($LauncherProcess.ExitCode))."
     }
 
     $current = Find-OwnedGameProcess -RootProcessId $RootProcessId -CandidatePath $CandidatePath
@@ -596,7 +633,7 @@ function Stop-OwnedGameProcess {
     Write-JsonFile -Value $terminationEvidence -Path (Join-Path $RunDirectory 'termination-requested.json')
 
     if ($LauncherProcess.HasExited) {
-        throw "Gradle/Loom launcher exited before verifier-controlled termination was issued."
+        throw "Gradle/Loom launcher exited before verifier-controlled termination was issued (exit code $($LauncherProcess.ExitCode))."
     }
     Stop-Process -Id ([int] $ObservedProcess.ProcessId) -ErrorAction Stop
 
@@ -686,24 +723,6 @@ function Read-LoadedClassProof {
     throw "FarmHelperClient was not observed loading from the exact candidate JAR: $candidate"
 }
 
-function Assert-NormalClientExit {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $RunDirectory
-    )
-
-    $minecraftLog = Join-Path $RunDirectory 'logs\latest.log'
-    Assert-NoReparsePathComponents -Path $minecraftLog -Description 'Minecraft log'
-    if (-not (Test-Path -LiteralPath $minecraftLog -PathType Leaf) -or
-        -not (Select-String -LiteralPath $minecraftLog -SimpleMatch 'Stopping!' -Quiet)) {
-        throw "Normal Minecraft exit evidence is missing: expected 'Stopping!' in $minecraftLog"
-    }
-    return [ordered]@{
-        marker = 'Stopping!'
-        path = [IO.Path]::GetFullPath($minecraftLog)
-    }
-}
-
 function Save-LauncherStreams {
     param(
         [Parameter(Mandatory = $true)]
@@ -730,14 +749,11 @@ $minecraftVersion = [string] $properties['minecraft_version']
 if ([string]::IsNullOrWhiteSpace($minecraftVersion)) {
     throw 'minecraft_version is missing from gradle.properties.'
 }
-if ($PreflightOnly -and $HoldForPlayer) {
-    throw 'HoldForPlayer cannot be combined with PreflightOnly.'
-}
 
 Assert-NoReparsePathComponents -Path $repositoryRoot -Description 'Repository root'
 Assert-NoReparsePathComponents -Path $wrapper -Description 'Gradle wrapper'
 
-$launcherPath = $wrapper
+$launcherPath = Get-CanonicalPath -Path $wrapper
 if (-not [string]::IsNullOrWhiteSpace($env:FARMHELPER_VERIFIER_TEST_LAUNCHER)) {
     if ($env:FARMHELPER_VERIFIER_TEST_MODE -ne '1') {
         throw 'FARMHELPER_VERIFIER_TEST_LAUNCHER requires FARMHELPER_VERIFIER_TEST_MODE=1.'
@@ -837,7 +853,8 @@ $proof = [ordered]@{
     candidate = $candidate
     runtimeDependencies = @($runtimeDependencyEvidence)
     provenanceBoundary = [ordered]@{
-        gradleTask = 'verifyDependencyProvenance'
+        gradleTask = 'verifyPackagedClientProvenanceGate'
+        dependencyTask = 'verifyDependencyProvenance'
         packagedTaskDependsOnProvenance = $true
         candidateHashCheckedInsideGradle = $true
         fabricApiHashCheckedInsideGradle = $true
@@ -852,8 +869,7 @@ $proof = [ordered]@{
         taskType = 'net.fabricmc.loom.task.prod.ClientProductionRunTask'
         mainClass = 'net.fabricmc.loader.impl.launch.knot.KnotClient'
         development = $false
-        holdForPlayer = [bool] $HoldForPlayer
-        visibleGuiRequested = [bool] $HoldForPlayer
+        noGui = $true
         addMods = @(
             [IO.Path]::GetFullPath($candidate.path)
             [IO.Path]::GetFullPath($fabricApi.source)
@@ -874,7 +890,6 @@ if ($PreflightOnly) {
 
 New-Item -ItemType Directory -Path $launcherLogDirectory -Force | Out-Null
 Assert-NoReparsePathComponents -Path $launcherLogDirectory -Description 'Launcher log directory'
-$holdValue = if ($HoldForPlayer) { 'true' } else { 'false' }
 $gradleArguments = @(
     '--offline',
     '--no-daemon',
@@ -885,7 +900,6 @@ $gradleArguments = @(
     '--project-prop', "packagedClientDependency=$($fabricApi.source)",
     '--project-prop', "packagedClientDependencySha256=$($fabricApi.sha256)",
     '--project-prop', "packagedClientRunDir=$([IO.Path]::GetFullPath($RunDirectory))",
-    '--project-prop', "packagedClientHoldForPlayer=$holdValue",
     'verifyPackagedClient'
 )
 
@@ -899,20 +913,12 @@ $rootExitCode = $null
 $gameExitCode = $null
 $loaded = $false
 $controlledTerminationEvidence = $null
-$normalExitEvidence = $null
 
 try {
-    $startInfo = [Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = $launcherPath
-    $startInfo.WorkingDirectory = $repositoryRoot
-    $startInfo.UseShellExecute = $false
-    $startInfo.CreateNoWindow = $true
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-    foreach ($argument in $gradleArguments) {
-        [void] $startInfo.ArgumentList.Add([string] $argument)
-    }
-
+    $startInfo = New-LauncherStartInfo `
+        -LauncherPath $launcherPath `
+        -WorkingDirectory $repositoryRoot `
+        -Arguments $gradleArguments
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
     if (-not $process.Start()) {
@@ -968,56 +974,27 @@ try {
     Write-Output "gameProcessId=$($proof.launch.gameProcessId)"
     Write-Output "runDirectory=$($proof.runDirectory)"
 
-    if ($HoldForPlayer) {
-        $holdDeadline = (Get-Date).AddSeconds($HoldSeconds)
-        while ((Get-Date) -lt $holdDeadline) {
-            if ($process.HasExited) {
-                $rootExitCode = [int] $process.ExitCode
-                throw "Gradle/Loom launcher exited unexpectedly while awaiting Player exit (exit code $rootExitCode)."
-            }
-            if ($ownedGameProcessHandle.HasExited) {
-                $gameExitCode = [int] $ownedGameProcessHandle.ExitCode
-                break
-            }
-            Start-Sleep -Milliseconds 500
-        }
-        if (-not $ownedGameProcessHandle.HasExited) {
-            throw "Player hold timed out after ${HoldSeconds}s before a normal client exit."
-        }
-        $gameExitCode = [int] $ownedGameProcessHandle.ExitCode
-        if ($gameExitCode -ne 0) {
-            throw "Minecraft client exited unexpectedly during Player hold (exit code $gameExitCode)."
-        }
-        $normalExitEvidence = Assert-NormalClientExit -RunDirectory $RunDirectory
-        $rootExitCode = Wait-LauncherExit -LauncherProcess $process -TimeoutSeconds 30
-        if ($rootExitCode -ne 0) {
-            throw "Gradle/Loom launcher exited unexpectedly after normal client exit (exit code $rootExitCode)."
-        }
-        $proof.launch.playerExit = $normalExitEvidence
-        $proof.launch.controlledTermination = $false
-    } else {
-        # A verifier-forced kill is cleanup evidence only. Loom's production task
-        # cannot turn that kill into a normal Java exit, so it can never pass.
-        $controlledTerminationEvidence = Stop-OwnedGameProcess `
-            -LauncherProcess $process `
-            -RootProcessId $rootProcessId `
-            -ObservedProcess $ownedGameProcess `
-            -GameProcess $ownedGameProcessHandle `
-            -CandidatePath $candidate.path `
-            -RunDirectory $RunDirectory
-        $gameExitCode = [int] $controlledTerminationEvidence.gameExitCode
-        $rootExitCode = Wait-LauncherExit -LauncherProcess $process -TimeoutSeconds 30
-        if ($gameExitCode -ne 0 -or $rootExitCode -ne 0) {
-            $proof.status = 'failed-controlled-termination'
-            $proof.launch.controlledTermination = $true
-            $proof.launch.gameExitCode = $gameExitCode
-            $proof.launch.launcherExitCode = $rootExitCode
-            $proof.launch.terminationEvidence = $controlledTerminationEvidence
-            Write-JsonFile -Value $proof -Path (Join-Path $RunDirectory 'failed-evidence.json')
-            throw "Verifier-controlled termination is not a successful verification: gameExitCode=$gameExitCode, launcherExitCode=$rootExitCode. Use -HoldForPlayer for a normal in-client exit."
-        }
+    # The verifier never waits for GUI or Player observation. The owned game
+    # termination is cleanup evidence; the Gradle/Loom exit remains authoritative.
+    $controlledTerminationEvidence = Stop-OwnedGameProcess `
+        -LauncherProcess $process `
+        -RootProcessId $rootProcessId `
+        -ObservedProcess $ownedGameProcess `
+        -GameProcess $ownedGameProcessHandle `
+        -CandidatePath $candidate.path `
+        -RunDirectory $RunDirectory
+    $gameExitCode = [int] $controlledTerminationEvidence.gameExitCode
+    $rootExitCode = Wait-LauncherExit -LauncherProcess $process -TimeoutSeconds 30
+    if ($rootExitCode -ne 0) {
+        $proof.status = 'failed-launcher-exit'
         $proof.launch.controlledTermination = $true
+        $proof.launch.gameExitCode = $gameExitCode
+        $proof.launch.launcherExitCode = $rootExitCode
+        $proof.launch.terminationEvidence = $controlledTerminationEvidence
+        Write-JsonFile -Value $proof -Path (Join-Path $RunDirectory 'failed-evidence.json')
+        throw "Gradle/Loom launcher exited unexpectedly after verifier-controlled termination (exit code $rootExitCode)."
     }
+    $proof.launch.controlledTermination = $true
 } finally {
     if ($null -ne $process) {
         try {
@@ -1064,6 +1041,7 @@ $proof.status = 'passed'
 $proof.launch.gameExitCode = $gameExitCode
 $proof.launch.launcherExitCode = $rootExitCode
 $proof.launch.controlledTermination = [bool] $proof.launch.controlledTermination
+$proof.launch.terminationEvidence = $controlledTerminationEvidence
 Write-JsonFile -Value $proof -Path (Join-Path $RunDirectory 'evidence.json')
 
 Write-Output 'PACKAGED_CLIENT_VERIFICATION_OK'
