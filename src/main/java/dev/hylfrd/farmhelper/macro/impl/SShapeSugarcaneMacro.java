@@ -348,16 +348,16 @@ public final class SShapeSugarcaneMacro implements Macro {
         double coordinate = movementCoordinate(observed.position(), state);
         RowProgressLedger.Result progress = rowProgress.observeWindowed(
                 context.nowNanos(), coordinate);
-        if (progress == RowProgressLedger.Result.WAITING
-                || progress == RowProgressLedger.Result.PROGRESSED) {
-            return movementDecision(state);
-        }
         if (state == State.A || state == State.D) {
             return enterMovement(State.S, observed, "row-turn-s");
         }
         MacroDecision transition = transitionFromS(observed);
         if (transition != null) {
             return transition;
+        }
+        if (progress == RowProgressLedger.Result.WAITING
+                || progress == RowProgressLedger.Result.PROGRESSED) {
+            return movementDecision(state);
         }
         if (progress == RowProgressLedger.Result.STALLED) {
             return enterRecovery(MacroRecoveryReason.ROW_STALLED, "row-stalled");

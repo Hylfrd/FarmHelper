@@ -162,23 +162,125 @@ class SShapeSugarcaneMacroTest {
     }
 
     @Test
-    void exactInputsAndAOrDToSTransitionsReleaseControls() {
+    void exactInputsAndImmediateAOrDToSTransitionsReleaseControls() {
         SShapeSugarcaneMacro a = readyMacro(new QueueRandom(), new QueueRandom());
         choose(a, Map.of(MINUS_WATER, Observation.present(water())));
-        assertEquals(Set.of(InputAction.LEFT, InputAction.ATTACK),
-                step(a, 2L, START, 45.0F, 0.0F, STILL, grounded(), Map.of()).inputs());
-        MacroDecision aTurn = step(a, TimeUnit.MILLISECONDS.toNanos(500L) + 1L,
+        MacroDecision aTurn = step(a, 2L,
                 START, 45.0F, 0.0F, STILL, grounded(), Map.of());
         assertEquals(SShapeSugarcaneMacro.State.S, a.state());
         assertTrue(aTurn.inputs().isEmpty());
         assertEquals(Set.of(InputAction.BACKWARD, InputAction.ATTACK),
-                step(a, TimeUnit.MILLISECONDS.toNanos(500L) + 2L,
+                step(a, 3L,
                         START, 45.0F, 0.0F, STILL, grounded(), Map.of()).inputs());
 
         SShapeSugarcaneMacro d = readyMacro(new QueueRandom(), new QueueRandom());
         choose(d, blockedMinusThenPlus());
-        assertEquals(Set.of(InputAction.RIGHT, InputAction.ATTACK),
-                step(d, 2L, START, 45.0F, 0.0F, STILL, grounded(), Map.of()).inputs());
+        MacroDecision dTurn = step(d, 2L,
+                START, 45.0F, 0.0F, STILL, grounded(), Map.of());
+        assertEquals(SShapeSugarcaneMacro.State.S, d.state());
+        assertTrue(dTurn.inputs().isEmpty());
+    }
+
+    @Test
+    void aAndDShiftToSBeforeWaitingOrProgressedMovement() {
+        SShapeSugarcaneMacro waitingA = readyMacro(new QueueRandom(), new QueueRandom());
+        choose(waitingA, Map.of(MINUS_WATER, Observation.present(water())));
+        MacroDecision aWaiting = step(waitingA, 2L, START, 45.0F, 0.0F,
+                STILL, grounded(), Map.of());
+        assertEquals(SShapeSugarcaneMacro.State.S, waitingA.state());
+        assertEquals("row-turn-s", aWaiting.status());
+        assertTrue(aWaiting.inputs().isEmpty());
+
+        SShapeSugarcaneMacro progressedA = readyMacro(new QueueRandom(), new QueueRandom());
+        choose(progressedA, Map.of(MINUS_WATER, Observation.present(water())));
+        MacroDecision aProgressed = step(progressedA,
+                TimeUnit.MILLISECONDS.toNanos(500L) + 2L,
+                new PositionSnapshot(0.6D, 1.0D, 0.5D), 45.0F, 0.0F,
+                STILL, grounded(), Map.of());
+        assertEquals(SShapeSugarcaneMacro.State.S, progressedA.state());
+        assertEquals("row-turn-s", aProgressed.status());
+        assertTrue(aProgressed.inputs().isEmpty());
+
+        SShapeSugarcaneMacro waitingD = readyMacro(new QueueRandom(), new QueueRandom());
+        choose(waitingD, blockedMinusThenPlus());
+        MacroDecision dWaiting = step(waitingD, 2L, START, 45.0F, 0.0F,
+                STILL, grounded(), Map.of());
+        assertEquals(SShapeSugarcaneMacro.State.S, waitingD.state());
+        assertEquals("row-turn-s", dWaiting.status());
+        assertTrue(dWaiting.inputs().isEmpty());
+
+        SShapeSugarcaneMacro progressedD = readyMacro(new QueueRandom(), new QueueRandom());
+        choose(progressedD, blockedMinusThenPlus());
+        MacroDecision dProgressed = step(progressedD,
+                TimeUnit.MILLISECONDS.toNanos(500L) + 2L,
+                new PositionSnapshot(0.4D, 1.0D, 0.5D), 45.0F, 0.0F,
+                STILL, grounded(), Map.of());
+        assertEquals(SShapeSugarcaneMacro.State.S, progressedD.state());
+        assertEquals("row-turn-s", dProgressed.status());
+        assertTrue(dProgressed.inputs().isEmpty());
+    }
+
+    @Test
+    void sBoundaryTransitionsPreemptWatchdogAndHealthyProgressStillMoves() {
+        Map<BlockPosition, Observation<BlockStateSnapshot>> rearBlocked = Map.of(
+                new BlockPosition(1, 1, 0), Observation.present(full()),
+                new BlockPosition(0, 1, -1), Observation.present(full()));
+
+        SShapeSugarcaneMacro waitingBoundary = readyMacro(
+                new QueueRandom(), new QueueRandom());
+        choose(waitingBoundary, Map.of());
+        MacroDecision waitingTurn = step(waitingBoundary, 2L, START, 45.0F, 0.0F,
+                STILL, grounded(), rearBlocked);
+        assertEquals(SShapeSugarcaneMacro.State.D, waitingBoundary.state());
+        assertEquals("row-turn-d", waitingTurn.status());
+        assertTrue(waitingTurn.inputs().isEmpty());
+
+        SShapeSugarcaneMacro progressedBoundary = readyMacro(
+                new QueueRandom(), new QueueRandom());
+        choose(progressedBoundary, Map.of());
+        MacroDecision progressedTurn = step(progressedBoundary,
+                TimeUnit.MILLISECONDS.toNanos(500L) + 2L,
+                new PositionSnapshot(0.6D, 1.0D, 0.5D), 45.0F, 0.0F,
+                STILL, grounded(), rearBlocked);
+        assertEquals(SShapeSugarcaneMacro.State.D, progressedBoundary.state());
+        assertEquals("row-turn-d", progressedTurn.status());
+        assertTrue(progressedTurn.inputs().isEmpty());
+
+        SShapeSugarcaneMacro healthy = readyMacro(new QueueRandom(), new QueueRandom());
+        choose(healthy, Map.of());
+        MacroDecision healthyMovement = step(healthy,
+                TimeUnit.MILLISECONDS.toNanos(500L) + 2L,
+                new PositionSnapshot(0.6D, 1.0D, 0.5D), 45.0F, 0.0F,
+                STILL, grounded(), Map.of());
+        assertEquals(SShapeSugarcaneMacro.State.S, healthy.state());
+        assertEquals("farming-s", healthyMovement.status());
+        assertEquals(Set.of(InputAction.BACKWARD, InputAction.ATTACK),
+                healthyMovement.inputs());
+    }
+
+    @Test
+    void unknownRearOrSideFailsClosedBeforeWatchdogMovement() {
+        SShapeSugarcaneMacro rearUnknown = readyMacro(new QueueRandom(), new QueueRandom());
+        choose(rearUnknown, Map.of());
+        MacroDecision rearDecision = step(rearUnknown, 2L, START, 45.0F, 0.0F,
+                STILL, grounded(), Map.of(
+                        new BlockPosition(1, 1, 0), Observation.unknown()));
+        assertEquals(SShapeSugarcaneMacro.State.S, rearUnknown.state());
+        assertEquals("sugarcane-rear-unknown", rearDecision.status());
+        assertTrue(rearDecision.inputs().isEmpty());
+
+        SShapeSugarcaneMacro sideUnknown = readyMacro(new QueueRandom(), new QueueRandom());
+        choose(sideUnknown, Map.of());
+        MacroDecision sideDecision = step(sideUnknown,
+                TimeUnit.MILLISECONDS.toNanos(500L) + 2L,
+                new PositionSnapshot(0.6D, 1.0D, 0.5D), 45.0F, 0.0F,
+                STILL, grounded(), Map.of(
+                        new BlockPosition(1, 1, 0), Observation.present(full()),
+                        new BlockPosition(0, 1, -1), Observation.present(full()),
+                        new BlockPosition(-1, 1, 0), Observation.unknown()));
+        assertEquals(SShapeSugarcaneMacro.State.S, sideUnknown.state());
+        assertEquals("sugarcane-side-scan-unknown", sideDecision.status());
+        assertTrue(sideDecision.inputs().isEmpty());
     }
 
     @Test
