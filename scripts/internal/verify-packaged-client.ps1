@@ -7,7 +7,14 @@ param(
 
     [string] $RunDirectory,
 
+    [string] $GradleUserHome,
+
     [switch] $PreflightOnly,
+
+    [switch] $HoldForPlayer,
+
+    [ValidateRange(15, 600)]
+    [int] $HoldSeconds = 120,
 
     [ValidateRange(15, 600)]
     [int] $TimeoutSeconds = 120
@@ -51,17 +58,49 @@ function Resolve-RepositoryPath {
     return [IO.Path]::GetFullPath($candidate)
 }
 
+function Assert-NoReparsePathComponents {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Description
+    )
+
+    $fullPath = [IO.Path]::GetFullPath($Path)
+    $rootPath = [IO.Path]::GetPathRoot($fullPath)
+    if ([string]::IsNullOrWhiteSpace($rootPath)) {
+        throw "${Description} has no usable filesystem root: $Path"
+    }
+
+    $currentPath = $rootPath.TrimEnd('\')
+    $relativePath = $fullPath.Substring($rootPath.Length)
+    foreach ($component in $relativePath.Split('\', [StringSplitOptions]::RemoveEmptyEntries)) {
+        $currentPath = Join-Path $currentPath $component
+        $item = Get-Item -LiteralPath $currentPath -Force -ErrorAction SilentlyContinue
+        if ($null -eq $item) {
+            break
+        }
+        $attributes = [IO.FileAttributes] $item.Attributes
+        if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "${Description} contains a reparse-point component: $currentPath"
+        }
+    }
+}
+
 function Get-CanonicalPath {
     param(
         [Parameter(Mandatory = $true)]
         [string] $Path
     )
 
-    $item = Get-Item -LiteralPath $Path
-    if ($item.PSObject.Properties.Name -contains 'LinkType' -and $null -ne $item.LinkType) {
-        throw "Reparse-point candidates are not accepted: $Path"
+    Assert-NoReparsePathComponents -Path $Path -Description 'Path'
+    $item = Get-Item -LiteralPath $Path -Force
+    $attributes = [IO.FileAttributes] $item.Attributes
+    if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Reparse-point paths are not accepted: $Path"
     }
-    return $item.FullName
+    return [IO.Path]::GetFullPath($item.FullName)
 }
 
 function Assert-PathUnder {
@@ -78,6 +117,8 @@ function Assert-PathUnder {
 
     $normalizedPath = [IO.Path]::GetFullPath($Path).TrimEnd('\')
     $normalizedRoot = [IO.Path]::GetFullPath($Root).TrimEnd('\')
+    Assert-NoReparsePathComponents -Path $Root -Description "${Description} root"
+    Assert-NoReparsePathComponents -Path $Path -Description $Description
     if (-not $normalizedPath.StartsWith($normalizedRoot + '\', [StringComparison]::OrdinalIgnoreCase) -and
         -not $normalizedPath.Equals($normalizedRoot, [StringComparison]::OrdinalIgnoreCase)) {
         throw "${Description} must be under ${normalizedRoot}: $normalizedPath"
@@ -118,6 +159,8 @@ function Resolve-ApprovedFabricApi {
         [hashtable] $Properties
     )
 
+    Assert-NoReparsePathComponents -Path $GradleHome -Description 'Gradle user home'
+
     if ([string] $Properties['fabric_api_version'] -ne $approvedFabricApiVersion) {
         throw "fabric_api_version is not the audited version $approvedFabricApiVersion."
     }
@@ -144,12 +187,19 @@ function Resolve-ApprovedFabricApi {
 
     $artifactRoot = Join-Path $GradleHome (
         "caches\modules-2\files-2.1\net.fabricmc.fabric-api\fabric-api\$approvedFabricApiVersion")
+    Assert-NoReparsePathComponents -Path $artifactRoot -Description 'Fabric API cache'
     if (-not (Test-Path -LiteralPath $artifactRoot -PathType Container)) {
         throw "Offline Fabric API cache is missing: $artifactRoot"
     }
 
     $artifactName = "fabric-api-$approvedFabricApiVersion.jar"
-    $artifacts = @(Get-ChildItem -LiteralPath $artifactRoot -Recurse -File -Filter $artifactName)
+    $cachedEntries = @(Get-ChildItem -LiteralPath $artifactRoot -Force -Recurse -ErrorAction Stop)
+    foreach ($cachedEntry in $cachedEntries) {
+        Assert-NoReparsePathComponents -Path $cachedEntry.FullName -Description 'Fabric API cache entry'
+    }
+    $artifacts = @($cachedEntries | Where-Object {
+        -not $_.PSIsContainer -and $_.Name -eq $artifactName
+    })
     if ($artifacts.Count -ne 1) {
         throw "Expected exactly one cached $approvedFabricApiCoordinate artifact; found $($artifacts.Count)."
     }
@@ -195,6 +245,8 @@ function Assert-CandidateArtifact {
     if ($ExpectedHash -notmatch '^[0-9a-fA-F]{64}$') {
         throw 'ExpectedSha256 must be exactly 64 hexadecimal characters.'
     }
+    Assert-NoReparsePathComponents -Path $LibrariesDirectory -Description 'Libraries directory'
+    Assert-NoReparsePathComponents -Path $Path -Description 'Candidate JAR'
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         throw "Candidate JAR is missing: $Path"
     }
@@ -210,7 +262,8 @@ function Assert-CandidateArtifact {
     }
 
     $matching = [System.Collections.Generic.List[string]]::new()
-    foreach ($jar in @(Get-ChildItem -LiteralPath $LibrariesDirectory -File -Filter '*.jar')) {
+    foreach ($jar in @(Get-ChildItem -LiteralPath $LibrariesDirectory -Force -File -Filter '*.jar')) {
+        Assert-NoReparsePathComponents -Path $jar.FullName -Description 'Candidate library entry'
         $hash = (Get-FileHash -LiteralPath $jar.FullName -Algorithm SHA256).Hash.ToUpperInvariant()
         if ($hash -eq $normalizedExpected) {
             $matching.Add((Get-CanonicalPath -Path $jar.FullName))
@@ -250,6 +303,7 @@ function Assert-CleanModsDirectory {
         [string] $ModsDirectory
     )
 
+    Assert-NoReparsePathComponents -Path $ModsDirectory -Description 'Mods directory'
     if (-not (Test-Path -LiteralPath $ModsDirectory)) {
         throw "Mods directory is missing: $ModsDirectory"
     }
@@ -260,6 +314,7 @@ function Assert-CleanModsDirectory {
     $entries = @(Get-ChildItem -LiteralPath $ModsDirectory -Force)
     $farmHelperDuplicates = [System.Collections.Generic.List[string]]::new()
     foreach ($entry in $entries) {
+        Assert-NoReparsePathComponents -Path $entry.FullName -Description 'Mods directory entry'
         if ($entry.PSIsContainer -or [IO.Path]::GetExtension($entry.Name) -ne '.jar') {
             continue
         }
@@ -290,7 +345,9 @@ function Assert-OfflineAssets {
         [string] $GradleHome
     )
 
+    Assert-NoReparsePathComponents -Path $GradleHome -Description 'Gradle user home'
     $metadataPath = Join-Path $GradleHome "caches\fabric-loom\$MinecraftVersion\mojang_minecraft_info.json"
+    Assert-NoReparsePathComponents -Path $metadataPath -Description 'Minecraft metadata'
     if (-not (Test-Path -LiteralPath $metadataPath -PathType Leaf)) {
         throw "Offline Minecraft metadata is missing: $metadataPath"
     }
@@ -309,36 +366,59 @@ function Assert-OfflineAssets {
     if (-not (Test-Path -LiteralPath $indexPath -PathType Leaf)) {
         throw "Offline asset index is missing: $indexPath"
     }
+    Assert-NoReparsePathComponents -Path $assetsRoot -Description 'Loom asset cache'
+    Assert-NoReparsePathComponents -Path $indexPath -Description 'Minecraft asset index'
+    if ([string] $metadata.assetIndex.sha1 -notmatch '^[0-9a-fA-F]{40}$') {
+        throw "Minecraft metadata has an invalid asset index SHA-1: $metadataPath"
+    }
     $indexHash = (Get-FileHash -LiteralPath $indexPath -Algorithm SHA1).Hash.ToLowerInvariant()
     if ($indexHash -ne ([string] $metadata.assetIndex.sha1).ToLowerInvariant()) {
         throw "Offline asset index SHA-1 mismatch: $indexPath"
     }
 
     $index = Get-Content -LiteralPath $indexPath -Raw | ConvertFrom-Json
+    if ($null -eq $index.objects) {
+        throw "Minecraft asset index has no objects map: $indexPath"
+    }
     $missing = [System.Collections.Generic.List[string]]::new()
+    $corrupt = [System.Collections.Generic.List[string]]::new()
     foreach ($asset in @($index.objects.PSObject.Properties)) {
         $hash = [string] $asset.Value.hash
         if ($hash -notmatch '^[0-9a-fA-F]{40}$') {
             throw "Invalid asset hash in ${indexPath}: $hash"
         }
         $objectPath = Join-Path (Join-Path (Join-Path $assetsRoot 'objects') $hash.Substring(0, 2)) $hash
+        Assert-PathUnder `
+            -Path $objectPath `
+            -Root (Join-Path $assetsRoot 'objects') `
+            -Description 'Asset object'
         if (-not (Test-Path -LiteralPath $objectPath -PathType Leaf)) {
             $missing.Add($asset.Name)
+            continue
+        }
+        Assert-NoReparsePathComponents -Path $objectPath -Description 'Asset object'
+        $actualHash = (Get-FileHash -LiteralPath $objectPath -Algorithm SHA1).Hash.ToLowerInvariant()
+        if ($actualHash -ne $hash.ToLowerInvariant()) {
+            $corrupt.Add("$($asset.Name): expected $hash, found $actualHash")
         }
     }
     if ($missing.Count -gt 0) {
         throw "Offline asset cache is incomplete; missing $($missing.Count) objects, including $($missing[0])."
+    }
+    if ($corrupt.Count -gt 0) {
+        throw "Offline asset cache has SHA-1 mismatched objects; found $($corrupt[0])."
     }
 
     return [pscustomobject]@{
         root = $assetsRoot
         index = $indexName
         objectCount = @($index.objects.PSObject.Properties).Count
+        verifiedObjectCount = @($index.objects.PSObject.Properties).Count
     }
 }
 
 function Get-ProcessSnapshot {
-    return @(Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, CommandLine)
+    return @(Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, CommandLine, CreationDate)
 }
 
 function Get-DescendantProcessIds {
@@ -403,10 +483,146 @@ function Find-OwnedGameProcess {
     return $null
 }
 
+function Get-OwnedProcessHandle {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int] $RootProcessId,
+
+        [Parameter(Mandatory = $true)]
+        [object] $ObservedProcess,
+
+        [Parameter(Mandatory = $true)]
+        [string] $CandidatePath
+    )
+
+    $snapshot = Get-ProcessSnapshot
+    $ownedIds = @(Get-DescendantProcessIds -RootProcessId $RootProcessId -Snapshot $snapshot)
+    $current = @($snapshot | Where-Object {
+        [int] $_.ProcessId -eq [int] $ObservedProcess.ProcessId
+    })
+    if ($current.Count -ne 1 -or -not $ownedIds.Contains([int] $ObservedProcess.ProcessId)) {
+        return $null
+    }
+
+    $currentCommandLine = [string] $current[0].CommandLine
+    if ([string]::IsNullOrWhiteSpace($currentCommandLine) -or
+        $currentCommandLine -ne [string] $ObservedProcess.CommandLine -or
+        -not (Normalize-CommandLinePath -Path $currentCommandLine).Contains(
+            (Normalize-CommandLinePath -Path $CandidatePath))) {
+        throw "Owned game PID $($ObservedProcess.ProcessId) changed identity before termination."
+    }
+
+    try {
+        $handle = [Diagnostics.Process]::GetProcessById([int] $ObservedProcess.ProcessId)
+        if ($handle.HasExited) {
+            $handle.Dispose()
+            return $null
+        }
+        return $handle
+    } catch [ArgumentException] {
+        return $null
+    }
+}
+
+function Wait-LauncherExit {
+    param(
+        [Parameter(Mandatory = $true)]
+        [Diagnostics.Process] $LauncherProcess,
+
+        [Parameter(Mandatory = $true)]
+        [int] $TimeoutSeconds
+    )
+
+    if (-not $LauncherProcess.HasExited -and
+        -not $LauncherProcess.WaitForExit($TimeoutSeconds * 1000)) {
+        throw "Gradle/Loom launcher did not exit within ${TimeoutSeconds}s."
+    }
+    return [int] $LauncherProcess.ExitCode
+}
+
+function Write-JsonFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object] $Value,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+
+    $Value | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $Path -Encoding utf8
+}
+
+function Stop-OwnedGameProcess {
+    param(
+        [Parameter(Mandatory = $true)]
+        [Diagnostics.Process] $LauncherProcess,
+
+        [Parameter(Mandatory = $true)]
+        [int] $RootProcessId,
+
+        [Parameter(Mandatory = $true)]
+        [object] $ObservedProcess,
+
+        [Parameter(Mandatory = $true)]
+        [Diagnostics.Process] $GameProcess,
+
+        [Parameter(Mandatory = $true)]
+        [string] $CandidatePath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $RunDirectory
+    )
+
+    if ($LauncherProcess.HasExited) {
+        throw "Gradle/Loom launcher exited before verifier-controlled termination."
+    }
+
+    $current = Find-OwnedGameProcess -RootProcessId $RootProcessId -CandidatePath $CandidatePath
+    if ($null -eq $current -or
+        [int] $current.ProcessId -ne [int] $ObservedProcess.ProcessId -or
+        [string] $current.CommandLine -ne [string] $ObservedProcess.CommandLine) {
+        throw "Owned game process changed or disappeared before verifier-controlled termination."
+    }
+
+    $terminationEvidence = [ordered]@{
+        kind = 'verifier-controlled-termination-request'
+        requestedAtUtc = [DateTime]::UtcNow.ToString('o')
+        launcherProcessId = $RootProcessId
+        launcherWasAliveAtRequest = $true
+        gameProcessId = [int] $ObservedProcess.ProcessId
+        gameProcessCommandLine = [string] $ObservedProcess.CommandLine
+        candidatePath = [IO.Path]::GetFullPath($CandidatePath)
+    }
+    Write-JsonFile -Value $terminationEvidence -Path (Join-Path $RunDirectory 'termination-requested.json')
+
+    if ($LauncherProcess.HasExited) {
+        throw "Gradle/Loom launcher exited before verifier-controlled termination was issued."
+    }
+    Stop-Process -Id ([int] $ObservedProcess.ProcessId) -ErrorAction Stop
+
+    $gameWaitDeadline = (Get-Date).AddSeconds(15)
+    while (-not $GameProcess.HasExited -and (Get-Date) -lt $gameWaitDeadline) {
+        Start-Sleep -Milliseconds 250
+    }
+    if (-not $GameProcess.HasExited) {
+        throw "Owned game process did not terminate after the verifier request."
+    }
+
+    $terminationEvidence.gameExitCode = [int] $GameProcess.ExitCode
+    $terminationEvidence.observedExitedAfterRequest = $true
+    return $terminationEvidence
+}
+
 function Stop-OwnedProcessTree {
     param(
         [Parameter(Mandatory = $true)]
-        [int] $RootProcessId
+        [int] $RootProcessId,
+
+        [Diagnostics.Process] $LauncherProcess,
+
+        [object] $KnownGameProcess,
+
+        [string] $CandidatePath
     )
 
     $snapshot = Get-ProcessSnapshot
@@ -415,7 +631,22 @@ function Stop-OwnedProcessTree {
     foreach ($processId in $ownedIds) {
         Stop-Process -Id $processId -ErrorAction SilentlyContinue
     }
-    Stop-Process -Id $RootProcessId -ErrorAction SilentlyContinue
+
+    if ($null -ne $KnownGameProcess -and -not [string]::IsNullOrWhiteSpace($CandidatePath)) {
+        $knownCurrent = @($snapshot | Where-Object {
+            [int] $_.ProcessId -eq [int] $KnownGameProcess.ProcessId -and
+                (Normalize-CommandLinePath -Path ([string] $_.CommandLine)).Contains(
+                    (Normalize-CommandLinePath -Path $CandidatePath)) -and
+                [string] $_.CommandLine -eq [string] $KnownGameProcess.CommandLine
+        })
+        if ($knownCurrent.Count -eq 1) {
+            Stop-Process -Id ([int] $KnownGameProcess.ProcessId) -ErrorAction SilentlyContinue
+        }
+    }
+
+    if ($null -ne $LauncherProcess -and -not $LauncherProcess.HasExited) {
+        Stop-Process -Id $RootProcessId -ErrorAction SilentlyContinue
+    }
 }
 
 function Read-LoadedClassProof {
@@ -427,6 +658,8 @@ function Read-LoadedClassProof {
         [string] $CandidatePath
     )
 
+    Assert-NoReparsePathComponents -Path $ClassLoadLog -Description 'JVM class-load log'
+    Assert-NoReparsePathComponents -Path $CandidatePath -Description 'Candidate JAR'
     if (-not (Test-Path -LiteralPath $ClassLoadLog -PathType Leaf)) {
         throw "JVM class-load evidence is missing: $ClassLoadLog"
     }
@@ -453,13 +686,67 @@ function Read-LoadedClassProof {
     throw "FarmHelperClient was not observed loading from the exact candidate JAR: $candidate"
 }
 
+function Assert-NormalClientExit {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $RunDirectory
+    )
+
+    $minecraftLog = Join-Path $RunDirectory 'logs\latest.log'
+    Assert-NoReparsePathComponents -Path $minecraftLog -Description 'Minecraft log'
+    if (-not (Test-Path -LiteralPath $minecraftLog -PathType Leaf) -or
+        -not (Select-String -LiteralPath $minecraftLog -SimpleMatch 'Stopping!' -Quiet)) {
+        throw "Normal Minecraft exit evidence is missing: expected 'Stopping!' in $minecraftLog"
+    }
+    return [ordered]@{
+        marker = 'Stopping!'
+        path = [IO.Path]::GetFullPath($minecraftLog)
+    }
+}
+
+function Save-LauncherStreams {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object] $StandardOutputTask,
+
+        [Parameter(Mandatory = $true)]
+        [object] $StandardErrorTask,
+
+        [Parameter(Mandatory = $true)]
+        [string] $StandardOutputPath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $StandardErrorPath
+    )
+
+    $stdout = $StandardOutputTask.GetAwaiter().GetResult()
+    $stderr = $StandardErrorTask.GetAwaiter().GetResult()
+    [IO.File]::WriteAllText($StandardOutputPath, $stdout, [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($StandardErrorPath, $stderr, [Text.UTF8Encoding]::new($false))
+}
+
 $properties = Read-GradleProperties -Path $gradlePropertiesPath
 $minecraftVersion = [string] $properties['minecraft_version']
 if ([string]::IsNullOrWhiteSpace($minecraftVersion)) {
     throw 'minecraft_version is missing from gradle.properties.'
 }
+if ($PreflightOnly -and $HoldForPlayer) {
+    throw 'HoldForPlayer cannot be combined with PreflightOnly.'
+}
+
+Assert-NoReparsePathComponents -Path $repositoryRoot -Description 'Repository root'
+Assert-NoReparsePathComponents -Path $wrapper -Description 'Gradle wrapper'
+
+$launcherPath = $wrapper
+if (-not [string]::IsNullOrWhiteSpace($env:FARMHELPER_VERIFIER_TEST_LAUNCHER)) {
+    if ($env:FARMHELPER_VERIFIER_TEST_MODE -ne '1') {
+        throw 'FARMHELPER_VERIFIER_TEST_LAUNCHER requires FARMHELPER_VERIFIER_TEST_MODE=1.'
+    }
+    $launcherPath = Get-CanonicalPath -Path $env:FARMHELPER_VERIFIER_TEST_LAUNCHER
+}
 
 $librariesDirectory = Join-Path $repositoryRoot 'build\libs'
+Assert-NoReparsePathComponents -Path $librariesDirectory -Description 'Build output directory'
 if (-not (Test-Path -LiteralPath $librariesDirectory -PathType Container)) {
     throw "Build output directory is missing: $librariesDirectory"
 }
@@ -474,28 +761,33 @@ $candidate = Assert-CandidateArtifact `
     -ExpectedHash $ExpectedSha256 `
     -LibrariesDirectory $librariesDirectory
 
+$verificationRoot = Join-Path $repositoryRoot 'build\verification\packaged-client'
+if (-not (Test-Path -LiteralPath $verificationRoot)) {
+    New-Item -ItemType Directory -Path $verificationRoot -Force | Out-Null
+}
+Assert-NoReparsePathComponents -Path $verificationRoot -Description 'Packaged verification root'
+
 if ([string]::IsNullOrWhiteSpace($RunDirectory)) {
-    $verificationRoot = Join-Path $repositoryRoot 'build\verification\packaged-client'
     if ($PreflightOnly) {
         throw 'PreflightOnly requires an existing -RunDirectory fixture.'
     }
-    New-Item -ItemType Directory -Path $verificationRoot -Force | Out-Null
     $RunDirectory = Join-Path $verificationRoot ([Guid]::NewGuid().ToString('N'))
 } else {
     $RunDirectory = Resolve-RepositoryPath -Path $RunDirectory
 }
 
+Assert-NoReparsePathComponents -Path $RunDirectory -Description 'Run directory'
 if ($PreflightOnly) {
     if (-not (Test-Path -LiteralPath $RunDirectory -PathType Container)) {
         throw "Preflight fixture directory is missing: $RunDirectory"
     }
 } else {
-    $verificationRoot = Join-Path $repositoryRoot 'build\verification\packaged-client'
     Assert-PathUnder -Path $RunDirectory -Root $verificationRoot -Description 'Run directory'
     if (Test-Path -LiteralPath $RunDirectory) {
         throw "Refusing to reuse an existing run directory: $RunDirectory"
     }
     New-Item -ItemType Directory -Path $RunDirectory | Out-Null
+    Assert-NoReparsePathComponents -Path $RunDirectory -Description 'Run directory'
 }
 
 $modsDirectory = Join-Path $RunDirectory 'mods'
@@ -507,11 +799,14 @@ if (-not (Test-Path -LiteralPath $modsDirectory)) {
 }
 Assert-CleanModsDirectory -ModsDirectory $modsDirectory
 
-$gradleHome = if ($env:GRADLE_USER_HOME) {
+$gradleHome = if (-not [string]::IsNullOrWhiteSpace($GradleUserHome)) {
+    [IO.Path]::GetFullPath($GradleUserHome)
+} elseif ($env:GRADLE_USER_HOME) {
     [IO.Path]::GetFullPath($env:GRADLE_USER_HOME)
 } else {
     Join-Path ([Environment]::GetFolderPath('UserProfile')) '.gradle'
 }
+Assert-NoReparsePathComponents -Path $gradleHome -Description 'Gradle user home'
 $assets = Assert-OfflineAssets -MinecraftVersion $minecraftVersion -GradleHome $gradleHome
 $fabricApi = Resolve-ApprovedFabricApi -GradleHome $gradleHome -Properties $properties
 $modsDirectoryEntries = @()
@@ -529,17 +824,24 @@ $runtimeDependencyEvidence = [ordered]@{
     allowlisted = $true
 }
 $launcherLogDirectory = Join-Path (Split-Path -Parent $RunDirectory) 'launcher-logs'
+Assert-NoReparsePathComponents -Path $launcherLogDirectory -Description 'Launcher log directory'
 $runDirectoryName = Split-Path -Leaf $RunDirectory
 $gradleStdout = Join-Path $launcherLogDirectory "$runDirectoryName.stdout.log"
 $gradleStderr = Join-Path $launcherLogDirectory "$runDirectoryName.stderr.log"
 
 $proof = [ordered]@{
-    schemaVersion = 1
+    schemaVersion = 2
     status = if ($PreflightOnly) { 'preflight-passed' } else { 'launch-pending' }
     minecraftVersion = $minecraftVersion
     loaderVersion = [string] $properties['loader_version']
     candidate = $candidate
     runtimeDependencies = @($runtimeDependencyEvidence)
+    provenanceBoundary = [ordered]@{
+        gradleTask = 'verifyDependencyProvenance'
+        packagedTaskDependsOnProvenance = $true
+        candidateHashCheckedInsideGradle = $true
+        fabricApiHashCheckedInsideGradle = $true
+    }
     runDirectory = [IO.Path]::GetFullPath($RunDirectory)
     modsDirectory = [IO.Path]::GetFullPath($modsDirectory)
     modsDirectoryEntries = @($modsDirectoryEntries)
@@ -550,6 +852,8 @@ $proof = [ordered]@{
         taskType = 'net.fabricmc.loom.task.prod.ClientProductionRunTask'
         mainClass = 'net.fabricmc.loader.impl.launch.knot.KnotClient'
         development = $false
+        holdForPlayer = [bool] $HoldForPlayer
+        visibleGuiRequested = [bool] $HoldForPlayer
         addMods = @(
             [IO.Path]::GetFullPath($candidate.path)
             [IO.Path]::GetFullPath($fabricApi.source)
@@ -564,55 +868,92 @@ $proof = [ordered]@{
 }
 
 if ($PreflightOnly) {
-    $proof | ConvertTo-Json -Depth 8
+    $proof | ConvertTo-Json -Depth 12
     exit 0
 }
 
 New-Item -ItemType Directory -Path $launcherLogDirectory -Force | Out-Null
+Assert-NoReparsePathComponents -Path $launcherLogDirectory -Description 'Launcher log directory'
+$holdValue = if ($HoldForPlayer) { 'true' } else { 'false' }
 $gradleArguments = @(
     '--offline',
     '--no-daemon',
     '--console=plain',
     '-x', 'jar',
     '--project-prop', "packagedClientJar=$($candidate.path)",
+    '--project-prop', "packagedClientJarSha256=$($candidate.sha256)",
     '--project-prop', "packagedClientDependency=$($fabricApi.source)",
+    '--project-prop', "packagedClientDependencySha256=$($fabricApi.sha256)",
     '--project-prop', "packagedClientRunDir=$([IO.Path]::GetFullPath($RunDirectory))",
+    '--project-prop', "packagedClientHoldForPlayer=$holdValue",
     'verifyPackagedClient'
 )
 
-$process = Start-Process `
-    -FilePath $wrapper `
-    -ArgumentList $gradleArguments `
-    -WorkingDirectory $repositoryRoot `
-    -RedirectStandardOutput $gradleStdout `
-    -RedirectStandardError $gradleStderr `
-    -PassThru
-$rootProcessId = $process.Id
-$deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-$loaded = $false
+$process = $null
+$stdoutTask = $null
+$stderrTask = $null
+$rootProcessId = $null
 $ownedGameProcess = $null
+$ownedGameProcessHandle = $null
+$rootExitCode = $null
+$gameExitCode = $null
+$loaded = $false
+$controlledTerminationEvidence = $null
+$normalExitEvidence = $null
 
 try {
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $launcherPath
+    $startInfo.WorkingDirectory = $repositoryRoot
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in $gradleArguments) {
+        [void] $startInfo.ArgumentList.Add([string] $argument)
+    }
+
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    if (-not $process.Start()) {
+        throw "Could not start Gradle/Loom launcher: $launcherPath"
+    }
+    $rootProcessId = $process.Id
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
     while ((Get-Date) -lt $deadline) {
         $ownedGameProcess = Find-OwnedGameProcess -RootProcessId $rootProcessId -CandidatePath $candidate.path
+        if ($null -ne $ownedGameProcess -and $null -eq $ownedGameProcessHandle) {
+            $ownedGameProcessHandle = Get-OwnedProcessHandle `
+                -RootProcessId $rootProcessId `
+                -ObservedProcess $ownedGameProcess `
+                -CandidatePath $candidate.path
+        }
+
+        if ($process.HasExited) {
+            $rootExitCode = [int] $process.ExitCode
+            throw "Gradle/Loom launcher exited unexpectedly before exact proof (exit code $rootExitCode)."
+        }
+
         $minecraftLog = Join-Path $RunDirectory 'logs\latest.log'
+        $classLoadLog = Join-Path $RunDirectory 'class-load.log'
         $hasMarker = (Test-Path -LiteralPath $minecraftLog -PathType Leaf) -and
             (Select-String -LiteralPath $minecraftLog -SimpleMatch 'FarmHelper client initialized.' -Quiet)
-        $hasClassProof = (Test-Path -LiteralPath (Join-Path $RunDirectory 'class-load.log') -PathType Leaf) -and
-            (Select-String -LiteralPath (Join-Path $RunDirectory 'class-load.log') -SimpleMatch 'dev.hylfrd.farmhelper.client.FarmHelperClient' -Quiet)
+        $hasClassProof = (Test-Path -LiteralPath $classLoadLog -PathType Leaf) -and
+            (Select-String -LiteralPath $classLoadLog -SimpleMatch 'dev.hylfrd.farmhelper.client.FarmHelperClient' -Quiet)
 
-        if ($null -ne $ownedGameProcess -and $hasMarker -and $hasClassProof) {
+        if ($null -ne $ownedGameProcessHandle -and $hasMarker -and $hasClassProof) {
             $loaded = $true
-            break
-        }
-        if ($process.HasExited) {
             break
         }
         Start-Sleep -Milliseconds 500
     }
 
     if (-not $loaded) {
-        throw "Timed out or exited before proving exact FarmHelper JAR loading. Owned game PID: $($null -eq $ownedGameProcess ? 'none' : $ownedGameProcess.ProcessId)."
+        throw "Timed out before proving exact FarmHelper JAR loading. Owned game PID: " +
+            $(if ($null -eq $ownedGameProcess) { 'none' } else { $ownedGameProcess.ProcessId })
     }
 
     $proof.launch.gameProcessId = [int] $ownedGameProcess.ProcessId
@@ -620,17 +961,93 @@ try {
     $proof.launch.classLoad = Read-LoadedClassProof `
         -ClassLoadLog (Join-Path $RunDirectory 'class-load.log') `
         -CandidatePath $candidate.path
+    $proof.status = 'proof-ready'
+    $proof.launch.proofReadyAtUtc = [DateTime]::UtcNow.ToString('o')
+    Write-JsonFile -Value $proof -Path (Join-Path $RunDirectory 'proof-ready.json')
+    Write-Output 'PACKAGED_CLIENT_PROOF_READY'
+    Write-Output "gameProcessId=$($proof.launch.gameProcessId)"
+    Write-Output "runDirectory=$($proof.runDirectory)"
 
-    # The client has initialized the mod and the evidence is durable. Stop only
-    # the exact game process spawned below our Gradle root; no GUI input is sent.
-    Stop-Process -Id ([int] $ownedGameProcess.ProcessId) -ErrorAction SilentlyContinue
-    $waitDeadline = (Get-Date).AddSeconds(15)
-    while (-not $process.HasExited -and (Get-Date) -lt $waitDeadline) {
-        Start-Sleep -Milliseconds 250
+    if ($HoldForPlayer) {
+        $holdDeadline = (Get-Date).AddSeconds($HoldSeconds)
+        while ((Get-Date) -lt $holdDeadline) {
+            if ($process.HasExited) {
+                $rootExitCode = [int] $process.ExitCode
+                throw "Gradle/Loom launcher exited unexpectedly while awaiting Player exit (exit code $rootExitCode)."
+            }
+            if ($ownedGameProcessHandle.HasExited) {
+                $gameExitCode = [int] $ownedGameProcessHandle.ExitCode
+                break
+            }
+            Start-Sleep -Milliseconds 500
+        }
+        if (-not $ownedGameProcessHandle.HasExited) {
+            throw "Player hold timed out after ${HoldSeconds}s before a normal client exit."
+        }
+        $gameExitCode = [int] $ownedGameProcessHandle.ExitCode
+        if ($gameExitCode -ne 0) {
+            throw "Minecraft client exited unexpectedly during Player hold (exit code $gameExitCode)."
+        }
+        $normalExitEvidence = Assert-NormalClientExit -RunDirectory $RunDirectory
+        $rootExitCode = Wait-LauncherExit -LauncherProcess $process -TimeoutSeconds 30
+        if ($rootExitCode -ne 0) {
+            throw "Gradle/Loom launcher exited unexpectedly after normal client exit (exit code $rootExitCode)."
+        }
+        $proof.launch.playerExit = $normalExitEvidence
+        $proof.launch.controlledTermination = $false
+    } else {
+        # A verifier-forced kill is cleanup evidence only. Loom's production task
+        # cannot turn that kill into a normal Java exit, so it can never pass.
+        $controlledTerminationEvidence = Stop-OwnedGameProcess `
+            -LauncherProcess $process `
+            -RootProcessId $rootProcessId `
+            -ObservedProcess $ownedGameProcess `
+            -GameProcess $ownedGameProcessHandle `
+            -CandidatePath $candidate.path `
+            -RunDirectory $RunDirectory
+        $gameExitCode = [int] $controlledTerminationEvidence.gameExitCode
+        $rootExitCode = Wait-LauncherExit -LauncherProcess $process -TimeoutSeconds 30
+        if ($gameExitCode -ne 0 -or $rootExitCode -ne 0) {
+            $proof.status = 'failed-controlled-termination'
+            $proof.launch.controlledTermination = $true
+            $proof.launch.gameExitCode = $gameExitCode
+            $proof.launch.launcherExitCode = $rootExitCode
+            $proof.launch.terminationEvidence = $controlledTerminationEvidence
+            Write-JsonFile -Value $proof -Path (Join-Path $RunDirectory 'failed-evidence.json')
+            throw "Verifier-controlled termination is not a successful verification: gameExitCode=$gameExitCode, launcherExitCode=$rootExitCode. Use -HoldForPlayer for a normal in-client exit."
+        }
+        $proof.launch.controlledTermination = $true
     }
 } finally {
-    if (-not $process.HasExited) {
-        Stop-OwnedProcessTree -RootProcessId $rootProcessId
+    if ($null -ne $process) {
+        try {
+            if (-not $process.HasExited) {
+                Stop-OwnedProcessTree `
+                    -RootProcessId $rootProcessId `
+                    -LauncherProcess $process `
+                    -KnownGameProcess $ownedGameProcess `
+                    -CandidatePath $candidate.path
+                [void] $process.WaitForExit(15000)
+            }
+        } catch {
+            # Cleanup is best effort and remains limited to the owned process tree.
+        }
+
+        if ($null -ne $stdoutTask -and $null -ne $stderrTask) {
+            try {
+                Save-LauncherStreams `
+                    -StandardOutputTask $stdoutTask `
+                    -StandardErrorTask $stderrTask `
+                    -StandardOutputPath $gradleStdout `
+                    -StandardErrorPath $gradleStderr
+            } catch {
+                # The primary verifier failure is retained if stream draining fails.
+            }
+        }
+        $process.Dispose()
+    }
+    if ($null -ne $ownedGameProcessHandle) {
+        $ownedGameProcessHandle.Dispose()
     }
 }
 
@@ -644,11 +1061,12 @@ if ($postDependencyHash -ne $fabricApi.sha256) {
 }
 
 $proof.status = 'passed'
-$proof.launch.launcherExitCode = $process.ExitCode
-$proof.launch.controlledTermination = $true
-$proof | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $RunDirectory 'evidence.json') -Encoding utf8
+$proof.launch.gameExitCode = $gameExitCode
+$proof.launch.launcherExitCode = $rootExitCode
+$proof.launch.controlledTermination = [bool] $proof.launch.controlledTermination
+Write-JsonFile -Value $proof -Path (Join-Path $RunDirectory 'evidence.json')
 
-Write-Output "PACKAGED_CLIENT_VERIFICATION_OK"
+Write-Output 'PACKAGED_CLIENT_VERIFICATION_OK'
 Write-Output "candidate=$($candidate.path)"
 Write-Output "sha256=$($candidate.sha256)"
 Write-Output "size=$($candidate.size)"
