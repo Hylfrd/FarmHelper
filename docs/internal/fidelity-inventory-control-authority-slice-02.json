@@ -1,0 +1,565 @@
+{
+  "format": "farm-helper-fidelity-inventory-control-authority-slice",
+  "schema_version": 1,
+  "status": "FINITE_BLOCK",
+  "verdict": "BLOCK",
+  "binding": {
+    "package_id": "FIDELITY-AUTHORITY-SLICE-02-REMEDIATION-01",
+    "campaign_id": "M001-INVENTORY-CONTROL-AUTHORITY-SLICES",
+    "mandate_id": "M-001",
+    "role": "BUILDER",
+    "task_id": "019fe754-c210-7a61-91cd-6dd17cb59827",
+    "turn_id": "019fe754-c4bd-7b92-8f7b-deabedf82525",
+    "parent_task_id": "019fe727-3e71-7a43-8fe6-c353a4942fb2",
+    "model_effort": "gpt-5.6-luna/max",
+    "model_effort_evidence": "DELEGATED_INPUT_ONLY; runtime model/effort receipt is not exposed.",
+    "base_sha": "434329cbbd6048910b3702e36dc88e40b546e64a",
+    "base_tree": "fe516efa886c7b83ab7ade9f773e6a67c1b57abd",
+    "fixed_upstream_sha": "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+    "canonical_target_sha": "1004be1393f48fc8e8656720fe475bd54e5278a0",
+    "canonical_target_tree": "82c76f4ce983eb7bc49003501be8a5e2ac53b1fd",
+    "assignment_sha256": "dffb71937f2275302fbb1dc93c0eddcb72434cf516e9fc6e00fb3746a902d85d",
+    "assignment_hash_basis": "Delegated input assignment SHA-256; the task binding did not expose its canonicalization basis.",
+    "source_review_handoff_sha256": "69df231109a95feaf7826ea9d75fd6d4b45bc3c80e1e4a61f4a8b302df16514a",
+    "owned_output_path": "docs/internal/fidelity-inventory-control-authority-slice-02.json",
+    "owned_audit_cluster_ids": [
+      "AC-013",
+      "AC-014",
+      "AC-015",
+      "AC-016",
+      "AC-017",
+      "AC-018",
+      "AC-019",
+      "AC-020",
+      "AC-021",
+      "AC-022",
+      "AC-023",
+      "AC-024"
+    ],
+    "successor_review_package": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01"
+  },
+  "evidence_basis": {
+    "accepted_source_ledger": {
+      "git_ref": "434329cbbd6048910b3702e36dc88e40b546e64a:docs/internal/fidelity-inventory-control-projection-source.json",
+      "git_blob": "a5577feea956e66bc56c412b65e845e3a766f1ad",
+      "size_bytes": 466075,
+      "sha256": "49011d463881c979ef8670024f3f58aaf20f40f12f84ca631642bfe83321aac7",
+      "canonical_size_bytes": 367126,
+      "canonical_sha256": "b2bec4a4e33901f1470d534969bb99d13e2385e9921c883bcc36bc23cf99ec8a",
+      "accepted_ac_row_count": 129,
+      "assigned_ac_row_count": 12,
+      "assigned_member_row_count": 14
+    },
+    "accepted_cluster_artifact": {
+      "git_ref": "434329cbbd6048910b3702e36dc88e40b546e64a:docs/internal/fidelity-inventory-clusters.json",
+      "git_blob": "7a42f5002a26286cd204bc69a2fec1c7b5f71eb5",
+      "size_bytes": 254482,
+      "sha256": "d70ed08138dc98320c8a89a26702da26db1c20d9c3186721188b15d23a6efc14",
+      "canonical_size_bytes": 202939,
+      "canonical_sha256": "79369a63ea70715c9846407aa82d1017c0207be203bf092f040ae7c81e775438",
+      "cluster_count": 129,
+      "member_row_count": 292
+    },
+    "source_review_handoff": {
+      "path": "logs/control-evidence/task-handoff-019fb5e2-inventory-control-projection-source-review-approve-r203.json",
+      "sha256": "69df231109a95fe7826ea9d75fd6d4b45bc3c80e1e4a61f4a8b302df16514a",
+      "verdict": "APPROVE_SOURCE_LEDGER_ONLY",
+      "unresolved_phase_ac_count": 129,
+      "unresolved_target_or_removal_authority_ac_count": 129,
+      "unresolved_future_owner_ac_count": 129,
+      "scope_limit": "The handoff approves only the exact immutable source ledger; authoritative projection completeness remains unaccepted."
+    },
+    "retained_control_recovery_evidence": {
+      "path": "C:\\Users\\Apostrophe\\.codex\\farm-helper-control-inputs\\progress-control-r179-projection-input.md",
+      "size_bytes": 391344,
+      "sha256": "fc1ea82be9582236ddecbc3fd37589f0edde53b544aae32e4a4e8b1eb9162c4f",
+      "revision": 179,
+      "finding": "All 129 AC records lack authoritative phase and canonical-master target fields; neither the S0-T2 parity matrix nor reachable refs contain an authoritative per-AC mapping."
+    },
+    "fixed_upstream_objects": {
+      "commit": "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+      "tree": "dfbaaf9ce75f9adc625352396acaa9138a8b97f8",
+      "basis": "The assigned 14 source member rows and their Git blob/hash/size anchors are read from and verified against the fixed-upstream Git objects."
+    },
+    "canonical_target_objects": {
+      "commit": "1004be1393f48fc8e8656720fe475bd54e5278a0",
+      "tree": "82c76f4ce983eb7bc49003501be8a5e2ac53b1fd",
+      "parity_matrix_git_blob": "41ae39a5251e3d276d2515717b47173905445220",
+      "exact_old_upstream_anchor_overlap_for_assigned_rows": 0,
+      "interpretation": "The target tree and parity matrix were searched for exact assigned source anchors and AC-keyed authority. Semantic migration intent is evidence to review, not an accepted per-AC target/removal ledger."
+    }
+  },
+  "phase_rows": [
+    { "phase": "FOUNDATION", "state": "UNINVENTORIED" },
+    { "phase": "P0", "state": "UNINVENTORIED" },
+    { "phase": "P1", "state": "UNINVENTORIED" },
+    { "phase": "P2", "state": "UNINVENTORIED" },
+    { "phase": "P3", "state": "UNINVENTORIED" },
+    { "phase": "P4", "state": "UNINVENTORIED" },
+    { "phase": "P5", "state": "UNINVENTORIED" },
+    { "phase": "P6", "state": "UNINVENTORIED" },
+    { "phase": "P7", "state": "UNINVENTORIED" }
+  ],
+  "blocker_catalog": {
+    "B-PHASE-AUTHORITY-MISSING": {
+      "blocker": "The accepted source-ledger row has phase:null. Its shared FOUNDATION/P0-P7 phase rows are UNINVENTORIED, and the accepted source-review handoff records unresolved_phase_ac_count=129. Retained control/recovery evidence independently records that all 129 AC records lack authoritative phase. No accepted per-AC phase authority was found in the fixed-upstream, canonical-target, parity-matrix or reachable-ref evidence.",
+      "evidence_searched": [
+        "accepted_source_ledger",
+        "source_review_handoff",
+        "retained_control_recovery_evidence",
+        "fixed_upstream_objects",
+        "canonical_target_objects",
+        "canonical_parity_matrix",
+        "reachable_refs"
+      ],
+      "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01"
+    },
+    "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING": {
+      "blocker": "The accepted source-ledger row has target:null and removal_authority:null. Exact old upstream-anchor lookup in canonical target tree 82c76f4c has zero overlap for the assigned rows; the canonical parity matrix records migration intent but is not an accepted AC-keyed target/removal ledger. Retained control/recovery evidence confirms no authoritative per-AC mapping in the parity matrix or reachable refs. Neither a canonical-target anchor nor explicit removal/absence authority can therefore be asserted.",
+      "evidence_searched": [
+        "accepted_source_ledger",
+        "source_review_handoff",
+        "retained_control_recovery_evidence",
+        "fixed_upstream_objects",
+        "canonical_target_objects",
+        "canonical_parity_matrix",
+        "reachable_refs"
+      ],
+      "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01"
+    },
+    "B-FUTURE-CLOSURE-OWNER-MISSING": {
+      "blocker": "The accepted source-ledger row has future_owner:null. Its source successor list contains only FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03, which the accepted handoff identifies as terminal materialization review rather than a valid nonterminal closure owner. The accepted source-review handoff records unresolved_future_owner_ac_count=129; no valid nonterminal closure-owner package is present in the accepted source or cluster evidence.",
+      "evidence_searched": [
+        "accepted_source_ledger",
+        "accepted_cluster_artifact",
+        "source_review_handoff",
+        "retained_control_recovery_evidence"
+      ],
+      "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01"
+    }
+  },
+  "rows": [
+    {
+      "id": "AC-013",
+      "key": "event-tablist",
+      "mechanism": "Event Tablist mechanism and source surface",
+      "surface": "Fixed-upstream Event Tablist path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": [
+          "src/main/java/com/jelly/farmhelperv2/event/UpdateTablistEvent.java",
+          "src/main/java/com/jelly/farmhelperv2/event/UpdateTablistFooterEvent.java"
+        ],
+        "member_count": 2,
+        "members": [
+          { "path": "src/main/java/com/jelly/farmhelperv2/event/UpdateTablistEvent.java", "blob": "ba5b8c66222daa2ddcafed4751d4cfb0f419dde2", "size_bytes": 388, "row_sha256": "530fa43d58a99b92a259f5cf42ac64c3b6b46f1ef44a6e5e8df33c59e3160ad2" },
+          { "path": "src/main/java/com/jelly/farmhelperv2/event/UpdateTablistFooterEvent.java", "blob": "b879a859f5bfa132407cb6b6750c0a0b5f200693", "size_bytes": 311, "row_sha256": "e00b5f57ced4dea734aa6b21a883e8b96ad53b5ff3801ac4de8431b12d48b528" }
+        ],
+        "accepted_definition_sha256": "65dd44a4917b42dd1224a0ae8946812774089a98aff81db12e61e8679ad0a1b5",
+        "accepted_member_rows_sha256": "f0cd7ae5f0ca5a927c60770d862e5c26b3a7e7a32ad61a6261b1dd075fb840e5",
+        "source_successor_closure_package_ids": [
+          "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+        ]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "retained_control_recovery_evidence"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-014",
+      "key": "failsafe-core",
+      "mechanism": "Failsafe Core mechanism and source surface",
+      "surface": "Fixed-upstream Failsafe Core path cluster",
+      "classification": "not_yet_ported",
+      "source": {
+        "upstream_path_anchors": [
+          "src/main/java/com/jelly/farmhelperv2/failsafe/Failsafe.java",
+          "src/main/java/com/jelly/farmhelperv2/failsafe/FailsafeManager.java"
+        ],
+        "member_count": 2,
+        "members": [
+          { "path": "src/main/java/com/jelly/farmhelperv2/failsafe/Failsafe.java", "blob": "bea7e87c80cf456daa3d00377cd68ea02f4e79bb", "size_bytes": 1538, "row_sha256": "19d3c02ec13304d3de28f0f6a5e69426adff6341aaeaf0ef0473f5768855e886" },
+          { "path": "src/main/java/com/jelly/farmhelperv2/failsafe/FailsafeManager.java", "blob": "07038cf79b0093c9af30f92ff390c211df28782a", "size_bytes": 23475, "row_sha256": "db0196aa11d12d05b881a4a64baa82df45035f371317da90638d2d447e910ccd" }
+        ],
+        "accepted_definition_sha256": "66c5a8a9a8af87066390e501920f5622e95f493bfbfbe6580ac5be23caf130a9",
+        "accepted_member_rows_sha256": "45503c41fc224a763fcc37967da1cd18b0281f9a0da2da6b1bc78ac2b38210f2",
+        "source_successor_closure_package_ids": [
+          "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+        ]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "retained_control_recovery_evidence"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-015",
+      "key": "failsafe-bad-effects",
+      "mechanism": "Failsafe Bad Effects mechanism and source surface",
+      "surface": "Fixed-upstream Failsafe Bad Effects path cluster",
+      "classification": "not_yet_ported",
+      "source": {
+        "upstream_path_anchors": [
+          "src/main/java/com/jelly/farmhelperv2/failsafe/impl/BadEffectsFailsafe.java"
+        ],
+        "member_count": 1,
+        "members": [
+          { "path": "src/main/java/com/jelly/farmhelperv2/failsafe/impl/BadEffectsFailsafe.java", "blob": "3c99a6a47a948ed1f5d6ac1365b56fbdb79b232a", "size_bytes": 13236, "row_sha256": "431c1c518a57d001e8c9600a6320e84267cd0ec96aee89c1c46219210e55d4cc" }
+        ],
+        "accepted_definition_sha256": "4f3457c3685ab9a6bc8bae54ad67b9371c79455ff78cc59a4d258e873120158a",
+        "accepted_member_rows_sha256": "431c1c518a57d001e8c9600a6320e84267cd0ec96aee89c1c46219210e55d4cc",
+        "source_successor_closure_package_ids": [
+          "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+        ]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "retained_control_recovery_evidence"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-016",
+      "key": "failsafe-banwave",
+      "mechanism": "Failsafe Banwave mechanism and source surface",
+      "surface": "Fixed-upstream Failsafe Banwave path cluster",
+      "classification": "not_yet_ported",
+      "source": {
+        "upstream_path_anchors": [
+          "src/main/java/com/jelly/farmhelperv2/failsafe/impl/BanwaveFailsafe.java"
+        ],
+        "member_count": 1,
+        "members": [
+          { "path": "src/main/java/com/jelly/farmhelperv2/failsafe/impl/BanwaveFailsafe.java", "blob": "c7fb077595acc3edfeb0cc19a4ef6d9f5ee877f8", "size_bytes": 4163, "row_sha256": "fa8e97f6a8c9599721adb981e38147c8ee72f60ad6ac82c7efdbc6b92bed114e" }
+        ],
+        "accepted_definition_sha256": "f39c367fb7ed3c82e47d5483fa7c63b733da55c4c99c3185966d2009e2e6b9fa",
+        "accepted_member_rows_sha256": "fa8e97f6a8c9599721adb981e38147c8ee72f60ad6ac82c7efdbc6b92bed114e",
+        "source_successor_closure_package_ids": [
+          "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+        ]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "retained_control_recovery_evidence"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-017",
+      "key": "failsafe-bedrock-cage",
+      "mechanism": "Failsafe Bedrock Cage mechanism and source surface",
+      "surface": "Fixed-upstream Failsafe Bedrock Cage path cluster",
+      "classification": "not_yet_ported",
+      "source": {
+        "upstream_path_anchors": [
+          "src/main/java/com/jelly/farmhelperv2/failsafe/impl/BedrockCageFailsafe.java"
+        ],
+        "member_count": 1,
+        "members": [
+          { "path": "src/main/java/com/jelly/farmhelperv2/failsafe/impl/BedrockCageFailsafe.java", "blob": "80d6e24db1b38e2dd0841b73337723ce7af7ecb6", "size_bytes": 16001, "row_sha256": "1b2c44065013e147de21d4ffa188e19534ca365db302a8a436db03cc81dea498" }
+        ],
+        "accepted_definition_sha256": "9e4662eda906be897f0fb73a4b8ff22d99507cb834019945b99d9cf8f06ce9b9",
+        "accepted_member_rows_sha256": "1b2c44065013e147de21d4ffa188e19534ca365db302a8a436db03cc81dea498",
+        "source_successor_closure_package_ids": [
+          "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+        ]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "retained_control_recovery_evidence"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-018",
+      "key": "failsafe-cobweb",
+      "mechanism": "Failsafe Cobweb mechanism and source surface",
+      "surface": "Fixed-upstream Failsafe Cobweb path cluster",
+      "classification": "not_yet_ported",
+      "source": {
+        "upstream_path_anchors": [
+          "src/main/java/com/jelly/farmhelperv2/failsafe/impl/CobwebFailsafe.java"
+        ],
+        "member_count": 1,
+        "members": [
+          { "path": "src/main/java/com/jelly/farmhelperv2/failsafe/impl/CobwebFailsafe.java", "blob": "e29c79c7455b18a5d4d970f941e71fae7ed659ba", "size_bytes": 13858, "row_sha256": "245ad62d1728606d10f9953ee530766cf19a6d1d5474fe09f4da4498fa188403" }
+        ],
+        "accepted_definition_sha256": "946ca793e5ff6361f3a2cb6b4292754adf6830dfa7a56ea9f429fa86bfac0651",
+        "accepted_member_rows_sha256": "245ad62d1728606d10f9953ee530766cf19a6d1d5474fe09f4da4498fa188403",
+        "source_successor_closure_package_ids": [
+          "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+        ]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "retained_control_recovery_evidence"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-019",
+      "key": "failsafe-dirt",
+      "mechanism": "Failsafe Dirt mechanism and source surface",
+      "surface": "Fixed-upstream Failsafe Dirt path cluster",
+      "classification": "not_yet_ported",
+      "source": {
+        "upstream_path_anchors": [
+          "src/main/java/com/jelly/farmhelperv2/failsafe/impl/DirtFailsafe.java"
+        ],
+        "member_count": 1,
+        "members": [
+          { "path": "src/main/java/com/jelly/farmhelperv2/failsafe/impl/DirtFailsafe.java", "blob": "c3eea2f5c8d9e3f27b47ed414e1ccef77edf9602", "size_bytes": 15986, "row_sha256": "2ff0756fb492a5e2b4a4ef62e8a3f926dbb80448eb56fb901c487821978b6d12" }
+        ],
+        "accepted_definition_sha256": "04c1eae95f924735b79325c8d864942cf0dc778e5b361bca6c8f7cb3ba424c76",
+        "accepted_member_rows_sha256": "2ff0756fb492a5e2b4a4ef62e8a3f926dbb80448eb56fb901c487821978b6d12",
+        "source_successor_closure_package_ids": [
+          "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+        ]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "retained_control_recovery_evidence"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-020",
+      "key": "failsafe-disconnect",
+      "mechanism": "Failsafe Disconnect mechanism and source surface",
+      "surface": "Fixed-upstream Failsafe Disconnect path cluster",
+      "classification": "not_yet_ported",
+      "source": {
+        "upstream_path_anchors": [
+          "src/main/java/com/jelly/farmhelperv2/failsafe/impl/DisconnectFailsafe.java"
+        ],
+        "member_count": 1,
+        "members": [
+          { "path": "src/main/java/com/jelly/farmhelperv2/failsafe/impl/DisconnectFailsafe.java", "blob": "d99ecffccfbdefe0a1c3144bfc1ffccf91c93646", "size_bytes": 3606, "row_sha256": "a4a3d07a1094df3a88215dd92297843f9098437bc84ed5771972b9d05df78a41" }
+        ],
+        "accepted_definition_sha256": "d8779f5dd480d8d471470aaf19056101222c500237d918bc11e4d6bcf8296159",
+        "accepted_member_rows_sha256": "a4a3d07a1094df3a88215dd92297843f9098437bc84ed5771972b9d05df78a41",
+        "source_successor_closure_package_ids": [
+          "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+        ]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "retained_control_recovery_evidence"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-021",
+      "key": "failsafe-evacuate",
+      "mechanism": "Failsafe Evacuate mechanism and source surface",
+      "surface": "Fixed-upstream Failsafe Evacuate path cluster",
+      "classification": "not_yet_ported",
+      "source": {
+        "upstream_path_anchors": [
+          "src/main/java/com/jelly/farmhelperv2/failsafe/impl/EvacuateFailsafe.java"
+        ],
+        "member_count": 1,
+        "members": [
+          { "path": "src/main/java/com/jelly/farmhelperv2/failsafe/impl/EvacuateFailsafe.java", "blob": "0b11ad39eefaceb3687792a57e4853557f822545", "size_bytes": 4941, "row_sha256": "195d75520765ef3e91b69d0d4b2c8094979e913c66f6baaa0e77db82c2ea45b6" }
+        ],
+        "accepted_definition_sha256": "af17d43a50b21b1a2adaebbefd75ae13c1776d67020910aa90bb61624699d86d",
+        "accepted_member_rows_sha256": "195d75520765ef3e91b69d0d4b2c8094979e913c66f6baaa0e77db82c2ea45b6",
+        "source_successor_closure_package_ids": [
+          "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+        ]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "retained_control_recovery_evidence"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-022",
+      "key": "failsafe-full-inventory",
+      "mechanism": "Failsafe Full Inventory mechanism and source surface",
+      "surface": "Fixed-upstream Failsafe Full Inventory path cluster",
+      "classification": "not_yet_ported",
+      "source": {
+        "upstream_path_anchors": [
+          "src/main/java/com/jelly/farmhelperv2/failsafe/impl/FullInventoryFailsafe.java"
+        ],
+        "member_count": 1,
+        "members": [
+          { "path": "src/main/java/com/jelly/farmhelperv2/failsafe/impl/FullInventoryFailsafe.java", "blob": "8a8c3438d81c5a353671d45e684b1c125334b3b6", "size_bytes": 4916, "row_sha256": "8c0696eae6b53e2daf7cfd7947ddcfc66e44be758c2b8fa5fa87753da8bca154" }
+        ],
+        "accepted_definition_sha256": "ef2a2e01a63b50ca00ba6624be3e00facf2fd4adb0d872dae0607ade55c589ca",
+        "accepted_member_rows_sha256": "8c0696eae6b53e2daf7cfd7947ddcfc66e44be758c2b8fa5fa87753da8bca154",
+        "source_successor_closure_package_ids": [
+          "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+        ]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "retained_control_recovery_evidence"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-023",
+      "key": "failsafe-guest-visit",
+      "mechanism": "Failsafe Guest Visit mechanism and source surface",
+      "surface": "Fixed-upstream Failsafe Guest Visit path cluster",
+      "classification": "not_yet_ported",
+      "source": {
+        "upstream_path_anchors": [
+          "src/main/java/com/jelly/farmhelperv2/failsafe/impl/GuestVisitFailsafe.java"
+        ],
+        "member_count": 1,
+        "members": [
+          { "path": "src/main/java/com/jelly/farmhelperv2/failsafe/impl/GuestVisitFailsafe.java", "blob": "050f1a1a21d9b8cf2f4904712eb83228aa8b2614", "size_bytes": 4433, "row_sha256": "cd214b3439b0e57b579f2beb89d24a8588492ad105c06dc541a31888dfd7f7f5" }
+        ],
+        "accepted_definition_sha256": "9ff3c39ebb103726e2d25a2fff35b0da0dc95580e2bb967120eafc6c3e1642a0",
+        "accepted_member_rows_sha256": "cd214b3439b0e57b579f2beb89d24a8588492ad105c06dc541a31888dfd7f7f5",
+        "source_successor_closure_package_ids": [
+          "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+        ]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "retained_control_recovery_evidence"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-024",
+      "key": "failsafe-item-change",
+      "mechanism": "Failsafe Item Change mechanism and source surface",
+      "surface": "Fixed-upstream Failsafe Item Change path cluster",
+      "classification": "not_yet_ported",
+      "source": {
+        "upstream_path_anchors": [
+          "src/main/java/com/jelly/farmhelperv2/failsafe/impl/ItemChangeFailsafe.java"
+        ],
+        "member_count": 1,
+        "members": [
+          { "path": "src/main/java/com/jelly/farmhelperv2/failsafe/impl/ItemChangeFailsafe.java", "blob": "96e48a67c490a3a91d70267cebd1b5952946ab36", "size_bytes": 4869, "row_sha256": "a6c666e2a97b591e338c8672acdccd04f0f93fcc34417e6caeb77c72ceb9f5d1" }
+        ],
+        "accepted_definition_sha256": "74868dfca907f8471d73092ba53d3359934f8f0d90a39f8edaf2a481b7f20e8f",
+        "accepted_member_rows_sha256": "a6c666e2a97b591e338c8672acdccd04f0f93fcc34417e6caeb77c72ceb9f5d1",
+        "source_successor_closure_package_ids": [
+          "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+        ]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "retained_control_recovery_evidence", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix", "reachable_refs"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "retained_control_recovery_evidence"], "successor": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01" }
+      }
+    }
+  ],
+  "coverage": {
+    "assigned_ac_count": 12,
+    "expected_ac_count": 12,
+    "assigned_ids": [
+      "AC-013",
+      "AC-014",
+      "AC-015",
+      "AC-016",
+      "AC-017",
+      "AC-018",
+      "AC-019",
+      "AC-020",
+      "AC-021",
+      "AC-022",
+      "AC-023",
+      "AC-024"
+    ],
+    "assigned_ids_unique": true,
+    "assigned_ids_exact": true,
+    "duplicate_id_count": 0,
+    "out_of_slice_row_count": 0,
+    "remainder_row_count": 0,
+    "assigned_member_row_count": 14,
+    "resolved_field_counts": {
+      "phase": 0,
+      "canonical_target_or_removal_authority": 0,
+      "future_owner": 0,
+      "total": 0
+    },
+    "unresolved_field_counts": {
+      "phase": 12,
+      "canonical_target_or_removal_authority": 12,
+      "future_owner": 12,
+      "total": 36
+    },
+    "source_rows_preserved": 12,
+    "source_rows_with_null_authority": 12
+  },
+  "handoff": {
+    "disposition": "FINITE_BLOCK",
+    "successor_package": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01",
+    "self_approval": false,
+    "inventory_approval": false,
+    "product_or_player_claim": false,
+    "closure_owner_claim": false
+  }
+}

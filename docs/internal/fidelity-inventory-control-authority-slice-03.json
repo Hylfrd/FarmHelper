@@ -1,0 +1,999 @@
+{
+    "format":  "farm-helper-fidelity-inventory-control-authority-slice",
+    "schema_version":  1,
+    "status":  "FINITE_BLOCK",
+    "verdict":  "BLOCK",
+    "binding":  {
+                    "package_id":  "FIDELITY-AUTHORITY-SLICE-03-REMEDIATION-01",
+                    "campaign_id":  "M001-INVENTORY-CONTROL-AUTHORITY-SLICES",
+                    "mandate_id":  "M-001",
+                    "intent_id":  "INT-AUTH-S03-B01",
+                    "role":  "BUILDER",
+                    "task_id":  "019fe755-9f52-7231-8ec1-f2ac20b223ac",
+                    "parent_task_id":  "019fe727-3e71-7a43-8fe6-c353a4942fb2",
+                    "model_effort":  "gpt-5.6-luna/max",
+                    "model_effort_evidence":  "DELEGATED_INPUT_ONLY; runtime model/effort receipt is not exposed.",
+                    "base_ref":  "refs/heads/codex/fidelity-inventory-control-authority-slice-03-r208-01",
+                    "base_sha":  "bb94de6608a516185b75dbab538430ce50f7941d",
+                    "base_tree":  "43da0d762052b7c2ee3af25146f321a5f40e7646",
+                    "fixed_upstream_sha":  "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+                    "canonical_target_sha":  "1004be1393f48fc8e8656720fe475bd54e5278a0",
+                    "canonical_target_tree":  "82c76f4ce983eb7bc49003501be8a5e2ac53b1fd",
+                    "assignment_sha256":  "f511786da20895c99cd80c9e17fae5c0d18de463fa87fa9480286dd665c6f11d",
+                    "assignment_hash_basis":  "Delegated assignment SHA-256 supplied by the parent task; canonical assignment payload is not exposed in this task.",
+                    "approved_source_ledger_sha256":  "49011d463881c979ef8670024f3f58aaf20f40f12f84ca631642bfe83321aac7",
+                    "source_review_handoff_sha256":  "69df231109a95fe7826ea9d75fd6d4b45bc3c80e1e4a61f4a8b302df16514a",
+                    "owned_output_path":  "docs/internal/fidelity-inventory-control-authority-slice-03.json",
+                    "owned_audit_cluster_ids":  [
+                                                    "AC-025",
+                                                    "AC-026",
+                                                    "AC-027",
+                                                    "AC-028",
+                                                    "AC-029",
+                                                    "AC-030",
+                                                    "AC-031",
+                                                    "AC-032",
+                                                    "AC-033",
+                                                    "AC-034",
+                                                    "AC-035",
+                                                    "AC-036"
+                                                ],
+                    "successor_review_package":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                },
+    "evidence_basis":  {
+                           "accepted_source_ledger":  {
+                                                           "git_ref":  "bb94de6608a516185b75dbab538430ce50f7941d:docs/internal/fidelity-inventory-control-projection-source.json",
+                                                          "git_blob":  "a5577feea956e66bc56c412b65e845e3a766f1ad",
+                                                          "size_bytes":  466075,
+                                                          "sha256":  "49011d463881c979ef8670024f3f58aaf20f40f12f84ca631642bfe83321aac7",
+                                                          "canonical_size_bytes":  367126,
+                                                           "canonical_sha256":  "b2bec4a4e33901f1470d534969bb99d13e2385e9921c883bcc36bc23cf99ec8a",
+                                                           "status":  "SOURCE_MATERIALIZED_UNRESOLVED",
+                                                           "accepted_ac_row_count":  129,
+                                                           "assigned_ac_row_count":  12,
+                                                           "assigned_member_row_count":  14,
+                                                           "authority_claims":  {
+                                                                                  "phase_mapping_authoritative":  false,
+                                                                                  "target_mapping_authoritative":  false,
+                                                                                  "removal_authority_complete":  false,
+                                                                                  "future_owner_authority_complete":  false
+                                                                              },
+                                                           "phase_rows":  {
+                                                                            "count":  9,
+                                                                            "states":  "FOUNDATION/P0-P7 all UNINVENTORIED"
+                                                                        }
+                                                       },
+                            "accepted_cluster_artifact":  {
+                                                              "git_ref":  "bb94de6608a516185b75dbab538430ce50f7941d:docs/internal/fidelity-inventory-clusters.json",
+                                                             "git_blob":  "7a42f5002a26286cd204bc69a2fec1c7b5f71eb5",
+                                                             "size_bytes":  254482,
+                                                             "sha256":  "d70ed08138dc98320c8a89a26702da26db1c20d9c3186721188b15d23a6efc14",
+                                                             "cluster_count":  129,
+                                                              "member_row_count":  292,
+                                                              "canonical_sha256":  "79369a63ea70715c9846407aa82d1017c0207be203bf092f040ae7c81e775438",
+                                                              "coverage":  "zero missing, duplicate, unknown, or implicit-remainder member rows",
+                                                              "successor_closure":  {
+                                                                                       "finite":  true,
+                                                                                       "package_ids":  [
+                                                                                                           "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                                                       ]
+                                                                                   }
+                                                          },
+                            "preserved_inventory_evidence":  {
+                                                               "source_rows_preserved":  12,
+                                                               "source_rows_with_null_authority":  12,
+                                                               "assigned_member_rows_preserved":  14,
+                                                               "fixed_upstream_blob_matches":  14,
+                                                               "fixed_upstream_blob_mismatches":  0,
+                                                               "interpretation":  "The accepted ledger and stable clusters preserve row identity and fixed-upstream source anchors only; they do not supply accepted per-AC authority values."
+                                                           },
+                           "source_review_handoff":  {
+                                                         "path":  "logs/control-evidence/task-handoff-019fb5e2-inventory-control-projection-source-review-approve-r203.json",
+                                                         "sha256":  "69df231109a95fe7826ea9d75fd6d4b45bc3c80e1e4a61f4a8b302df16514a",
+                                                         "verdict":  "APPROVE_SOURCE_LEDGER_ONLY",
+                                                         "unresolved_phase_ac_count":  129,
+                                                         "unresolved_target_or_removal_authority_ac_count":  129,
+                                                         "unresolved_future_owner_ac_count":  129,
+                                                         "scope_limit":  "The handoff approves only the exact immutable source ledger; authoritative projection completeness remains unaccepted."
+                                                     },
+                           "fixed_upstream_objects":  {
+                                                          "commit":  "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+                                                          "tree":  "dfbaaf9ce75f9adc625352396acaa9138a8b97f8",
+                                                           "assigned_member_paths_checked":  14,
+                                                           "assigned_member_blob_matches":  14,
+                                                           "assigned_member_blob_mismatches":  0,
+                                                           "basis":  "The assigned source member rows and their Git blob/hash anchors are read from and match the fixed-upstream Git objects."
+                                                       },
+                           "canonical_target_objects":  {
+                                                            "commit":  "1004be1393f48fc8e8656720fe475bd54e5278a0",
+                                                            "tree":  "82c76f4ce983eb7bc49003501be8a5e2ac53b1fd",
+                                                             "parity_matrix_git_blob":  "41ae39a5251e3d276d2515717b47173905445220",
+                                                             "exact_old_upstream_anchor_paths_checked":  14,
+                                                             "exact_old_upstream_anchor_overlap_for_assigned_rows":  0,
+                                                             "exact_cluster_keys_checked":  12,
+                                                             "exact_cluster_key_overlap":  0,
+                                                             "exact_cluster_ids_checked":  12,
+                                                             "exact_cluster_id_overlap":  0,
+                                                             "interpretation":  "The target tree and parity matrix were searched for exact assigned source anchors, stable cluster keys/IDs and AC-keyed authority. Semantic migration intent is evidence to review, not an accepted per-AC phase or target/removal ledger."
+                                                         },
+                            "canonical_parity_matrix":  {
+                                                             "git_ref":  "1004be1393f48fc8e8656720fe475bd54e5278a0:docs/internal/upstream-parity-matrix.md",
+                                                             "git_blob":  "41ae39a5251e3d276d2515717b47173905445220",
+                                                             "interpretation":  "Named upstream mechanisms have semantic migration-track references, but the matrix contains no accepted AC-keyed phase, canonical target, removal-authority, or future-owner ledger."
+                                                         }
+                       },
+    "phase_rows":  [
+                       {
+                           "phase":  "FOUNDATION",
+                           "state":  "UNINVENTORIED"
+                       },
+                       {
+                           "phase":  "P0",
+                           "state":  "UNINVENTORIED"
+                       },
+                       {
+                           "phase":  "P1",
+                           "state":  "UNINVENTORIED"
+                       },
+                       {
+                           "phase":  "P2",
+                           "state":  "UNINVENTORIED"
+                       },
+                       {
+                           "phase":  "P3",
+                           "state":  "UNINVENTORIED"
+                       },
+                       {
+                           "phase":  "P4",
+                           "state":  "UNINVENTORIED"
+                       },
+                       {
+                           "phase":  "P5",
+                           "state":  "UNINVENTORIED"
+                       },
+                       {
+                           "phase":  "P6",
+                           "state":  "UNINVENTORIED"
+                       },
+                       {
+                           "phase":  "P7",
+                           "state":  "UNINVENTORIED"
+                       }
+                   ],
+    "blocker_catalog":  {
+                            "B-PHASE-AUTHORITY-MISSING":  {
+                                                               "blocker":  "The preserved source-projection artifact (blob a5577feea956e66bc56c412b65e845e3a766f1ad, SHA-256 49011d463881c979ef8670024f3f58aaf20f40f12f84ca631642bfe83321aac7) has phase:null for all 12 assigned rows, phase_mapping_authoritative:false, and nine FOUNDATION/P0-P7 rows all UNINVENTORIED. The source-review handoff records unresolved_phase_ac_count=129. Fixed-upstream validates source blobs only, while the canonical parity matrix has no accepted AC-keyed phase ledger; phase remains null.",
+                                                              "evidence_searched":  [
+                                                                                        "accepted_source_ledger",
+                                                                                        "preserved_inventory_evidence",
+                                                                                        "source_review_handoff",
+                                                                                        "fixed_upstream_objects",
+                                                                                        "canonical_target_objects",
+                                                                                        "canonical_parity_matrix"
+                                                                                    ],
+                                                              "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                          },
+                            "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING":  {
+                                                                           "blocker":  "The preserved source-projection rows have target:null and removal_authority:null, and the source claims target_mapping_authoritative:false and removal_authority_complete:false. All 14 fixed-upstream member blobs match their preserved anchors, but the canonical target search found zero exact old-upstream path overlap out of 14, zero stable-key overlap out of 12, and zero AC-ID overlap out of 12. The parity matrix is semantic migration intent, not an accepted target/removal ledger; neither target nor removal authority can be asserted.",
+                                                                           "evidence_searched":  [
+                                                                                                     "accepted_source_ledger",
+                                                                                                     "preserved_inventory_evidence",
+                                                                                                     "source_review_handoff",
+                                                                                                     "fixed_upstream_objects",
+                                                                                                     "canonical_target_objects",
+                                                                                                     "canonical_parity_matrix"
+                                                                                                ],
+                                                                          "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                      },
+                            "B-FUTURE-CLOSURE-OWNER-MISSING":  {
+                                                                    "blocker":  "The preserved source-projection rows have future_owner:null and future_owner_authority_complete:false. Stable cluster coverage is complete for row identity, but its finite successor closure contains only FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03, a materialization-review package rather than an assigned nonterminal closure owner. The source-review handoff records unresolved_future_owner_ac_count=129; no future owner is asserted.",
+                                                                   "evidence_searched":  [
+                                                                                             "accepted_source_ledger",
+                                                                                             "preserved_inventory_evidence",
+                                                                                             "accepted_cluster_artifact",
+                                                                                             "source_review_handoff"
+                                                                                         ],
+                                                                   "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                               }
+                        },
+    "rows":  [
+                 {
+                     "id":  "AC-025",
+                     "key":  "failsafe-jacob",
+                     "mechanism":  "Failsafe Jacob mechanism and source surface",
+                     "surface":  "Fixed-upstream Failsafe Jacob path cluster",
+                     "classification":  "not_yet_ported",
+                     "source":  {
+                                    "upstream_path_anchors":  [
+                                                                  "src/main/java/com/jelly/farmhelperv2/failsafe/impl/JacobFailsafe.java"
+                                                              ],
+                                    "member_count":  1,
+                                    "members":  [
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/failsafe/impl/JacobFailsafe.java",
+                                                        "blob":  "b20ee8f3201f10901a2803b4e8577865af3d49fb",
+                                                        "size_bytes":  5341,
+                                                        "row_sha256":  "60feabc937cdd037795093476df517c7555893ebc8a84ab09c5e9e2f0bfb6e9c"
+                                                    }
+                                                ],
+                                    "accepted_definition_sha256":  "7e11f081e1c94191532f7d59e6261efb678204481a4bd1d05cea4604c2ebc023",
+                                    "accepted_member_rows_sha256":  "60feabc937cdd037795093476df517c7555893ebc8a84ab09c5e9e2f0bfb6e9c",
+                                    "source_successor_closure_package_ids":  [
+                                                                                 "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                             ]
+                                },
+                     "phase":  null,
+                     "target":  null,
+                     "removal_authority":  null,
+                     "future_owner":  null,
+                     "resolution_status":  "BLOCKED",
+                     "unresolved":  {
+                                        "phase":  {
+                                                      "blocker_code":  "B-PHASE-AUTHORITY-MISSING",
+                                                      "evidence_searched":  [
+                                                                                "accepted_source_ledger",
+                                                                                "source_review_handoff",
+                                                                                "fixed_upstream_objects",
+                                                                                "canonical_target_objects"
+                                                                            ],
+                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                  },
+                                        "canonical_target_or_removal_authority":  {
+                                                                                      "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
+                                                                                      "evidence_searched":  [
+                                                                                                                "accepted_source_ledger",
+                                                                                                                "source_review_handoff",
+                                                                                                                "fixed_upstream_objects",
+                                                                                                                "canonical_target_objects"
+                                                                                                            ],
+                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                  },
+                                        "future_owner":  {
+                                                             "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
+                                                             "evidence_searched":  [
+                                                                                       "accepted_source_ledger",
+                                                                                       "accepted_cluster_artifact",
+                                                                                       "source_review_handoff"
+                                                                                   ],
+                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                         }
+                                    }
+                 },
+                 {
+                     "id":  "AC-026",
+                     "key":  "failsafe-knockback",
+                     "mechanism":  "Failsafe Knockback mechanism and source surface",
+                     "surface":  "Fixed-upstream Failsafe Knockback path cluster",
+                     "classification":  "not_yet_ported",
+                     "source":  {
+                                    "upstream_path_anchors":  [
+                                                                  "src/main/java/com/jelly/farmhelperv2/failsafe/impl/KnockbackFailsafe.java"
+                                                              ],
+                                    "member_count":  1,
+                                    "members":  [
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/failsafe/impl/KnockbackFailsafe.java",
+                                                        "blob":  "e452dc60218b2e6b637574d32586356f69c0685c",
+                                                        "size_bytes":  14423,
+                                                        "row_sha256":  "f6abc6dafcc7392f152c440be15a72bb6438ae1653212a45ec90f365c0f438c2"
+                                                    }
+                                                ],
+                                    "accepted_definition_sha256":  "f31cafa1e8d621c0e1a16a5fcbfbc9ce187106dac97782efc29cec3344ff8dde",
+                                    "accepted_member_rows_sha256":  "f6abc6dafcc7392f152c440be15a72bb6438ae1653212a45ec90f365c0f438c2",
+                                    "source_successor_closure_package_ids":  [
+                                                                                 "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                             ]
+                                },
+                     "phase":  null,
+                     "target":  null,
+                     "removal_authority":  null,
+                     "future_owner":  null,
+                     "resolution_status":  "BLOCKED",
+                     "unresolved":  {
+                                        "phase":  {
+                                                      "blocker_code":  "B-PHASE-AUTHORITY-MISSING",
+                                                      "evidence_searched":  [
+                                                                                "accepted_source_ledger",
+                                                                                "source_review_handoff",
+                                                                                "fixed_upstream_objects",
+                                                                                "canonical_target_objects"
+                                                                            ],
+                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                  },
+                                        "canonical_target_or_removal_authority":  {
+                                                                                      "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
+                                                                                      "evidence_searched":  [
+                                                                                                                "accepted_source_ledger",
+                                                                                                                "source_review_handoff",
+                                                                                                                "fixed_upstream_objects",
+                                                                                                                "canonical_target_objects"
+                                                                                                            ],
+                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                  },
+                                        "future_owner":  {
+                                                             "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
+                                                             "evidence_searched":  [
+                                                                                       "accepted_source_ledger",
+                                                                                       "accepted_cluster_artifact",
+                                                                                       "source_review_handoff"
+                                                                                   ],
+                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                         }
+                                    }
+                 },
+                 {
+                     "id":  "AC-027",
+                     "key":  "failsafe-lower-average-bps",
+                     "mechanism":  "Failsafe Lower Average Bps mechanism and source surface",
+                     "surface":  "Fixed-upstream Failsafe Lower Average Bps path cluster",
+                     "classification":  "not_yet_ported",
+                     "source":  {
+                                    "upstream_path_anchors":  [
+                                                                  "src/main/java/com/jelly/farmhelperv2/failsafe/impl/LowerAvgBpsFailsafe.java"
+                                                              ],
+                                    "member_count":  1,
+                                    "members":  [
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/failsafe/impl/LowerAvgBpsFailsafe.java",
+                                                        "blob":  "c928d22742da9df343770b49c19041c41cbd1ecb",
+                                                        "size_bytes":  6226,
+                                                        "row_sha256":  "39efe4610500b4922e4c46272f6644cc8ca757b5c03193d17cea9863aa1c287a"
+                                                    }
+                                                ],
+                                    "accepted_definition_sha256":  "d8da4675272883a36eadae86cf301a9200fb0689c4f7455b5482dbe121fc037f",
+                                    "accepted_member_rows_sha256":  "39efe4610500b4922e4c46272f6644cc8ca757b5c03193d17cea9863aa1c287a",
+                                    "source_successor_closure_package_ids":  [
+                                                                                 "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                             ]
+                                },
+                     "phase":  null,
+                     "target":  null,
+                     "removal_authority":  null,
+                     "future_owner":  null,
+                     "resolution_status":  "BLOCKED",
+                     "unresolved":  {
+                                        "phase":  {
+                                                      "blocker_code":  "B-PHASE-AUTHORITY-MISSING",
+                                                      "evidence_searched":  [
+                                                                                "accepted_source_ledger",
+                                                                                "source_review_handoff",
+                                                                                "fixed_upstream_objects",
+                                                                                "canonical_target_objects"
+                                                                            ],
+                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                  },
+                                        "canonical_target_or_removal_authority":  {
+                                                                                      "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
+                                                                                      "evidence_searched":  [
+                                                                                                                "accepted_source_ledger",
+                                                                                                                "source_review_handoff",
+                                                                                                                "fixed_upstream_objects",
+                                                                                                                "canonical_target_objects"
+                                                                                                            ],
+                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                  },
+                                        "future_owner":  {
+                                                             "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
+                                                             "evidence_searched":  [
+                                                                                       "accepted_source_ledger",
+                                                                                       "accepted_cluster_artifact",
+                                                                                       "source_review_handoff"
+                                                                                   ],
+                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                         }
+                                    }
+                 },
+                 {
+                     "id":  "AC-028",
+                     "key":  "failsafe-rotation",
+                     "mechanism":  "Failsafe Rotation mechanism and source surface",
+                     "surface":  "Fixed-upstream Failsafe Rotation path cluster",
+                     "classification":  "not_yet_ported",
+                     "source":  {
+                                    "upstream_path_anchors":  [
+                                                                  "src/main/java/com/jelly/farmhelperv2/failsafe/impl/RotationFailsafe.java"
+                                                              ],
+                                    "member_count":  1,
+                                    "members":  [
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/failsafe/impl/RotationFailsafe.java",
+                                                        "blob":  "0f4df2964b7afb9fc2f6bc29594e79e1cb24bf99",
+                                                        "size_bytes":  16688,
+                                                        "row_sha256":  "d3364ec866e5799d5d5cbdb19c2851c0c3a77303c245e00f2a5c0e3db7c938e0"
+                                                    }
+                                                ],
+                                    "accepted_definition_sha256":  "260676e35d9b53ae075578922e2d55d5e45b051ba7c39935d1f63f9cd403a303",
+                                    "accepted_member_rows_sha256":  "d3364ec866e5799d5d5cbdb19c2851c0c3a77303c245e00f2a5c0e3db7c938e0",
+                                    "source_successor_closure_package_ids":  [
+                                                                                 "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                             ]
+                                },
+                     "phase":  null,
+                     "target":  null,
+                     "removal_authority":  null,
+                     "future_owner":  null,
+                     "resolution_status":  "BLOCKED",
+                     "unresolved":  {
+                                        "phase":  {
+                                                      "blocker_code":  "B-PHASE-AUTHORITY-MISSING",
+                                                      "evidence_searched":  [
+                                                                                "accepted_source_ledger",
+                                                                                "source_review_handoff",
+                                                                                "fixed_upstream_objects",
+                                                                                "canonical_target_objects"
+                                                                            ],
+                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                  },
+                                        "canonical_target_or_removal_authority":  {
+                                                                                      "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
+                                                                                      "evidence_searched":  [
+                                                                                                                "accepted_source_ledger",
+                                                                                                                "source_review_handoff",
+                                                                                                                "fixed_upstream_objects",
+                                                                                                                "canonical_target_objects"
+                                                                                                            ],
+                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                  },
+                                        "future_owner":  {
+                                                             "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
+                                                             "evidence_searched":  [
+                                                                                       "accepted_source_ledger",
+                                                                                       "accepted_cluster_artifact",
+                                                                                       "source_review_handoff"
+                                                                                   ],
+                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                         }
+                                    }
+                 },
+                 {
+                     "id":  "AC-029",
+                     "key":  "failsafe-teleport",
+                     "mechanism":  "Failsafe Teleport mechanism and source surface",
+                     "surface":  "Fixed-upstream Failsafe Teleport path cluster",
+                     "classification":  "not_yet_ported",
+                     "source":  {
+                                    "upstream_path_anchors":  [
+                                                                  "src/main/java/com/jelly/farmhelperv2/failsafe/impl/TeleportFailsafe.java"
+                                                              ],
+                                    "member_count":  1,
+                                    "members":  [
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/failsafe/impl/TeleportFailsafe.java",
+                                                        "blob":  "18f56cd8269b049d1d4a00c22562928f5ffbbd5b",
+                                                        "size_bytes":  23534,
+                                                        "row_sha256":  "1edff29ffc1c80a55b127122a08dd60edd4e56c69e4f258d05cdad02e7d9d85b"
+                                                    }
+                                                ],
+                                    "accepted_definition_sha256":  "2a5507f86bed878f6650daa161b841e534ea2292576590fa54a95182219f2aa2",
+                                    "accepted_member_rows_sha256":  "1edff29ffc1c80a55b127122a08dd60edd4e56c69e4f258d05cdad02e7d9d85b",
+                                    "source_successor_closure_package_ids":  [
+                                                                                 "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                             ]
+                                },
+                     "phase":  null,
+                     "target":  null,
+                     "removal_authority":  null,
+                     "future_owner":  null,
+                     "resolution_status":  "BLOCKED",
+                     "unresolved":  {
+                                        "phase":  {
+                                                      "blocker_code":  "B-PHASE-AUTHORITY-MISSING",
+                                                      "evidence_searched":  [
+                                                                                "accepted_source_ledger",
+                                                                                "source_review_handoff",
+                                                                                "fixed_upstream_objects",
+                                                                                "canonical_target_objects"
+                                                                            ],
+                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                  },
+                                        "canonical_target_or_removal_authority":  {
+                                                                                      "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
+                                                                                      "evidence_searched":  [
+                                                                                                                "accepted_source_ledger",
+                                                                                                                "source_review_handoff",
+                                                                                                                "fixed_upstream_objects",
+                                                                                                                "canonical_target_objects"
+                                                                                                            ],
+                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                  },
+                                        "future_owner":  {
+                                                             "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
+                                                             "evidence_searched":  [
+                                                                                       "accepted_source_ledger",
+                                                                                       "accepted_cluster_artifact",
+                                                                                       "source_review_handoff"
+                                                                                   ],
+                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                         }
+                                    }
+                 },
+                 {
+                     "id":  "AC-030",
+                     "key":  "failsafe-world-change",
+                     "mechanism":  "Failsafe World Change mechanism and source surface",
+                     "surface":  "Fixed-upstream Failsafe World Change path cluster",
+                     "classification":  "not_yet_ported",
+                     "source":  {
+                                    "upstream_path_anchors":  [
+                                                                  "src/main/java/com/jelly/farmhelperv2/failsafe/impl/WorldChangeFailsafe.java"
+                                                              ],
+                                    "member_count":  1,
+                                    "members":  [
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/failsafe/impl/WorldChangeFailsafe.java",
+                                                        "blob":  "3c36f013727f6e1fb2496f745ef83debb0546b45",
+                                                        "size_bytes":  7795,
+                                                        "row_sha256":  "166777d6aff52936e4401b0da73825ccba5525b348f4787641eb30240510457e"
+                                                    }
+                                                ],
+                                    "accepted_definition_sha256":  "4911a05cc7787b3263be7cfdac574099627e80a50a379cb3c3d4068628a01750",
+                                    "accepted_member_rows_sha256":  "166777d6aff52936e4401b0da73825ccba5525b348f4787641eb30240510457e",
+                                    "source_successor_closure_package_ids":  [
+                                                                                 "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                             ]
+                                },
+                     "phase":  null,
+                     "target":  null,
+                     "removal_authority":  null,
+                     "future_owner":  null,
+                     "resolution_status":  "BLOCKED",
+                     "unresolved":  {
+                                        "phase":  {
+                                                      "blocker_code":  "B-PHASE-AUTHORITY-MISSING",
+                                                      "evidence_searched":  [
+                                                                                "accepted_source_ledger",
+                                                                                "source_review_handoff",
+                                                                                "fixed_upstream_objects",
+                                                                                "canonical_target_objects"
+                                                                            ],
+                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                  },
+                                        "canonical_target_or_removal_authority":  {
+                                                                                      "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
+                                                                                      "evidence_searched":  [
+                                                                                                                "accepted_source_ledger",
+                                                                                                                "source_review_handoff",
+                                                                                                                "fixed_upstream_objects",
+                                                                                                                "canonical_target_objects"
+                                                                                                            ],
+                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                  },
+                                        "future_owner":  {
+                                                             "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
+                                                             "evidence_searched":  [
+                                                                                       "accepted_source_ledger",
+                                                                                       "accepted_cluster_artifact",
+                                                                                       "source_review_handoff"
+                                                                                   ],
+                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                         }
+                                    }
+                 },
+                 {
+                     "id":  "AC-031",
+                     "key":  "feature-core",
+                     "mechanism":  "Feature Core mechanism and source surface",
+                     "surface":  "Fixed-upstream Feature Core path cluster",
+                     "classification":  "not_yet_ported",
+                     "source":  {
+                                    "upstream_path_anchors":  [
+                                                                  "src/main/java/com/jelly/farmhelperv2/feature/FeatureManager.java",
+                                                                  "src/main/java/com/jelly/farmhelperv2/feature/IFeature.java"
+                                                              ],
+                                    "member_count":  2,
+                                    "members":  [
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/feature/FeatureManager.java",
+                                                        "blob":  "620fa2763b42c42ad00df26c6569b0eba9f549d3",
+                                                        "size_bytes":  6125,
+                                                        "row_sha256":  "e8463e60c904e8b86da470a4031dede0227187d80d81ccb158735ae3553523ef"
+                                                    },
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/feature/IFeature.java",
+                                                        "blob":  "ebd550d87d003f68e5b2346bbf24805b68d8e1bd",
+                                                        "size_bytes":  777,
+                                                        "row_sha256":  "6171ae7c2cb54c68509aceccaf9f8603bb548f17da5f72a7ee3f81ee6a18190a"
+                                                    }
+                                                ],
+                                    "accepted_definition_sha256":  "34002f14c2b7449b5ee72260eb113411e84ca73fd54e0463f25cd8b44ec4f9d5",
+                                    "accepted_member_rows_sha256":  "224859294d29256aed311b56208d15b538fc477d7ed074ce87f9baa69bb798e1",
+                                    "source_successor_closure_package_ids":  [
+                                                                                 "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                             ]
+                                },
+                     "phase":  null,
+                     "target":  null,
+                     "removal_authority":  null,
+                     "future_owner":  null,
+                     "resolution_status":  "BLOCKED",
+                     "unresolved":  {
+                                        "phase":  {
+                                                      "blocker_code":  "B-PHASE-AUTHORITY-MISSING",
+                                                      "evidence_searched":  [
+                                                                                "accepted_source_ledger",
+                                                                                "source_review_handoff",
+                                                                                "fixed_upstream_objects",
+                                                                                "canonical_target_objects"
+                                                                            ],
+                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                  },
+                                        "canonical_target_or_removal_authority":  {
+                                                                                      "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
+                                                                                      "evidence_searched":  [
+                                                                                                                "accepted_source_ledger",
+                                                                                                                "source_review_handoff",
+                                                                                                                "fixed_upstream_objects",
+                                                                                                                "canonical_target_objects"
+                                                                                                            ],
+                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                  },
+                                        "future_owner":  {
+                                                             "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
+                                                             "evidence_searched":  [
+                                                                                       "accepted_source_ledger",
+                                                                                       "accepted_cluster_artifact",
+                                                                                       "source_review_handoff"
+                                                                                   ],
+                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                         }
+                                    }
+                 },
+                 {
+                     "id":  "AC-032",
+                     "key":  "feature-anti-stuck",
+                     "mechanism":  "Feature Anti Stuck mechanism and source surface",
+                     "surface":  "Fixed-upstream Feature Anti Stuck path cluster",
+                     "classification":  "not_yet_ported",
+                     "source":  {
+                                    "upstream_path_anchors":  [
+                                                                  "src/main/java/com/jelly/farmhelperv2/feature/impl/AntiStuck.java"
+                                                              ],
+                                    "member_count":  1,
+                                    "members":  [
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/feature/impl/AntiStuck.java",
+                                                        "blob":  "8fc8522097b8a73af3c11f117873963fe9954559",
+                                                        "size_bytes":  12694,
+                                                        "row_sha256":  "13db18b8ad3e4fe9a4fedb85bd72e51420a14d10a684fcec82ddc3ec489c3599"
+                                                    }
+                                                ],
+                                    "accepted_definition_sha256":  "bee3b010ce07656326c5b0269b67239d18785a02d0d483b73f504928e73f5869",
+                                    "accepted_member_rows_sha256":  "13db18b8ad3e4fe9a4fedb85bd72e51420a14d10a684fcec82ddc3ec489c3599",
+                                    "source_successor_closure_package_ids":  [
+                                                                                 "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                             ]
+                                },
+                     "phase":  null,
+                     "target":  null,
+                     "removal_authority":  null,
+                     "future_owner":  null,
+                     "resolution_status":  "BLOCKED",
+                     "unresolved":  {
+                                        "phase":  {
+                                                      "blocker_code":  "B-PHASE-AUTHORITY-MISSING",
+                                                      "evidence_searched":  [
+                                                                                "accepted_source_ledger",
+                                                                                "source_review_handoff",
+                                                                                "fixed_upstream_objects",
+                                                                                "canonical_target_objects"
+                                                                            ],
+                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                  },
+                                        "canonical_target_or_removal_authority":  {
+                                                                                      "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
+                                                                                      "evidence_searched":  [
+                                                                                                                "accepted_source_ledger",
+                                                                                                                "source_review_handoff",
+                                                                                                                "fixed_upstream_objects",
+                                                                                                                "canonical_target_objects"
+                                                                                                            ],
+                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                  },
+                                        "future_owner":  {
+                                                             "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
+                                                             "evidence_searched":  [
+                                                                                       "accepted_source_ledger",
+                                                                                       "accepted_cluster_artifact",
+                                                                                       "source_review_handoff"
+                                                                                   ],
+                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                         }
+                                    }
+                 },
+                 {
+                     "id":  "AC-033",
+                     "key":  "feature-auto-bazaar",
+                     "mechanism":  "Feature Auto Bazaar mechanism and source surface",
+                     "surface":  "Fixed-upstream Feature Auto Bazaar path cluster",
+                     "classification":  "not_yet_ported",
+                     "source":  {
+                                    "upstream_path_anchors":  [
+                                                                  "src/main/java/com/jelly/farmhelperv2/feature/impl/AutoBazaar.java"
+                                                              ],
+                                    "member_count":  1,
+                                    "members":  [
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/feature/impl/AutoBazaar.java",
+                                                        "blob":  "bba9eee6dc0da86287d33ab3dd80acd45e025ea8",
+                                                        "size_bytes":  24191,
+                                                        "row_sha256":  "eeb3f723b306f7dcd3c30e33b78d8f0f117fb82dd086721cec603e0c2e52c120"
+                                                    }
+                                                ],
+                                    "accepted_definition_sha256":  "22bae7b33cf805ce87d449a768daa6f1acdbdd13ded95cd2f375c7e544533663",
+                                    "accepted_member_rows_sha256":  "eeb3f723b306f7dcd3c30e33b78d8f0f117fb82dd086721cec603e0c2e52c120",
+                                    "source_successor_closure_package_ids":  [
+                                                                                 "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                             ]
+                                },
+                     "phase":  null,
+                     "target":  null,
+                     "removal_authority":  null,
+                     "future_owner":  null,
+                     "resolution_status":  "BLOCKED",
+                     "unresolved":  {
+                                        "phase":  {
+                                                      "blocker_code":  "B-PHASE-AUTHORITY-MISSING",
+                                                      "evidence_searched":  [
+                                                                                "accepted_source_ledger",
+                                                                                "source_review_handoff",
+                                                                                "fixed_upstream_objects",
+                                                                                "canonical_target_objects"
+                                                                            ],
+                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                  },
+                                        "canonical_target_or_removal_authority":  {
+                                                                                      "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
+                                                                                      "evidence_searched":  [
+                                                                                                                "accepted_source_ledger",
+                                                                                                                "source_review_handoff",
+                                                                                                                "fixed_upstream_objects",
+                                                                                                                "canonical_target_objects"
+                                                                                                            ],
+                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                  },
+                                        "future_owner":  {
+                                                             "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
+                                                             "evidence_searched":  [
+                                                                                       "accepted_source_ledger",
+                                                                                       "accepted_cluster_artifact",
+                                                                                       "source_review_handoff"
+                                                                                   ],
+                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                         }
+                                    }
+                 },
+                 {
+                     "id":  "AC-034",
+                     "key":  "feature-auto-composter",
+                     "mechanism":  "Feature Auto Composter mechanism and source surface",
+                     "surface":  "Fixed-upstream Feature Auto Composter path cluster",
+                     "classification":  "not_yet_ported",
+                     "source":  {
+                                    "upstream_path_anchors":  [
+                                                                  "src/main/java/com/jelly/farmhelperv2/feature/impl/AutoComposter.java"
+                                                              ],
+                                    "member_count":  1,
+                                    "members":  [
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/feature/impl/AutoComposter.java",
+                                                        "blob":  "9e92455dd20341d2bd2bc661a51a99ffa260a8e5",
+                                                        "size_bytes":  28202,
+                                                        "row_sha256":  "e85f5042693deba0d6cc30749b1d8c89fd907f17c40c522ba69413878abc231c"
+                                                    }
+                                                ],
+                                    "accepted_definition_sha256":  "bea1f87f027303b81d4171ccefb6a03abffca21369af219a036566cad2c6a5b1",
+                                    "accepted_member_rows_sha256":  "e85f5042693deba0d6cc30749b1d8c89fd907f17c40c522ba69413878abc231c",
+                                    "source_successor_closure_package_ids":  [
+                                                                                 "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                             ]
+                                },
+                     "phase":  null,
+                     "target":  null,
+                     "removal_authority":  null,
+                     "future_owner":  null,
+                     "resolution_status":  "BLOCKED",
+                     "unresolved":  {
+                                        "phase":  {
+                                                      "blocker_code":  "B-PHASE-AUTHORITY-MISSING",
+                                                      "evidence_searched":  [
+                                                                                "accepted_source_ledger",
+                                                                                "source_review_handoff",
+                                                                                "fixed_upstream_objects",
+                                                                                "canonical_target_objects"
+                                                                            ],
+                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                  },
+                                        "canonical_target_or_removal_authority":  {
+                                                                                      "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
+                                                                                      "evidence_searched":  [
+                                                                                                                "accepted_source_ledger",
+                                                                                                                "source_review_handoff",
+                                                                                                                "fixed_upstream_objects",
+                                                                                                                "canonical_target_objects"
+                                                                                                            ],
+                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                  },
+                                        "future_owner":  {
+                                                             "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
+                                                             "evidence_searched":  [
+                                                                                       "accepted_source_ledger",
+                                                                                       "accepted_cluster_artifact",
+                                                                                       "source_review_handoff"
+                                                                                   ],
+                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                         }
+                                    }
+                 },
+                 {
+                     "id":  "AC-035",
+                     "key":  "feature-consumables",
+                     "mechanism":  "Feature Consumables mechanism and source surface",
+                     "surface":  "Fixed-upstream Feature Consumables path cluster",
+                     "classification":  "not_yet_ported",
+                     "source":  {
+                                    "upstream_path_anchors":  [
+                                                                  "src/main/java/com/jelly/farmhelperv2/feature/impl/AutoCookie.java",
+                                                                  "src/main/java/com/jelly/farmhelperv2/feature/impl/AutoGodPot.java"
+                                                              ],
+                                    "member_count":  2,
+                                    "members":  [
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/feature/impl/AutoCookie.java",
+                                                        "blob":  "1b1fd4680689a1557d6917e4b30b3bd0f513fd1c",
+                                                        "size_bytes":  31033,
+                                                        "row_sha256":  "ae878bd1c5431b01363b2338cbc464c422ddf8894b26071ea714a5bec464862e"
+                                                    },
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/feature/impl/AutoGodPot.java",
+                                                        "blob":  "a99c4e8afaf9a33be49f4c9c0ec7b080a1981b37",
+                                                        "size_bytes":  52653,
+                                                        "row_sha256":  "cae7a721f5956e8cadca5d44050bb72a14349c7f8bd0c4c706b8b040d5a84128"
+                                                    }
+                                                ],
+                                    "accepted_definition_sha256":  "31ad929d8306e91a418363291f2d803787affc94c1baabeaabc608626dab7046",
+                                    "accepted_member_rows_sha256":  "615b876448f6cc3d9c952e3b2b3437685a0d946ca3e34a7af5e8e8ba475536c5",
+                                    "source_successor_closure_package_ids":  [
+                                                                                 "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                             ]
+                                },
+                     "phase":  null,
+                     "target":  null,
+                     "removal_authority":  null,
+                     "future_owner":  null,
+                     "resolution_status":  "BLOCKED",
+                     "unresolved":  {
+                                        "phase":  {
+                                                      "blocker_code":  "B-PHASE-AUTHORITY-MISSING",
+                                                      "evidence_searched":  [
+                                                                                "accepted_source_ledger",
+                                                                                "source_review_handoff",
+                                                                                "fixed_upstream_objects",
+                                                                                "canonical_target_objects"
+                                                                            ],
+                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                  },
+                                        "canonical_target_or_removal_authority":  {
+                                                                                      "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
+                                                                                      "evidence_searched":  [
+                                                                                                                "accepted_source_ledger",
+                                                                                                                "source_review_handoff",
+                                                                                                                "fixed_upstream_objects",
+                                                                                                                "canonical_target_objects"
+                                                                                                            ],
+                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                  },
+                                        "future_owner":  {
+                                                             "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
+                                                             "evidence_searched":  [
+                                                                                       "accepted_source_ledger",
+                                                                                       "accepted_cluster_artifact",
+                                                                                       "source_review_handoff"
+                                                                                   ],
+                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                         }
+                                    }
+                 },
+                 {
+                     "id":  "AC-036",
+                     "key":  "feature-pest-exchange",
+                     "mechanism":  "Feature Pest Exchange mechanism and source surface",
+                     "surface":  "Fixed-upstream Feature Pest Exchange path cluster",
+                     "classification":  "not_yet_ported",
+                     "source":  {
+                                    "upstream_path_anchors":  [
+                                                                  "src/main/java/com/jelly/farmhelperv2/feature/impl/AutoPestExchange.java"
+                                                              ],
+                                    "member_count":  1,
+                                    "members":  [
+                                                    {
+                                                        "path":  "src/main/java/com/jelly/farmhelperv2/feature/impl/AutoPestExchange.java",
+                                                        "blob":  "9728def45020d5c8f36c46ba125366fffc25e1b7",
+                                                        "size_bytes":  23841,
+                                                        "row_sha256":  "925f9f0768f41014584c4847100b663f445b6e602f67e8686df486107c2fe920"
+                                                    }
+                                                ],
+                                    "accepted_definition_sha256":  "1b134ebf8470af15f8efff00ffcd969153997560c1713310c7f80e4770ca9d3e",
+                                    "accepted_member_rows_sha256":  "925f9f0768f41014584c4847100b663f445b6e602f67e8686df486107c2fe920",
+                                    "source_successor_closure_package_ids":  [
+                                                                                 "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
+                                                                             ]
+                                },
+                     "phase":  null,
+                     "target":  null,
+                     "removal_authority":  null,
+                     "future_owner":  null,
+                     "resolution_status":  "BLOCKED",
+                     "unresolved":  {
+                                        "phase":  {
+                                                      "blocker_code":  "B-PHASE-AUTHORITY-MISSING",
+                                                      "evidence_searched":  [
+                                                                                "accepted_source_ledger",
+                                                                                "source_review_handoff",
+                                                                                "fixed_upstream_objects",
+                                                                                "canonical_target_objects"
+                                                                            ],
+                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                  },
+                                        "canonical_target_or_removal_authority":  {
+                                                                                      "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
+                                                                                      "evidence_searched":  [
+                                                                                                                "accepted_source_ledger",
+                                                                                                                "source_review_handoff",
+                                                                                                                "fixed_upstream_objects",
+                                                                                                                "canonical_target_objects"
+                                                                                                            ],
+                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                  },
+                                        "future_owner":  {
+                                                             "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
+                                                             "evidence_searched":  [
+                                                                                       "accepted_source_ledger",
+                                                                                       "accepted_cluster_artifact",
+                                                                                       "source_review_handoff"
+                                                                                   ],
+                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                         }
+                                    }
+                 }
+             ],
+    "coverage":  {
+                     "assigned_ac_count":  12,
+                     "expected_ac_count":  12,
+                     "assigned_ids_unique":  true,
+                     "assigned_ids_exact":  true,
+                     "out_of_slice_row_count":  0,
+                     "resolved_field_counts":  {
+                                                   "phase":  0,
+                                                   "canonical_target_or_removal_authority":  0,
+                                                   "future_owner":  0,
+                                                   "total":  0
+                                               },
+                     "unresolved_field_counts":  {
+                                                     "phase":  12,
+                                                     "canonical_target_or_removal_authority":  12,
+                                                     "future_owner":  12,
+                                                     "total":  36
+                                                 },
+                      "source_rows_preserved":  12,
+                      "source_rows_with_null_authority":  12,
+                      "assigned_member_row_count":  14,
+                      "fixed_upstream_member_blob_matches":  14,
+                      "fixed_upstream_member_blob_mismatches":  0,
+                      "authority_fields_remain_null":  [
+                                                            "phase",
+                                                            "target",
+                                                            "removal_authority",
+                                                            "future_owner"
+                                                        ]
+                 },
+    "handoff":  {
+                    "disposition":  "FINITE_BLOCK",
+                    "successor_package":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01",
+                    "self_approval":  false,
+                    "inventory_approval":  false,
+                    "product_or_player_claim":  false,
+                     "closure_owner_claim":  false,
+                     "authority_fields_resolved":  false,
+                     "preserved_inventory_only":  true
+                }
+}
