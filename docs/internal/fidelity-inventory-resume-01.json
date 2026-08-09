@@ -95,7 +95,7 @@
         "future_owner": 12,
         "total": 36
       },
-      "successor_review_package": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-01-REVIEW-01"
+      "successor_review_package": "FIDELITY-AUTHORITY-SLICE-01-REVIEW-01"
     },
     {
       "package_id": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02",
@@ -125,7 +125,7 @@
         "future_owner": 12,
         "total": 36
       },
-      "successor_review_package": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01"
+      "successor_review_package": "FIDELITY-AUTHORITY-SLICE-02-REVIEW-01"
     },
     {
       "package_id": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03",
@@ -154,9 +154,69 @@
         "future_owner": 12,
         "total": 36
       },
-      "successor_review_package": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+      "successor_review_package": "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
     }
   ],
+  "materialization_provenance": {
+    "slice_artifacts": [
+      {
+        "package_id": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-01",
+        "path": "docs/internal/fidelity-inventory-control-authority-slice-01.json",
+        "historical_pre_remediation": {
+          "commit": "ea6b4a3d40f6406697182122102322c57e7d4c42",
+          "tree": "1ec4c3f7e7c995174da21a9e831532b586fc7bad",
+          "blob": "0d2ea4799f7fc2eeec9b6e030a6f95ee1b683a73",
+          "role": "HISTORICAL_PRE_REMEDIATION_SLICE_BLOB"
+        },
+        "current_materialized_target": {
+          "commit": "f19a9850181f556263dd83af111b6d5e2abf7f6b",
+          "tree": "ee907924587de8e947bb4c851367ca55f7e3dee0",
+          "blob": "1f540a842423d26ecababa5491af007c41defaf0",
+          "role": "CURRENT_MATERIALIZED_TARGET_SLICE_BLOB"
+        }
+      },
+      {
+        "package_id": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02",
+        "path": "docs/internal/fidelity-inventory-control-authority-slice-02.json",
+        "historical_pre_remediation": {
+          "commit": "434329cbbd6048910b3702e36dc88e40b546e64a",
+          "tree": "fe516efa886c7b83ab7ade9f773e6a67c1b57abd",
+          "blob": "4df0a6bcfc8534c34c1d11b78ebe88b1e024965e",
+          "role": "HISTORICAL_PRE_REMEDIATION_SLICE_BLOB"
+        },
+        "current_materialized_target": {
+          "commit": "f19a9850181f556263dd83af111b6d5e2abf7f6b",
+          "tree": "ee907924587de8e947bb4c851367ca55f7e3dee0",
+          "blob": "150519a83faf0dd1f054496613b1a35739d1e6c3",
+          "role": "CURRENT_MATERIALIZED_TARGET_SLICE_BLOB"
+        }
+      },
+      {
+        "package_id": "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03",
+        "path": "docs/internal/fidelity-inventory-control-authority-slice-03.json",
+        "historical_pre_remediation": {
+          "commit": "bb94de6608a516185b75dbab538430ce50f7941d",
+          "tree": "43da0d762052b7c2ee3af25146f321a5f40e7646",
+          "blob": "2d3ee10c2407536bc6ccd534579bfb2361bcebf8",
+          "role": "HISTORICAL_PRE_REMEDIATION_SLICE_BLOB"
+        },
+        "current_materialized_target": {
+          "commit": "f19a9850181f556263dd83af111b6d5e2abf7f6b",
+          "tree": "ee907924587de8e947bb4c851367ca55f7e3dee0",
+          "blob": "892b076da7780a4132ee80535b49af0bc6c2eedc",
+          "role": "CURRENT_MATERIALIZED_TARGET_SLICE_BLOB"
+        }
+      }
+    ],
+    "interpretation": "The sibling commit/tree fields preserve pre-remediation history. The current materialized target entries identify the exact slice blobs in the reviewed master tree; neither replaces the other."
+  },
+  "terminal_successor_closure": {
+    "package_id": "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03",
+    "terminal": true,
+    "role": "MATERIALIZATION_REVIEW_ONLY",
+    "nonterminal_future_owner": false,
+    "interpretation": "This retained package is terminal materialization-review evidence and cannot be interpreted as a future closure owner."
+  },
   "coverage_reconciliation": {
     "accepted_source_rows": 292,
     "cluster_ledger_cluster_count": 129,
@@ -326,6 +386,8 @@
       "source_successor_closure_package_ids": [
         "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
       ],
+      "source_successor_closure_terminal": true,
+      "source_successor_closure_role": "MATERIALIZATION_REVIEW_ONLY",
       "successor_is_nonterminal_owner": false
     },
     "slice_status": {
@@ -477,10 +539,12 @@
     "source_successor_closure_package_ids": [
       "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"
     ],
+    "source_successor_closure_terminal": true,
+    "source_successor_closure_role": "MATERIALIZATION_REVIEW_ONLY",
     "slice_successor_review_packages": [
-      "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-01-REVIEW-01",
-      "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-02-REVIEW-01",
-      "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+      "FIDELITY-AUTHORITY-SLICE-01-REVIEW-01",
+      "FIDELITY-AUTHORITY-SLICE-02-REVIEW-01",
+      "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
     ],
     "uncovered_authority_cluster_ids": [
       "AC-037",

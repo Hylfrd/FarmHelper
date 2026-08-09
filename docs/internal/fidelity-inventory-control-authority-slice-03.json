@@ -22,7 +22,7 @@
                     "assignment_sha256":  "f511786da20895c99cd80c9e17fae5c0d18de463fa87fa9480286dd665c6f11d",
                     "assignment_hash_basis":  "Delegated assignment SHA-256 supplied by the parent task; canonical assignment payload is not exposed in this task.",
                     "approved_source_ledger_sha256":  "49011d463881c979ef8670024f3f58aaf20f40f12f84ca631642bfe83321aac7",
-                    "source_review_handoff_sha256":  "69df231109a95fe7826ea9d75fd6d4b45bc3c80e1e4a61f4a8b302df16514a",
+                    "source_review_handoff_sha256":  "69df231109a95feaf7826ea9d75fd6d4b45bc3c80e1e4a61f4a8b302df16514a",
                     "owned_output_path":  "docs/internal/fidelity-inventory-control-authority-slice-03.json",
                     "owned_audit_cluster_ids":  [
                                                     "AC-025",
@@ -38,8 +38,31 @@
                                                     "AC-035",
                                                     "AC-036"
                                                 ],
-                    "successor_review_package":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                    "successor_review_package":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                 },
+    "materialization_provenance":  {
+        "historical_pre_remediation":  {
+            "commit":  "bb94de6608a516185b75dbab538430ce50f7941d",
+            "tree":  "43da0d762052b7c2ee3af25146f321a5f40e7646",
+            "blob":  "2d3ee10c2407536bc6ccd534579bfb2361bcebf8",
+            "role":  "HISTORICAL_PRE_REMEDIATION_SLICE_BLOB"
+        },
+        "current_materialized_target":  {
+            "commit":  "f19a9850181f556263dd83af111b6d5e2abf7f6b",
+            "tree":  "ee907924587de8e947bb4c851367ca55f7e3dee0",
+            "path":  "docs/internal/fidelity-inventory-control-authority-slice-03.json",
+            "blob":  "892b076da7780a4132ee80535b49af0bc6c2eedc",
+            "role":  "CURRENT_MATERIALIZED_TARGET_SLICE_BLOB"
+        },
+        "interpretation":  "The binding base commit/tree and historical artifact identify the pre-remediation slice. The current materialized target identifies the exact slice blob in the reviewed master tree; neither replaces the other."
+    },
+    "terminal_successor_closure":  {
+        "package_id":  "FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03",
+        "terminal":  true,
+        "role":  "MATERIALIZATION_REVIEW_ONLY",
+        "nonterminal_future_owner":  false,
+        "interpretation":  "This retained package is terminal materialization-review evidence and cannot be interpreted as a future closure owner."
+    },
     "evidence_basis":  {
                            "accepted_source_ledger":  {
                                                            "git_ref":  "bb94de6608a516185b75dbab538430ce50f7941d:docs/internal/fidelity-inventory-control-projection-source.json",
@@ -89,7 +112,7 @@
                                                            },
                            "source_review_handoff":  {
                                                          "path":  "logs/control-evidence/task-handoff-019fb5e2-inventory-control-projection-source-review-approve-r203.json",
-                                                         "sha256":  "69df231109a95fe7826ea9d75fd6d4b45bc3c80e1e4a61f4a8b302df16514a",
+                                                         "sha256":  "69df231109a95feaf7826ea9d75fd6d4b45bc3c80e1e4a61f4a8b302df16514a",
                                                          "verdict":  "APPROVE_SOURCE_LEDGER_ONLY",
                                                          "unresolved_phase_ac_count":  129,
                                                          "unresolved_target_or_removal_authority_ac_count":  129,
@@ -171,7 +194,7 @@
                                                                                         "canonical_target_objects",
                                                                                         "canonical_parity_matrix"
                                                                                     ],
-                                                              "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                              "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                           },
                             "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING":  {
                                                                            "blocker":  "The preserved source-projection rows have target:null and removal_authority:null, and the source claims target_mapping_authoritative:false and removal_authority_complete:false. All 14 fixed-upstream member blobs match their preserved anchors, but the canonical target search found zero exact old-upstream path overlap out of 14, zero stable-key overlap out of 12, and zero AC-ID overlap out of 12. The parity matrix is semantic migration intent, not an accepted target/removal ledger; neither target nor removal authority can be asserted.",
@@ -183,7 +206,7 @@
                                                                                                      "canonical_target_objects",
                                                                                                      "canonical_parity_matrix"
                                                                                                 ],
-                                                                          "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                          "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                       },
                             "B-FUTURE-CLOSURE-OWNER-MISSING":  {
                                                                     "blocker":  "The preserved source-projection rows have future_owner:null and future_owner_authority_complete:false. Stable cluster coverage is complete for row identity, but its finite successor closure contains only FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03, a materialization-review package rather than an assigned nonterminal closure owner. The source-review handoff records unresolved_future_owner_ac_count=129; no future owner is asserted.",
@@ -193,7 +216,7 @@
                                                                                              "accepted_cluster_artifact",
                                                                                              "source_review_handoff"
                                                                                          ],
-                                                                   "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                   "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                }
                         },
     "rows":  [
@@ -236,7 +259,7 @@
                                                                                 "fixed_upstream_objects",
                                                                                 "canonical_target_objects"
                                                                             ],
-                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                   },
                                         "canonical_target_or_removal_authority":  {
                                                                                       "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
@@ -246,7 +269,7 @@
                                                                                                                 "fixed_upstream_objects",
                                                                                                                 "canonical_target_objects"
                                                                                                             ],
-                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                                   },
                                         "future_owner":  {
                                                              "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
@@ -255,7 +278,7 @@
                                                                                        "accepted_cluster_artifact",
                                                                                        "source_review_handoff"
                                                                                    ],
-                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                             "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                          }
                                     }
                  },
@@ -298,7 +321,7 @@
                                                                                 "fixed_upstream_objects",
                                                                                 "canonical_target_objects"
                                                                             ],
-                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                   },
                                         "canonical_target_or_removal_authority":  {
                                                                                       "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
@@ -308,7 +331,7 @@
                                                                                                                 "fixed_upstream_objects",
                                                                                                                 "canonical_target_objects"
                                                                                                             ],
-                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                                   },
                                         "future_owner":  {
                                                              "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
@@ -317,7 +340,7 @@
                                                                                        "accepted_cluster_artifact",
                                                                                        "source_review_handoff"
                                                                                    ],
-                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                             "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                          }
                                     }
                  },
@@ -360,7 +383,7 @@
                                                                                 "fixed_upstream_objects",
                                                                                 "canonical_target_objects"
                                                                             ],
-                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                   },
                                         "canonical_target_or_removal_authority":  {
                                                                                       "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
@@ -370,7 +393,7 @@
                                                                                                                 "fixed_upstream_objects",
                                                                                                                 "canonical_target_objects"
                                                                                                             ],
-                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                                   },
                                         "future_owner":  {
                                                              "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
@@ -379,7 +402,7 @@
                                                                                        "accepted_cluster_artifact",
                                                                                        "source_review_handoff"
                                                                                    ],
-                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                             "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                          }
                                     }
                  },
@@ -422,7 +445,7 @@
                                                                                 "fixed_upstream_objects",
                                                                                 "canonical_target_objects"
                                                                             ],
-                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                   },
                                         "canonical_target_or_removal_authority":  {
                                                                                       "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
@@ -432,7 +455,7 @@
                                                                                                                 "fixed_upstream_objects",
                                                                                                                 "canonical_target_objects"
                                                                                                             ],
-                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                                   },
                                         "future_owner":  {
                                                              "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
@@ -441,7 +464,7 @@
                                                                                        "accepted_cluster_artifact",
                                                                                        "source_review_handoff"
                                                                                    ],
-                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                             "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                          }
                                     }
                  },
@@ -484,7 +507,7 @@
                                                                                 "fixed_upstream_objects",
                                                                                 "canonical_target_objects"
                                                                             ],
-                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                   },
                                         "canonical_target_or_removal_authority":  {
                                                                                       "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
@@ -494,7 +517,7 @@
                                                                                                                 "fixed_upstream_objects",
                                                                                                                 "canonical_target_objects"
                                                                                                             ],
-                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                                   },
                                         "future_owner":  {
                                                              "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
@@ -503,7 +526,7 @@
                                                                                        "accepted_cluster_artifact",
                                                                                        "source_review_handoff"
                                                                                    ],
-                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                             "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                          }
                                     }
                  },
@@ -546,7 +569,7 @@
                                                                                 "fixed_upstream_objects",
                                                                                 "canonical_target_objects"
                                                                             ],
-                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                   },
                                         "canonical_target_or_removal_authority":  {
                                                                                       "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
@@ -556,7 +579,7 @@
                                                                                                                 "fixed_upstream_objects",
                                                                                                                 "canonical_target_objects"
                                                                                                             ],
-                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                                   },
                                         "future_owner":  {
                                                              "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
@@ -565,7 +588,7 @@
                                                                                        "accepted_cluster_artifact",
                                                                                        "source_review_handoff"
                                                                                    ],
-                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                             "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                          }
                                     }
                  },
@@ -615,7 +638,7 @@
                                                                                 "fixed_upstream_objects",
                                                                                 "canonical_target_objects"
                                                                             ],
-                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                   },
                                         "canonical_target_or_removal_authority":  {
                                                                                       "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
@@ -625,7 +648,7 @@
                                                                                                                 "fixed_upstream_objects",
                                                                                                                 "canonical_target_objects"
                                                                                                             ],
-                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                                   },
                                         "future_owner":  {
                                                              "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
@@ -634,7 +657,7 @@
                                                                                        "accepted_cluster_artifact",
                                                                                        "source_review_handoff"
                                                                                    ],
-                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                             "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                          }
                                     }
                  },
@@ -677,7 +700,7 @@
                                                                                 "fixed_upstream_objects",
                                                                                 "canonical_target_objects"
                                                                             ],
-                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                   },
                                         "canonical_target_or_removal_authority":  {
                                                                                       "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
@@ -687,7 +710,7 @@
                                                                                                                 "fixed_upstream_objects",
                                                                                                                 "canonical_target_objects"
                                                                                                             ],
-                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                                   },
                                         "future_owner":  {
                                                              "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
@@ -696,7 +719,7 @@
                                                                                        "accepted_cluster_artifact",
                                                                                        "source_review_handoff"
                                                                                    ],
-                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                             "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                          }
                                     }
                  },
@@ -739,7 +762,7 @@
                                                                                 "fixed_upstream_objects",
                                                                                 "canonical_target_objects"
                                                                             ],
-                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                   },
                                         "canonical_target_or_removal_authority":  {
                                                                                       "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
@@ -749,7 +772,7 @@
                                                                                                                 "fixed_upstream_objects",
                                                                                                                 "canonical_target_objects"
                                                                                                             ],
-                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                                   },
                                         "future_owner":  {
                                                              "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
@@ -758,7 +781,7 @@
                                                                                        "accepted_cluster_artifact",
                                                                                        "source_review_handoff"
                                                                                    ],
-                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                             "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                          }
                                     }
                  },
@@ -801,7 +824,7 @@
                                                                                 "fixed_upstream_objects",
                                                                                 "canonical_target_objects"
                                                                             ],
-                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                   },
                                         "canonical_target_or_removal_authority":  {
                                                                                       "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
@@ -811,7 +834,7 @@
                                                                                                                 "fixed_upstream_objects",
                                                                                                                 "canonical_target_objects"
                                                                                                             ],
-                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                                   },
                                         "future_owner":  {
                                                              "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
@@ -820,7 +843,7 @@
                                                                                        "accepted_cluster_artifact",
                                                                                        "source_review_handoff"
                                                                                    ],
-                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                             "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                          }
                                     }
                  },
@@ -870,7 +893,7 @@
                                                                                 "fixed_upstream_objects",
                                                                                 "canonical_target_objects"
                                                                             ],
-                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                   },
                                         "canonical_target_or_removal_authority":  {
                                                                                       "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
@@ -880,7 +903,7 @@
                                                                                                                 "fixed_upstream_objects",
                                                                                                                 "canonical_target_objects"
                                                                                                             ],
-                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                                   },
                                         "future_owner":  {
                                                              "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
@@ -889,7 +912,7 @@
                                                                                        "accepted_cluster_artifact",
                                                                                        "source_review_handoff"
                                                                                    ],
-                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                             "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                          }
                                     }
                  },
@@ -932,7 +955,7 @@
                                                                                 "fixed_upstream_objects",
                                                                                 "canonical_target_objects"
                                                                             ],
-                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                   },
                                         "canonical_target_or_removal_authority":  {
                                                                                       "blocker_code":  "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING",
@@ -942,7 +965,7 @@
                                                                                                                 "fixed_upstream_objects",
                                                                                                                 "canonical_target_objects"
                                                                                                             ],
-                                                                                      "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                                                      "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                                                   },
                                         "future_owner":  {
                                                              "blocker_code":  "B-FUTURE-CLOSURE-OWNER-MISSING",
@@ -951,7 +974,7 @@
                                                                                        "accepted_cluster_artifact",
                                                                                        "source_review_handoff"
                                                                                    ],
-                                                             "successor":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01"
+                                                             "successor":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01"
                                                          }
                                     }
                  }
@@ -988,7 +1011,7 @@
                  },
     "handoff":  {
                     "disposition":  "FINITE_BLOCK",
-                    "successor_package":  "FIDELITY-INVENTORY-CONTROL-AUTHORITY-SLICE-03-REVIEW-01",
+                    "successor_package":  "FIDELITY-AUTHORITY-SLICE-03-REVIEW-01",
                     "self_approval":  false,
                     "inventory_approval":  false,
                     "product_or_player_claim":  false,
