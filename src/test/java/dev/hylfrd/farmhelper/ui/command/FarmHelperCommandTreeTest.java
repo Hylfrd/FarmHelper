@@ -31,7 +31,7 @@ class FarmHelperCommandTreeTest {
 
     @Test
     void completeTreeAndAliasDelegateToServices() throws CommandSyntaxException {
-        assertEquals(1, execute("farmhelper"));
+        assertEquals(1, execute("farmhelper status"));
         assertEquals(1, execute("fh status"));
         assertEquals(1, execute("farmhelper toggle"));
         assertEquals(1, execute("farmhelper stop"));
@@ -58,6 +58,22 @@ class FarmHelperCommandTreeTest {
         assertTrue(service.calls.contains("rotation:-90.0:30.0:250"));
         assertTrue(service.calls.contains("release-input"));
         assertTrue(service.calls.contains("diagnostics"));
+    }
+
+    @Test
+    void bareRootsOpenNativeSettingsAndExplicitStatusRemainsAvailable() throws CommandSyntaxException {
+        assertEquals(1, execute("farmhelper"));
+        assertEquals("open", feedback.getLast());
+        assertEquals(1, execute("fh"));
+        assertEquals("open", feedback.getLast());
+        assertEquals(1, execute("farmhelper status"));
+        assertEquals("status", feedback.getLast());
+        assertEquals(1, execute("fh status"));
+        assertEquals("status", feedback.getLast());
+
+        assertEquals(2, service.calls.stream().filter("open"::equals).count());
+        assertEquals(2, service.calls.stream().filter("status"::equals).count());
+        assertEquals(List.of("open", "open", "status", "status"), feedback);
     }
 
     @Test

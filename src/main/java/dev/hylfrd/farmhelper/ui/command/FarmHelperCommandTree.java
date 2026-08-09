@@ -32,7 +32,7 @@ public final class FarmHelperCommandTree {
         Objects.requireNonNull(feedback, "feedback");
 
         LiteralArgumentBuilder<S> root = LiteralArgumentBuilder.literal(name);
-        root.executes(context -> emit(context.getSource(), service.status(), feedback));
+        root.executes(context -> emit(context.getSource(), service.openConfig(), feedback));
         root.then(FarmHelperCommandTree.<S>literalNode("status")
                 .executes(context -> emit(context.getSource(), service.status(), feedback)));
         root.then(FarmHelperCommandTree.<S>literalNode("toggle")
@@ -95,7 +95,7 @@ public final class FarmHelperCommandTree {
             BiConsumer<S, String> feedback
     ) {
         return LiteralArgumentBuilder.<S>literal(name)
-                .executes(context -> emit(context.getSource(), service.status(), feedback))
+                .executes(context -> emit(context.getSource(), service.openConfig(), feedback))
                 .redirect(target);
     }
 
