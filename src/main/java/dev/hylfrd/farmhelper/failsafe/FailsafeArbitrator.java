@@ -58,7 +58,6 @@ public final class FailsafeArbitrator {
 
     private static final Comparator<PendingCandidate> PENDING_ORDER =
             Comparator.comparingInt((PendingCandidate pending) -> pending.candidate().type().priority())
-                    .thenComparingInt(pending -> pending.candidate().type().registrationOrder())
                     .thenComparingLong(PendingCandidate::admissionOrder);
 
     private final MonotonicClock clock;

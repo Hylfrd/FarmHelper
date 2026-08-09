@@ -64,7 +64,7 @@ class FailsafeArbitratorTest {
     }
 
     @Test
-    void selectionHonorsLowerPriorityThenFixedRegistrationOrderAfterDelay() {
+    void selectionHonorsLowerPriorityThenAdmissionOrderAfterDelay() {
         TestClock clock = new TestClock();
         FailsafeArbitrator arbitrator = FailsafeArbitrator.withDelaySource(clock, () -> 2_000L);
         FailsafeCandidate laterRegistered = candidate(FailsafeType.FULL_INVENTORY);
@@ -87,7 +87,7 @@ class FailsafeArbitratorTest {
         assertTrue(arbitrator.admit(laterRegistered));
         assertTrue(arbitrator.admit(earlierRegistered));
         clock.advanceMillis(2_000L);
-        assertEquals(earlierRegistered, arbitrator.selectIfReady().orElseThrow());
+        assertEquals(laterRegistered, arbitrator.selectIfReady().orElseThrow());
     }
 
     @Test
