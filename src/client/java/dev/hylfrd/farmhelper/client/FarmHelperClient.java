@@ -38,4 +38,20 @@ public final class FarmHelperClient implements ClientModInitializer {
             runtime.recordClick(position, direction);
         }
     }
+
+    /** Receives the modern destroyBlock HEAD hook before the world is mutated. */
+    public static void beginBlockBreak(BlockPos position) {
+        FarmHelperClientRuntime runtime = activeRuntime;
+        if (runtime != null) {
+            runtime.beginBlockBreak(position);
+        }
+    }
+
+    /** Receives the modern destroyBlock RETURN hook and preserves its boolean success result. */
+    public static void completeBlockBreak(boolean destroySucceeded) {
+        FarmHelperClientRuntime runtime = activeRuntime;
+        if (runtime != null) {
+            runtime.completeBlockBreak(destroySucceeded);
+        }
+    }
 }

@@ -38,6 +38,9 @@ import dev.hylfrd.farmhelper.navigation.NavigationCancellationReason;
 import dev.hylfrd.farmhelper.navigation.NavigationResult;
 import dev.hylfrd.farmhelper.navigation.NavigationTicket;
 import dev.hylfrd.farmhelper.runtime.FarmHelperRuntime;
+import dev.hylfrd.farmhelper.runtime.interaction.BlockInteractionFace;
+import dev.hylfrd.farmhelper.runtime.interaction.BlockInteractionSignal;
+import dev.hylfrd.farmhelper.runtime.interaction.BlockInteractionSignalBridge;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientCancellationFanout;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientCancellationReason;
 import dev.hylfrd.farmhelper.runtime.lifecycle.ClientOwnershipFence;
@@ -81,6 +84,7 @@ public final class FarmHelperClientRuntime {
     private final DesyncChecker desyncChecker;
     private final ClientCancellationFanout cancellationFanout;
     private final ClientRuntimeLifecycle lifecycle;
+    private final BlockInteractionSignalBridge blockInteractionSignals;
     private final SpatialSnapshotCapturePort spatialSnapshots;
     private final BooleanSupplier failsafeActive;
     private boolean disconnectLatched;
@@ -89,24 +93,24 @@ public final class FarmHelperClientRuntime {
 
     public FarmHelperClientRuntime() {
         this(FabricLoader.getInstance().getConfigDir().resolve(FarmHelper.MOD_ID + ".json"),
-                Minecraft.getInstance(), null, null, null, () -> false);
+                Minecraft.getInstance(), null, null, null, () -> false, ignored -> { });
     }
 
     FarmHelperClientRuntime(Path configPath) {
         this(configPath, null, UnavailableInventoryPort.INSTANCE, defaultDiagnostics(), null,
-                () -> false);
+                () -> false, ignored -> { });
     }
 
     FarmHelperClientRuntime(
             Path configPath,
             InventoryPort inventoryPort,
             Consumer<InventoryDiagnostic> diagnostics) {
-        this(configPath, null, inventoryPort, diagnostics, null, () -> false);
+        this(configPath, null, inventoryPort, diagnostics, null, () -> false, ignored -> { });
     }
 
     FarmHelperClientRuntime(Path configPath, SpatialSnapshotCapturePort spatialSnapshots) {
         this(configPath, null, UnavailableInventoryPort.INSTANCE, defaultDiagnostics(),
-                spatialSnapshots, () -> false);
+                spatialSnapshots, () -> false, ignored -> { });
     }
 
     FarmHelperClientRuntime(
@@ -115,7 +119,17 @@ public final class FarmHelperClientRuntime {
             BooleanSupplier failsafeActive
     ) {
         this(configPath, null, UnavailableInventoryPort.INSTANCE, defaultDiagnostics(),
-                spatialSnapshots, failsafeActive);
+                spatialSnapshots, failsafeActive, ignored -> { });
+    }
+
+    FarmHelperClientRuntime(
+            Path configPath,
+            SpatialSnapshotCapturePort spatialSnapshots,
+            BooleanSupplier failsafeActive,
+            Consumer<BlockInteractionSignal> blockInteractionSignalSink
+    ) {
+        this(configPath, null, UnavailableInventoryPort.INSTANCE, defaultDiagnostics(),
+                spatialSnapshots, failsafeActive, blockInteractionSignalSink);
     }
 
     private FarmHelperClientRuntime(
@@ -124,7 +138,8 @@ public final class FarmHelperClientRuntime {
             InventoryPort suppliedInventoryPort,
             Consumer<InventoryDiagnostic> suppliedDiagnostics,
             SpatialSnapshotCapturePort suppliedSpatialSnapshots,
-            BooleanSupplier suppliedFailsafeActive) {
+            BooleanSupplier suppliedFailsafeActive,
+            Consumer<BlockInteractionSignal> suppliedBlockInteractionSignalSink) {
         attachedClient = client;
         failsafeActive = suppliedFailsafeActive == null ? () -> false : suppliedFailsafeActive;
         configStore = new FarmHelperConfigStore(configPath);
@@ -165,6 +180,12 @@ public final class FarmHelperClientRuntime {
                 this::cancelDesync,
                 this::resetServerHeartbeat);
         lifecycle = new ClientRuntimeLifecycle(this::cancelOwnership);
+        blockInteractionSignals = new BlockInteractionSignalBridge(
+                ownershipFence::generation,
+                lifecycle::worldEpoch,
+                suppliedBlockInteractionSignalSink == null
+                        ? ignored -> { }
+                        : suppliedBlockInteractionSignalSink);
         core.macroManager().installLifecycleParticipant(new MacroLifecycleParticipant() {
             @Override
             public void started(long generation, long nowNanos) {
@@ -480,7 +501,33 @@ public final class FarmHelperClientRuntime {
         requireAttachedClientThread();
         Objects.requireNonNull(position, "position");
         Objects.requireNonNull(direction, "direction");
-        return recordClick(new BlockPosition(position.getX(), position.getY(), position.getZ()));
+        BlockPosition blockPosition = new BlockPosition(
+                position.getX(), position.getY(), position.getZ());
+        // This is the fixed-upstream attack seam. The raw signal intentionally precedes every
+        // feature/configuration gate in the domain-facing desync path below.
+        blockInteractionSignals.emitClickIntent(blockPosition, interactionFace(direction));
+        return recordClick(blockPosition);
+    }
+
+    /** Captures the block state at the modern destroyBlock HEAD seam, before world mutation. */
+    public void beginBlockBreak(BlockPos position) {
+        requireAttachedClientThread();
+        Objects.requireNonNull(position, "position");
+        BlockPosition blockPosition = new BlockPosition(
+                position.getX(), position.getY(), position.getZ());
+        long worldEpoch = lifecycle.worldEpoch();
+        Observation<SpatialSnapshot> observed = captureDesyncSpatial(
+                worldEpoch, Set.of(blockPosition));
+        Observation<BlockStateSnapshot> preBreakState = observed.isPresent()
+                ? observed.get().block(worldEpoch, blockPosition)
+                : Observation.unknown();
+        blockInteractionSignals.beginBreak(blockPosition, preBreakState);
+    }
+
+    /** Completes one modern destroyBlock invocation using its boolean return value. */
+    public void completeBlockBreak(boolean destroySucceeded) {
+        requireAttachedClientThread();
+        blockInteractionSignals.completeBreak(destroySucceeded);
     }
 
     /**
@@ -521,6 +568,17 @@ public final class FarmHelperClientRuntime {
                 new DesyncClick(generation, worldEpoch, position, clickedBlock),
                 activeCrop.orElseThrow(), failsafe, connectionReady, responsiveness,
                 currentBlocks, core.nowNanos());
+    }
+
+    private static BlockInteractionFace interactionFace(Direction direction) {
+        return switch (direction) {
+            case DOWN -> BlockInteractionFace.DOWN;
+            case UP -> BlockInteractionFace.UP;
+            case NORTH -> BlockInteractionFace.NORTH;
+            case SOUTH -> BlockInteractionFace.SOUTH;
+            case WEST -> BlockInteractionFace.WEST;
+            case EAST -> BlockInteractionFace.EAST;
+        };
     }
 
     /** Advances delayed Desync recovery once from the existing runtime-delivery tick phase. */

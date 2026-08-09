@@ -20,4 +20,20 @@ abstract class MultiPlayerGameModeMixin {
     ) {
         FarmHelperClient.recordClickedBlock(position, direction);
     }
+
+    @Inject(method = "destroyBlock", at = @At("HEAD"))
+    private void farmhelper$capturePreBreakState(
+            BlockPos position,
+            CallbackInfoReturnable<Boolean> callbackInfo
+    ) {
+        FarmHelperClient.beginBlockBreak(position);
+    }
+
+    @Inject(method = "destroyBlock", at = @At("RETURN"))
+    private void farmhelper$recordBreakResult(
+            BlockPos position,
+            CallbackInfoReturnable<Boolean> callbackInfo
+    ) {
+        FarmHelperClient.completeBlockBreak(callbackInfo.getReturnValue());
+    }
 }
