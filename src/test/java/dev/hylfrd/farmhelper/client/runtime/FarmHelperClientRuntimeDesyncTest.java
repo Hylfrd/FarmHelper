@@ -42,12 +42,13 @@ class FarmHelperClientRuntimeDesyncTest {
     Path temporaryDirectory;
 
     @Test
-    void typedIngressUsesExactIdentityAndOneBoundedSpatialBatch() {
+    void enabledDesyncStartsCollectingAndRetainsRecovery() {
         RecordingSpatial spatial = RecordingSpatial.present(SUGAR_CANE);
         FarmHelperClientRuntime runtime = runtime("typed.json", spatial, () -> false);
         ready(runtime);
         assertTrue(runtime.setMacroMode(4));
         assertTrue(runtime.startMacro());
+        assertEquals(DesyncChecker.State.COLLECTING, runtime.desyncChecker().state());
 
         long generation = runtime.core().macroManager().generation();
         long worldEpoch = runtime.lifecycle().worldEpoch();
@@ -72,6 +73,22 @@ class FarmHelperClientRuntimeDesyncTest {
         assertEquals(DesyncCheckResult.RECOVERY_PENDING, runtime.tickDesync());
         assertEquals(DesyncCheckResult.RECOVERY_PENDING, runtime.tickDesync());
         assertEquals(DesyncChecker.State.RECOVERING, runtime.desyncChecker().state());
+    }
+
+    @Test
+    void disabledDesyncDoesNotStartOrCaptureObservations() {
+        RecordingSpatial spatial = RecordingSpatial.present(SUGAR_CANE);
+        FarmHelperClientRuntime runtime = runtime("disabled.json", spatial, () -> false);
+        runtime.core().config().setCheckDesync(false);
+        ready(runtime);
+        assertTrue(runtime.setMacroMode(4));
+        assertTrue(runtime.startMacro());
+
+        assertEquals(DesyncChecker.State.STOPPED, runtime.desyncChecker().state());
+        assertEquals(DesyncCheckResult.DISABLED,
+                runtime.recordClick(new BlockPosition(0, 70, 0)));
+        assertEquals(0, runtime.desyncChecker().acceptedClickCount());
+        assertEquals(0, spatial.calls);
     }
 
     @Test

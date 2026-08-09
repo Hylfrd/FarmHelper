@@ -168,7 +168,9 @@ public final class FarmHelperClientRuntime {
         core.macroManager().installLifecycleParticipant(new MacroLifecycleParticipant() {
             @Override
             public void started(long generation, long nowNanos) {
-                desyncChecker.start(generation, lifecycle.worldEpoch());
+                if (core.config().checkDesync()) {
+                    desyncChecker.start(generation, lifecycle.worldEpoch());
+                }
             }
 
             @Override
