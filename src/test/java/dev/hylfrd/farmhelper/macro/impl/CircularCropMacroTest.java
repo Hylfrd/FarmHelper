@@ -146,6 +146,22 @@ class CircularCropMacroTest {
     }
 
     @Test
+    void rewarpUsesAbsoluteMotionAndExactUpstreamRestWindows() {
+        assertRewarpRest(new MotionSnapshot(0.0D, 0.0784D, 0.0D), true);
+        assertRewarpRest(new MotionSnapshot(0.0D, -0.0784D, 0.0D), true);
+        assertRewarpRest(new MotionSnapshot(0.0D, 0.049D, 0.0D), true);
+        assertRewarpRest(new MotionSnapshot(0.0D, 0.05D, 0.0D), false);
+        assertRewarpRest(new MotionSnapshot(0.0D, 0.0779D, 0.0D), false);
+        assertRewarpRest(new MotionSnapshot(0.0D, 0.078D, 0.0D), true);
+        assertRewarpRest(new MotionSnapshot(0.0D, 0.079D, 0.0D), true);
+        assertRewarpRest(new MotionSnapshot(0.0D, 0.0791D, 0.0D), false);
+        assertRewarpRest(new MotionSnapshot(0.01D, 0.0D, 0.0D), true);
+        assertRewarpRest(new MotionSnapshot(0.0101D, 0.0D, 0.0D), false);
+        assertRewarpRest(new MotionSnapshot(0.0D, 0.0D, -0.01D), true);
+        assertRewarpRest(new MotionSnapshot(0.0D, 0.0D, -0.0101D), false);
+    }
+
+    @Test
     void passableAndUnknownNeverCountAsCornerCompletion() {
         QueueRandom leaf = zeros(4);
         CircularCropMacro macro = started(quietSettings(), leaf, zeros(4));
@@ -222,6 +238,13 @@ class CircularCropMacroTest {
         assertEquals(CircularCropMacro.State.D, unknown.state());
         assertTrue(unknown.cornerDwellActive());
         assertEquals(2, unknownLeaf.draws());
+    }
+
+    @Test
+    void captureFailureCancelsActiveCornerDwellWithoutSamplingAndRequiresFreshDwell() {
+        assertCaptureFailureResetsDwell(CaptureFailure.MISSING);
+        assertCaptureFailureResetsDwell(CaptureFailure.REJECTED);
+        assertCaptureFailureResetsDwell(CaptureFailure.STALE);
     }
 
     @Test
@@ -642,6 +665,75 @@ class CircularCropMacroTest {
                 "vertical motion " + verticalMotion);
     }
 
+    private static void assertRewarpRest(MotionSnapshot motion, boolean expectedRest) {
+        QueueRandom leaf = zeros(2);
+        CircularCropMacro macro = started(rewarpSettings(), leaf, zeros(2));
+        step(macro, 0L, START, 45.0F, 3.0F, STILL, grounded(), Map.of());
+
+        MacroDecision decision = step(macro, 1L, START, 45.0F, 3.0F,
+                motion, grounded(), Map.of());
+        assertEquals(expectedRest ? "rewarp-dwell" : "rewarp-moving",
+                decision.status(), "motion " + motion);
+        assertEquals(expectedRest ? CircularCropMacro.State.REWARP_DWELL
+                        : CircularCropMacro.State.NONE,
+                macro.state(), "motion " + motion);
+        assertEquals(expectedRest ? 1 : 0, leaf.draws(), "motion " + motion);
+    }
+
+    private static void assertCaptureFailureResetsDwell(CaptureFailure failure) {
+        QueueRandom leaf = zeros(3);
+        CircularCropMacro macro = started(quietSettings(), leaf, zeros(2));
+        long entered = enterD(macro, START);
+        long dwellAt = entered + 1L;
+        MacroDecision startedDwell = step(macro, dwellAt, START, 45.0F, 3.0F,
+                STILL, grounded(), blocked(CircularCropMacro.State.D));
+        assertEquals("circular-corner-dwell", startedDwell.status(), failure.name());
+        assertTrue(macro.cornerDwellActive(), failure.name());
+        int drawsBeforeFailure = leaf.draws();
+
+        PlayerSnapshot player = player(START, 45.0F, 3.0F, STILL);
+        SpatialCaptureRequest request = macro.spatialRequest(player, EPOCH).orElseThrow();
+        SpatialSnapshot valid = captured(request, START, blocked(CircularCropMacro.State.D));
+        MacroDecision failed = switch (failure) {
+            case MISSING -> macro.tick(missingSpatialContext(
+                    dwellAt + 1L, player, grounded()));
+            case REJECTED -> macro.tick(context(
+                    dwellAt + 1L, player, rejected(valid), grounded(),
+                    MacroRotationLeaseState.idle(0L)));
+            case STALE -> macro.tick(context(
+                    dwellAt + 1L, player, staleToken(request, valid), grounded(),
+                    MacroRotationLeaseState.idle(0L)));
+        };
+        assertEquals("spatial-unknown-or-stale", failed.status(), failure.name());
+        assertEquals(CircularCropMacro.State.D, macro.state(), failure.name());
+        assertFalse(macro.cornerDwellActive(), failure.name());
+        assertEquals(0, macro.cornerDwellNanos(), failure.name());
+        assertEquals(drawsBeforeFailure, leaf.draws(), failure.name());
+
+        long freshAt = dwellAt + 2L;
+        MacroDecision fresh = step(macro, freshAt, START, 45.0F, 3.0F,
+                STILL, grounded(), blocked(CircularCropMacro.State.D));
+        assertEquals("circular-corner-dwell", fresh.status(), failure.name());
+        assertTrue(macro.cornerDwellActive(), failure.name());
+        assertEquals(TimeUnit.MILLISECONDS.toNanos(400L), macro.cornerDwellNanos(), failure.name());
+        assertEquals(drawsBeforeFailure + 1, leaf.draws(), failure.name());
+
+        MacroDecision early = step(macro,
+                freshAt + TimeUnit.MILLISECONDS.toNanos(400L) - 1L,
+                START, 45.0F, 3.0F, STILL, grounded(),
+                blocked(CircularCropMacro.State.D));
+        assertEquals("circular-corner-dwell", early.status(), failure.name());
+        assertEquals(CircularCropMacro.State.D, macro.state(), failure.name());
+
+        MacroDecision complete = step(macro,
+                freshAt + TimeUnit.MILLISECONDS.toNanos(400L),
+                START, 45.0F, 3.0F, STILL, grounded(),
+                blocked(CircularCropMacro.State.D));
+        assertEquals(CircularCropMacro.State.S, macro.state(), failure.name());
+        assertEquals(Set.of(InputAction.BACKWARD, InputAction.ATTACK), complete.inputs(),
+                failure.name());
+    }
+
     private static void assertDirection(
             CircularCropMacro macro,
             CircularCropMacro.State expected
@@ -723,6 +815,14 @@ class CircularCropMacroTest {
         return settings;
     }
 
+    private static MacroSettings rewarpSettings() {
+        MacroSettings settings = quietSettings();
+        settings.clearRewarps();
+        settings.spawn(new RewarpPosition(10, 1, 10));
+        assertTrue(settings.addRewarp(new RewarpPosition(0, 1, 0)));
+        return settings;
+    }
+
     private static MacroDecision step(
             CircularCropMacro macro,
             long now,
@@ -766,6 +866,17 @@ class CircularCropMacroTest {
                 Observation.present(posture), Observation.present(lease));
     }
 
+    private static FarmingContext missingSpatialContext(
+            long now,
+            PlayerSnapshot player,
+            PlayerPosture posture
+    ) {
+        return new FarmingContext(
+                now, EPOCH, Observation.present(player), Observation.unknown(),
+                Observation.present(true), false, ServerResponsiveness.RESPONSIVE,
+                Observation.present(posture), Observation.present(MacroRotationLeaseState.idle(0L)));
+    }
+
     private static PlayerSnapshot player(
             PositionSnapshot position,
             float yaw,
@@ -800,6 +911,21 @@ class CircularCropMacroTest {
                 new BoxSnapshot(player.x() - 0.3D, player.y(), player.z() - 0.3D,
                         player.x() + 0.3D, player.y() + 1.8D, player.z() + 0.3D),
                 chunks);
+    }
+
+    private static SpatialSnapshot rejected(SpatialSnapshot valid) {
+        return new SpatialSnapshot(
+                valid.worldEpoch(), valid.requestToken(), valid.bounds(), -64, 320,
+                valid.playerBox().move(0.01D, 0.0D, 0.0D), valid.chunks());
+    }
+
+    private static SpatialSnapshot staleToken(
+            SpatialCaptureRequest request,
+            SpatialSnapshot valid
+    ) {
+        return new SpatialSnapshot(
+                request.worldEpoch(), request.requestToken() + 1L, request.bounds(),
+                -64, 320, valid.playerBox(), valid.chunks());
     }
 
     private static void assertStale(StaleKind kind) {
@@ -864,6 +990,12 @@ class CircularCropMacroTest {
         WORLD,
         BOUNDS,
         BODY
+    }
+
+    private enum CaptureFailure {
+        MISSING,
+        REJECTED,
+        STALE
     }
 
     private static final class QueueRandom implements dev.hylfrd.farmhelper.macro.MacroRandom {

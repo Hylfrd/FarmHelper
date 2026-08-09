@@ -178,6 +178,7 @@ public final class CircularCropMacro implements Macro {
         PlayerPosture posture = context.posture().get();
         Observed observed = consumeCapture(context);
         if (observed == null) {
+            clearCornerDwell();
             return MacroDecision.failClosed("spatial-unknown-or-stale");
         }
         if (anchorRefreshPending) {
@@ -706,9 +707,11 @@ public final class CircularCropMacro implements Macro {
     }
 
     private static boolean stationary(MotionSnapshot motion) {
+        double vertical = Math.abs(motion.y());
         return Math.abs(motion.x()) <= 0.01D
-                && Math.abs(motion.y()) <= 0.01D
-                && Math.abs(motion.z()) <= 0.01D;
+                && Math.abs(motion.z()) <= 0.01D
+                && (vertical < 0.05D
+                    || (vertical >= 0.078D && vertical <= 0.079D));
     }
 
     private static boolean upstreamStopped(MotionSnapshot motion) {
