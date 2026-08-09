@@ -1,0 +1,488 @@
+{
+  "format": "farm-helper-fidelity-inventory-control-authority-slice",
+  "schema_version": 1,
+  "status": "FINITE_BLOCK",
+  "verdict": "BLOCK",
+  "binding": {
+    "package_id": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01",
+    "campaign_id": "M001-INVENTORY-CONTROL-AUTHORITY-SLICES",
+    "mandate_id": "M-001",
+    "role": "BUILDER",
+    "task_id": "019fe753-9325-7a52-be1b-c30b8e2937dd",
+    "parent_task_id": "019fe727-3e71-7a43-8fe6-c353a4942fb2",
+    "model_effort": "gpt-5.6-luna/max",
+    "model_effort_evidence": "DELEGATED_INPUT_ONLY; runtime model/effort receipt is not exposed.",
+    "base_sha": "ea6b4a3d40f6406697182122102322c57e7d4c42",
+    "base_tree": "1ec4c3f7e7c995174da21a9e831532b586fc7bad",
+    "fixed_upstream_sha": "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+    "fixed_upstream_tree": "dfbaaf9ce75f9adc625352396acaa9138a8b97f8",
+    "canonical_target_sha": "1004be1393f48fc8e8656720fe475bd54e5278a0",
+    "canonical_target_tree": "82c76f4ce983eb7bc49003501be8a5e2ac53b1fd",
+    "assignment_sha256": "5b1f5bd77d871f1c6b463097541ac08729edefcbbadab53483eea3bc78954b98",
+    "assignment_sha256_basis": "SHA-256 value supplied in the immutable delegated assignment; canonical input tuple was not exposed.",
+    "approved_source_ledger_sha256": "49011d463881c979ef8670024f3f58aaf20f40f12f84ca631642bfe83321aac7",
+    "source_review_handoff_sha256": "69df231109a95feaf7826ea9d75fd6d4b45bc3c80e1e4a61f4a8b302df16514a",
+    "owned_output_path": "docs/internal/fidelity-inventory-control-authority-slice-01.json",
+    "owned_audit_cluster_ids": [
+      "AC-001",
+      "AC-002",
+      "AC-003",
+      "AC-004",
+      "AC-005",
+      "AC-006",
+      "AC-007",
+      "AC-008",
+      "AC-009",
+      "AC-010",
+      "AC-011",
+      "AC-012"
+    ],
+    "successor_review_package": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01"
+  },
+  "evidence_basis": {
+    "accepted_source_ledger": {
+      "git_ref": "ea6b4a3d40f6406697182122102322c57e7d4c42:docs/internal/fidelity-inventory-control-projection-source.json",
+      "git_blob": "a5577feea956e66bc56c412b65e845e3a766f1ad",
+      "size_bytes": 466075,
+      "sha256": "49011d463881c979ef8670024f3f58aaf20f40f12f84ca631642bfe83321aac7",
+      "canonical_size_bytes": 367126,
+      "canonical_sha256": "b2bec4a4e33901f1470d534969bb99d13e2385e9921c883bcc36bc23cf99ec8a",
+      "assigned_ac_row_count": 12,
+      "assigned_member_row_count": 21,
+      "assigned_rows_all_authority_null": true
+    },
+    "accepted_cluster_artifact": {
+      "git_ref": "ea6b4a3d40f6406697182122102322c57e7d4c42:docs/internal/fidelity-inventory-clusters.json",
+      "git_blob": "7a42f5002a26286cd204bc69a2fec1c7b5f71eb5",
+      "size_bytes": 254482,
+      "sha256": "d70ed08138dc98320c8a89a26702da26db1c20d9c3186721188b15d23a6efc14",
+      "cluster_count": 129,
+      "member_row_count": 292,
+      "assigned_cluster_count": 12,
+      "assigned_member_row_count": 21,
+      "assigned_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+    },
+    "source_review_handoff": {
+      "path": "logs/control-evidence/task-handoff-019fb5e2-inventory-control-projection-source-review-approve-r203.json",
+      "sha256": "69df231109a95feaf7826ea9d75fd6d4b45bc3c80e1e4a61f4a8b302df16514a",
+      "verdict": "APPROVE_SOURCE_LEDGER_ONLY",
+      "unresolved_phase_ac_count": 129,
+      "unresolved_target_or_removal_authority_ac_count": 129,
+      "unresolved_future_owner_ac_count": 129,
+      "scope_limit": "The handoff approves only the exact immutable source ledger; authoritative projection completeness remains unaccepted."
+    },
+    "preserved_inventory_chain": {
+      "base_commit": "ea6b4a3d40f6406697182122102322c57e7d4c42",
+      "source_ledger_blob": "a5577feea956e66bc56c412b65e845e3a766f1ad",
+      "source_ledger_sha256": "49011d463881c979ef8670024f3f58aaf20f40f12f84ca631642bfe83321aac7",
+      "cluster_artifact_blob": "7a42f5002a26286cd204bc69a2fec1c7b5f71eb5",
+      "cluster_artifact_sha256": "d70ed08138dc98320c8a89a26702da26db1c20d9c3186721188b15d23a6efc14",
+      "assigned_ac_count": 12,
+      "assigned_member_row_count": 21,
+      "assigned_rows_all_authority_null": true,
+      "successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"],
+      "scope_limit": "Preserves the accepted AC-001..AC-012 accounting chain only; it does not claim whole-inventory completeness."
+    },
+    "fixed_upstream_objects": {
+      "commit": "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+      "tree": "dfbaaf9ce75f9adc625352396acaa9138a8b97f8",
+      "assigned_member_anchor_count": 21,
+      "assigned_member_anchor_paths_present": 21,
+      "assigned_member_anchor_paths_unique": true,
+      "basis": "The assigned source member rows and their Git blob/hash anchors are read from the fixed-upstream Git objects."
+    },
+    "canonical_target_objects": {
+      "commit": "1004be1393f48fc8e8656720fe475bd54e5278a0",
+      "tree": "82c76f4ce983eb7bc49003501be8a5e2ac53b1fd",
+      "parity_matrix_git_blob": "41ae39a5251e3d276d2515717b47173905445220",
+      "assigned_member_anchor_count": 21,
+      "exact_old_upstream_anchor_overlap_for_assigned_rows": 0,
+      "assigned_ac_key_matches": 0,
+      "interpretation": "The target tree and parity matrix were searched for exact assigned source anchors and AC-keyed authority. Semantic migration intent is evidence to review, not an accepted per-AC target/removal ledger."
+    },
+    "canonical_parity_matrix": {
+      "git_ref": "1004be1393f48fc8e8656720fe475bd54e5278a0:docs/internal/upstream-parity-matrix.md",
+      "git_blob": "41ae39a5251e3d276d2515717b47173905445220",
+      "semantic_anchor_line_groups": ["157-164", "170-187", "243-285", "337-342"],
+      "interpretation": "These canonical lines describe semantic migration destinations and package-level intent, but contain no AC-001..AC-012 keyed authority and cannot populate phase, target, removal_authority or future_owner."
+    }
+  },
+  "phase_rows": [
+    { "phase": "FOUNDATION", "state": "UNINVENTORIED" },
+    { "phase": "P0", "state": "UNINVENTORIED" },
+    { "phase": "P1", "state": "UNINVENTORIED" },
+    { "phase": "P2", "state": "UNINVENTORIED" },
+    { "phase": "P3", "state": "UNINVENTORIED" },
+    { "phase": "P4", "state": "UNINVENTORIED" },
+    { "phase": "P5", "state": "UNINVENTORIED" },
+    { "phase": "P6", "state": "UNINVENTORIED" },
+    { "phase": "P7", "state": "UNINVENTORIED" }
+  ],
+  "blocker_catalog": {
+    "B-PHASE-AUTHORITY-MISSING": {
+      "blocker": "The exact-base accepted source ledger has phase:null for all 12 assigned rows. Its shared FOUNDATION/P0-P7 phase rows are UNINVENTORIED, and the accepted source-review handoff records unresolved_phase_ac_count=129. The fixed-upstream tree anchors all 21 assigned source members, but the fixed-upstream and canonical-target objects contain no accepted AC-001..AC-012 phase authority; no per-AC phase is asserted.",
+      "evidence_searched": [
+        "accepted_source_ledger",
+        "source_review_handoff",
+        "preserved_inventory_chain",
+        "fixed_upstream_objects",
+        "canonical_target_objects",
+        "canonical_parity_matrix"
+      ],
+      "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01"
+    },
+    "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING": {
+      "blocker": "The exact-base accepted source ledger has target:null and removal_authority:null for all 12 assigned rows. All 21 old-upstream member anchors are present in fixed upstream, but exact lookup in canonical target tree 82c76f4c has zero overlap and the canonical target has zero assigned AC-key matches. The parity matrix anchors semantic migration intent only; no canonical-target anchor or explicit removal/absence authority can be asserted.",
+      "evidence_searched": [
+        "accepted_source_ledger",
+        "source_review_handoff",
+        "preserved_inventory_chain",
+        "fixed_upstream_objects",
+        "canonical_target_objects",
+        "canonical_parity_matrix"
+      ],
+      "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01"
+    },
+    "B-FUTURE-CLOSURE-OWNER-MISSING": {
+      "blocker": "The exact-base accepted source and stable-cluster rows have future_owner:null and retain only FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03 as their successor. The accepted source-review handoff records unresolved_future_owner_ac_count=129 and identifies that successor as terminal materialization review, not a valid nonterminal closure owner; no future owner is asserted.",
+      "evidence_searched": [
+        "accepted_source_ledger",
+        "accepted_cluster_artifact",
+        "source_review_handoff",
+        "preserved_inventory_chain"
+      ],
+      "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01"
+    }
+  },
+  "rows": [
+    {
+      "id": "AC-001",
+      "key": "farmhelper-entrypoint",
+      "mechanism": "Farmhelper Entrypoint mechanism and source surface",
+      "surface": "Fixed-upstream Farmhelper Entrypoint path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": ["src/main/java/com/jelly/farmhelperv2/FarmHelper.java"],
+        "member_count": 1,
+        "members": [{ "path": "src/main/java/com/jelly/farmhelperv2/FarmHelper.java", "blob": "80445980aee1d71e74b00d8fd0357b727e50daa5", "size_bytes": 11884, "row_sha256": "cfb9b7321ec04f6a0b0af189a2f5f5fb66a98a2fc378d52811de8cd9fca5a3d6" }],
+        "accepted_definition_sha256": "bbf6110bb2922e2323950e5b0d4b59c34acf1a199bbf1c10e8a78e8b7bf0e9c7",
+        "accepted_member_rows_sha256": "cfb9b7321ec04f6a0b0af189a2f5f5fb66a98a2fc378d52811de8cd9fca5a3d6",
+        "source_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "preserved_inventory_chain"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-002",
+      "key": "command-services",
+      "mechanism": "Command Services mechanism and source surface",
+      "surface": "Fixed-upstream Command Services path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": ["src/main/java/com/jelly/farmhelperv2/command/FarmHelperMainCommand.java", "src/main/java/com/jelly/farmhelperv2/command/RewarpCommand.java"],
+        "member_count": 2,
+        "members": [{ "path": "src/main/java/com/jelly/farmhelperv2/command/FarmHelperMainCommand.java", "blob": "b5c6cabc521854af6a9992936e7cbbf24d83e841", "size_bytes": 4990, "row_sha256": "049c89f3153f2114ae283eea67b28acf5acb6bcecc15c3eec2741e4b667564c9" }, { "path": "src/main/java/com/jelly/farmhelperv2/command/RewarpCommand.java", "blob": "22ebd2acf38f9ef91f40dfd11d7f7eecaccff3c5", "size_bytes": 2072, "row_sha256": "ae44b1980fc4da0003eee66b1f1820576f63044a84da2c56355822588ad487ec" }],
+        "accepted_definition_sha256": "b5c94c05d77e2c85bb5e1498f736fe602dcbbe3e28f9a05c76e650599ad11414",
+        "accepted_member_rows_sha256": "7b5b3d0e9b1161aeb3620044957316e702a6a66c1d7aee8abf5900a0359d0e88",
+        "source_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "preserved_inventory_chain"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-003",
+      "key": "config-definition",
+      "mechanism": "Config Definition mechanism and source surface",
+      "surface": "Fixed-upstream Config Definition path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": ["src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java"],
+        "member_count": 1,
+        "members": [{ "path": "src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java", "blob": "66dab1c0d78003b64b46f795e60e0cce145ae843", "size_bytes": 128838, "row_sha256": "f149cfea0a21022b50fdd170483b8589e072cae59eb27974ec6d25dfe46ad1de" }],
+        "accepted_definition_sha256": "a29cdebf1e043bea75c8567e91210a792089d1c36227231c8a24c398afab3318",
+        "accepted_member_rows_sha256": "f149cfea0a21022b50fdd170483b8589e072cae59eb27974ec6d25dfe46ad1de",
+        "source_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "preserved_inventory_chain"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-004",
+      "key": "config-pages",
+      "mechanism": "Config Pages mechanism and source surface",
+      "surface": "Fixed-upstream Config Pages path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": ["src/main/java/com/jelly/farmhelperv2/config/page/CustomFailsafeMessagesPage.java", "src/main/java/com/jelly/farmhelperv2/config/page/FailsafeNotificationsPage.java"],
+        "member_count": 2,
+        "members": [{ "path": "src/main/java/com/jelly/farmhelperv2/config/page/CustomFailsafeMessagesPage.java", "blob": "1bbba013d45a498fed49df270eb81c3c6d0e7842", "size_bytes": 3063, "row_sha256": "64b039fcdee8805d7e410af8135cc759715e92a30f1754e4a5c5025205c1688c" }, { "path": "src/main/java/com/jelly/farmhelperv2/config/page/FailsafeNotificationsPage.java", "blob": "a15b93fb32fd7d70f271e8fe15f5e1b427f6a2ad", "size_bytes": 19374, "row_sha256": "0ed3e51fd85f931efa0c889ba5c42b87283e6976891b5b0439930aa955a48837" }],
+        "accepted_definition_sha256": "07e7dd16ce037a83f6e29f3d6db6b7c0b01ff57a9a43953dd9212da7d7aa7858",
+        "accepted_member_rows_sha256": "50a05b19c9356718c6bdae9e13a070499df578aff71706b798c4b63904655b94",
+        "source_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "preserved_inventory_chain"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-005",
+      "key": "config-structs",
+      "mechanism": "Config Structs mechanism and source surface",
+      "surface": "Fixed-upstream Config Structs path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": ["src/main/java/com/jelly/farmhelperv2/config/struct/Rewarp.java"],
+        "member_count": 1,
+        "members": [{ "path": "src/main/java/com/jelly/farmhelperv2/config/struct/Rewarp.java", "blob": "42d6b32b9cf8bd1abdf34ecf240e98d55d467f89", "size_bytes": 1020, "row_sha256": "ac1edc6767a05d85cc52bb11459acb6d7ff113e8311dc6a2c6c0ea6c5f326b69" }],
+        "accepted_definition_sha256": "d0eb21ddc3c3fc1fd24d8f4228c3981aae3f47fb38659e47ab829b0297377663",
+        "accepted_member_rows_sha256": "ac1edc6767a05d85cc52bb11459acb6d7ff113e8311dc6a2c6c0ea6c5f326b69",
+        "source_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "preserved_inventory_chain"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-006",
+      "key": "event-block-world",
+      "mechanism": "Event Block World mechanism and source surface",
+      "surface": "Fixed-upstream Event Block World path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": ["src/main/java/com/jelly/farmhelperv2/event/BlockChangeEvent.java", "src/main/java/com/jelly/farmhelperv2/event/ChunkServerLoadEvent.java"],
+        "member_count": 2,
+        "members": [{ "path": "src/main/java/com/jelly/farmhelperv2/event/BlockChangeEvent.java", "blob": "fcdfe6fca1429d785646c825f634929898c4c2df", "size_bytes": 675, "row_sha256": "17c2ee504adca0f2ea51fed00db10ca39b2586999f6b31016c168d67371716ca" }, { "path": "src/main/java/com/jelly/farmhelperv2/event/ChunkServerLoadEvent.java", "blob": "dc134baa1152e7cf79c8f95964a2c80e48ae7d73", "size_bytes": 407, "row_sha256": "1bac33ff93e0e75114a774f6269acd63f60b5153c412ac43268475df1768717a" }],
+        "accepted_definition_sha256": "a232a5b730808353a34dd85b47a0d4c177320cd7e79d58f85bc67aa1b33f2968",
+        "accepted_member_rows_sha256": "3a46620f8815729152572484285f0e3deba7a3bb81bf7f6c22386f55c0a5584a",
+        "source_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "preserved_inventory_chain"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-007",
+      "key": "event-input-actions",
+      "mechanism": "Event Input Actions mechanism and source surface",
+      "surface": "Fixed-upstream Event Input Actions path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": ["src/main/java/com/jelly/farmhelperv2/event/ClickedBlockEvent.java", "src/main/java/com/jelly/farmhelperv2/event/InventoryInputEvent.java", "src/main/java/com/jelly/farmhelperv2/event/PlayerDestroyBlockEvent.java"],
+        "member_count": 3,
+        "members": [{ "path": "src/main/java/com/jelly/farmhelperv2/event/ClickedBlockEvent.java", "blob": "888d23cb31d9769c1a2219e3daceba11031faaf9", "size_bytes": 550, "row_sha256": "7c50061770942bee2468d78e84e9620a0090110a2859a78f5815a0ade6a7f890" }, { "path": "src/main/java/com/jelly/farmhelperv2/event/InventoryInputEvent.java", "blob": "c4073a9c5c7356b87807d3a9d30bbd52091b05ef", "size_bytes": 380, "row_sha256": "cd99e3c5a599e238f9f09a978d398286e2628546d78f1e6e76157536a12325e5" }, { "path": "src/main/java/com/jelly/farmhelperv2/event/PlayerDestroyBlockEvent.java", "blob": "26f7041d2944c86b6b5412d48093bba0feec12e0", "size_bytes": 529, "row_sha256": "837ce946ad0d86dd090979f1c48a3d54ac7f43cd576a2cd6966e4da6a3af1653" }],
+        "accepted_definition_sha256": "d30360e627f3bdd3befedda431d5a0a1f8efdc24b59dfa58fd1df8e2e8ef263e",
+        "accepted_member_rows_sha256": "ae31c99b318bc07814abc57fe0221dcea64dfeeba7ecc16695122ad31a7c2cfb",
+        "source_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "preserved_inventory_chain"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-008",
+      "key": "event-tick-motion",
+      "mechanism": "Event Tick Motion mechanism and source surface",
+      "surface": "Fixed-upstream Event Tick Motion path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": ["src/main/java/com/jelly/farmhelperv2/event/MillisecondEvent.java", "src/main/java/com/jelly/farmhelperv2/event/MotionUpdateEvent.java"],
+        "member_count": 2,
+        "members": [{ "path": "src/main/java/com/jelly/farmhelperv2/event/MillisecondEvent.java", "blob": "d7f06b352f4236d48da839959fdb075242573506", "size_bytes": 259, "row_sha256": "ab222ab47a87cde20a41507c75941246aa87b566f4c95964cd4cf7445e93f66d" }, { "path": "src/main/java/com/jelly/farmhelperv2/event/MotionUpdateEvent.java", "blob": "5fb2e47e349e4eacc311e6994adfec5ff22234a2", "size_bytes": 739, "row_sha256": "ccf8d33b760ec5e55450de30bba63d4faabab9bf786f57d0ab8c382a6bffa515" }],
+        "accepted_definition_sha256": "a77e30deb89cdf9c1c5579f032d42c82e1a0bc7f565e567cd8443bdc3eb9d394",
+        "accepted_member_rows_sha256": "d10510dd30fb3ab375e49b1f0ac03ab906d96bf862ad9d786fa6e11e59b0e51d",
+        "source_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "preserved_inventory_chain"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-009",
+      "key": "event-screen-render",
+      "mechanism": "Event Screen Render mechanism and source surface",
+      "surface": "Fixed-upstream Event Screen Render path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": ["src/main/java/com/jelly/farmhelperv2/event/DrawScreenAfterEvent.java"],
+        "member_count": 1,
+        "members": [{ "path": "src/main/java/com/jelly/farmhelperv2/event/DrawScreenAfterEvent.java", "blob": "390d0826bc42deb2e33b4d1ac7eae09330031c2e", "size_bytes": 322, "row_sha256": "a35781829d710f54b986c1c3f7f2cc7d2eadde500c65ea847e91e5f4873bf655" }],
+        "accepted_definition_sha256": "eed169efff2dfd9f44d3a3225a56f5d849797eec407272a7a7015970c330e918",
+        "accepted_member_rows_sha256": "a35781829d710f54b986c1c3f7f2cc7d2eadde500c65ea847e91e5f4873bf655",
+        "source_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "preserved_inventory_chain"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-010",
+      "key": "event-packets-inbound",
+      "mechanism": "Event Packets Inbound mechanism and source surface",
+      "surface": "Fixed-upstream Event Packets Inbound path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": ["src/main/java/com/jelly/farmhelperv2/event/ReceivePacketEvent.java"],
+        "member_count": 1,
+        "members": [{ "path": "src/main/java/com/jelly/farmhelperv2/event/ReceivePacketEvent.java", "blob": "98a36206e1a003476471f3afccdf972c92170914", "size_bytes": 300, "row_sha256": "1ac85b5ed5ea47c7af8bdedf8a59e31559734a2e9cf77c1811e97c43a69bd445" }],
+        "accepted_definition_sha256": "b52fff9922f0a5c055693742166292dba15e95726c3f6199fd1853998f051fa5",
+        "accepted_member_rows_sha256": "1ac85b5ed5ea47c7af8bdedf8a59e31559734a2e9cf77c1811e97c43a69bd445",
+        "source_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "preserved_inventory_chain"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-011",
+      "key": "event-packets-outbound-spawn",
+      "mechanism": "Event Packets Outbound Spawn mechanism and source surface",
+      "surface": "Fixed-upstream Event Packets Outbound Spawn path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": ["src/main/java/com/jelly/farmhelperv2/event/SendPacketEvent.java", "src/main/java/com/jelly/farmhelperv2/event/SpawnObjectEvent.java", "src/main/java/com/jelly/farmhelperv2/event/SpawnParticleEvent.java"],
+        "member_count": 3,
+        "members": [{ "path": "src/main/java/com/jelly/farmhelperv2/event/SendPacketEvent.java", "blob": "70de1c750994be17769ee05d5ade0f77da2cd1de", "size_bytes": 294, "row_sha256": "8f0b700b4d05b4f03dada527d7ea804370e16e67b5a0da9ab2f6258d4d19aa8a" }, { "path": "src/main/java/com/jelly/farmhelperv2/event/SpawnObjectEvent.java", "blob": "3164ee44c6c3db82efbb566d62874ea3ac9ca99f", "size_bytes": 891, "row_sha256": "61d203520bf08fe263832b0c78c91d83b00eabb103cb2bb11a5c162833d8e020" }, { "path": "src/main/java/com/jelly/farmhelperv2/event/SpawnParticleEvent.java", "blob": "6bb4d3fa82d81675cb3d7ee5bfd31c1adb421737", "size_bytes": 1188, "row_sha256": "de9f3abb06e9db23ca2d959ddba4eb5da432f6c5aa0d62f9ae96358c11cc8ae8" }],
+        "accepted_definition_sha256": "e3e8868bf86eb3c42b682fc89799162270b6874124c3d946e49aab0723acfaa4",
+        "accepted_member_rows_sha256": "a9dc2acd6a944bc185b7ba7d5af60e34f48d35e84ae8fad2b9c9a8417d2c8984",
+        "source_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "preserved_inventory_chain"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" }
+      }
+    },
+    {
+      "id": "AC-012",
+      "key": "event-scoreboard",
+      "mechanism": "Event Scoreboard mechanism and source surface",
+      "surface": "Fixed-upstream Event Scoreboard path cluster",
+      "classification": "retained",
+      "source": {
+        "upstream_path_anchors": ["src/main/java/com/jelly/farmhelperv2/event/UpdateScoreboardLineEvent.java", "src/main/java/com/jelly/farmhelperv2/event/UpdateScoreboardListEvent.java"],
+        "member_count": 2,
+        "members": [{ "path": "src/main/java/com/jelly/farmhelperv2/event/UpdateScoreboardLineEvent.java", "blob": "a2c4c8fdc9209efb864707dd15c16269ba61362e", "size_bytes": 301, "row_sha256": "b0c9afa448fb6b34a62b5ef7be1511992097f76d6168a29440ec6976f482465b" }, { "path": "src/main/java/com/jelly/farmhelperv2/event/UpdateScoreboardListEvent.java", "blob": "f834a6b77a53d5633da527242719300c495aaf9a", "size_bytes": 579, "row_sha256": "d4b924ae54d436d6fbb59afac5c5757fd85c497a4e11bc8885d0bb3326e5ef28" }],
+        "accepted_definition_sha256": "514161e2918b5573b325ab56934b710b15880b15b105593d7fc19fa1bf37a18e",
+        "accepted_member_rows_sha256": "306f7464f3bdd14a5984d854dbe292535e7618adf779ab03eaf7a697ca67b965",
+        "source_successor_closure_package_ids": ["FIDELITY-INVENTORY-CLUSTER-MATERIALIZE-02-REVIEW-03"]
+      },
+      "phase": null,
+      "target": null,
+      "removal_authority": null,
+      "future_owner": null,
+      "resolution_status": "BLOCKED",
+      "unresolved": {
+        "phase": { "blocker_code": "B-PHASE-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "canonical_target_or_removal_authority": { "blocker_code": "B-TARGET-OR-REMOVAL-AUTHORITY-MISSING", "evidence_searched": ["accepted_source_ledger", "source_review_handoff", "preserved_inventory_chain", "fixed_upstream_objects", "canonical_target_objects", "canonical_parity_matrix"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" },
+        "future_owner": { "blocker_code": "B-FUTURE-CLOSURE-OWNER-MISSING", "evidence_searched": ["accepted_source_ledger", "accepted_cluster_artifact", "source_review_handoff", "preserved_inventory_chain"], "successor": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01" }
+      }
+    }
+  ],
+  "coverage": {
+    "assigned_ac_count": 12,
+    "expected_ac_count": 12,
+    "assigned_ids_unique": true,
+    "assigned_ids_exact": true,
+    "out_of_slice_row_count": 0,
+    "resolved_field_counts": {
+      "phase": 0,
+      "canonical_target_or_removal_authority": 0,
+      "future_owner": 0,
+      "total": 0
+    },
+    "unresolved_field_counts": {
+      "phase": 12,
+      "canonical_target_or_removal_authority": 12,
+      "future_owner": 12,
+      "total": 36
+    },
+    "source_rows_preserved": 12,
+    "source_rows_with_null_authority": 12
+  },
+  "handoff": {
+    "disposition": "FINITE_BLOCK",
+    "successor_package": "FIDELITY-AUTHORITY-SLICE-01-REMEDIATION-01-REVIEW-01",
+    "self_approval": false,
+    "inventory_approval": false,
+    "product_or_player_claim": false,
+    "closure_owner_claim": false
+  }
+}
