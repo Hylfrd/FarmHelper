@@ -35,14 +35,6 @@ public final class AntiStuckController {
 
     private static final AntiStuckInputIntent PRESERVE_ALL =
             AntiStuckInputIntent.preserveAll();
-    private static final Set<InputAction> STOP_ACTIONS = Set.of(
-            InputAction.FORWARD,
-            InputAction.BACKWARD,
-            InputAction.LEFT,
-            InputAction.RIGHT,
-            InputAction.JUMP,
-            InputAction.SNEAK,
-            InputAction.ATTACK);
 
     private final AntiStuckRandom random;
     private final int retryThreshold;
@@ -328,7 +320,7 @@ public final class AntiStuckController {
         return currentDecision(
                 AntiStuckDecisionKind.ADVANCED,
                 AntiStuckDecisionReason.TARGET_SELECTED,
-                AntiStuckInputIntent.fromSets(held, Set.of()),
+                intentForHeld(held),
                 false);
     }
 
@@ -339,9 +331,7 @@ public final class AntiStuckController {
         return currentDecision(
                 AntiStuckDecisionKind.ADVANCED,
                 AntiStuckDecisionReason.NO_TARGET,
-                AntiStuckInputIntent.fromSets(
-                        Set.of(InputAction.BACKWARD, InputAction.SNEAK),
-                        Set.of()),
+                intentForHeld(Set.of(InputAction.BACKWARD, InputAction.SNEAK)),
                 false);
     }
 
@@ -362,7 +352,7 @@ public final class AntiStuckController {
         return currentDecision(
                 AntiStuckDecisionKind.ADVANCED,
                 AntiStuckDecisionReason.COME_BACK,
-                AntiStuckInputIntent.fromSets(oppositeActions, Set.of()),
+                intentForHeld(oppositeActions),
                 false);
     }
 
@@ -514,7 +504,13 @@ public final class AntiStuckController {
     }
 
     private static AntiStuckInputIntent stopIntent() {
-        return AntiStuckInputIntent.fromSets(Set.of(), STOP_ACTIONS);
+        return intentForHeld(Set.of());
+    }
+
+    private static AntiStuckInputIntent intentForHeld(Set<InputAction> held) {
+        EnumSet<InputAction> released = EnumSet.allOf(InputAction.class);
+        released.removeAll(held);
+        return AntiStuckInputIntent.fromSets(held, released);
     }
 
     private static int increment(int value) {

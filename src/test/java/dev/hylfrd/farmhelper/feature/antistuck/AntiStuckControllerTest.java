@@ -41,16 +41,8 @@ class AntiStuckControllerTest {
         AntiStuckDecision press = controller.tick(tick(0L, evidence));
         assertEquals(AntiStuckState.PRESS, press.state());
         assertEquals(150, press.scheduledDelayMillis().orElseThrow());
-        assertEquals(Set.of(
-                InputAction.FORWARD,
-                InputAction.BACKWARD,
-                InputAction.LEFT,
-                InputAction.RIGHT,
-                InputAction.JUMP,
-                InputAction.SNEAK,
-                InputAction.ATTACK), press.inputIntent().releasedActions());
-        assertEquals(Set.of(InputAction.USE, InputAction.SPRINT),
-                press.inputIntent().preservedActions());
+        assertCompleteInputIntent(press.inputIntent());
+        assertEquals(EnumSet.allOf(InputAction.class), press.inputIntent().releasedActions());
 
         assertEquals(AntiStuckDecisionKind.WAITING,
                 controller.tick(tick(149L, evidence)).kind());
@@ -59,23 +51,35 @@ class AntiStuckControllerTest {
         assertEquals(AntiStuckState.RELEASE, noTarget.state());
         assertEquals(Set.of(InputAction.BACKWARD, InputAction.SNEAK),
                 noTarget.inputIntent().heldActions());
+        assertEquals(Set.of(
+                InputAction.FORWARD,
+                InputAction.LEFT,
+                InputAction.RIGHT,
+                InputAction.JUMP,
+                InputAction.SPRINT,
+                InputAction.ATTACK,
+                InputAction.USE), noTarget.inputIntent().releasedActions());
+        assertCompleteInputIntent(noTarget.inputIntent());
         assertEquals(250L, noTarget.dueAtMillis().orElseThrow());
 
         AntiStuckDecision released = controller.tick(tick(250L, evidence));
         assertEquals(AntiStuckState.COME_BACK, released.state());
         assertEquals(AntiStuckDecisionReason.RELEASE, released.reason());
-        assertTrue(released.inputIntent().releasedActions().contains(InputAction.SNEAK));
+        assertEquals(EnumSet.allOf(InputAction.class), released.inputIntent().releasedActions());
+        assertCompleteInputIntent(released.inputIntent());
 
         AntiStuckDecision returned = controller.tick(tick(300L, evidence));
         assertEquals(AntiStuckState.DISABLE, returned.state());
-        assertTrue(returned.inputIntent().preservedActions().contains(InputAction.USE));
-        assertTrue(returned.inputIntent().preservedActions().contains(InputAction.SPRINT));
+        assertEquals(EnumSet.allOf(InputAction.class), returned.inputIntent().releasedActions());
+        assertCompleteInputIntent(returned.inputIntent());
         assertTrue(returned.inputIntent().heldActions().isEmpty());
         assertEquals(380L, returned.dueAtMillis().orElseThrow());
 
         AntiStuckDecision terminal = controller.tick(tick(380L, evidence));
         assertEquals(AntiStuckDecisionKind.STOPPED, terminal.kind());
         assertTrue(terminal.terminal());
+        assertEquals(EnumSet.allOf(InputAction.class), terminal.inputIntent().releasedActions());
+        assertCompleteInputIntent(terminal.inputIntent());
         assertEquals(1, terminal.unstuckTries());
         assertEquals(terminal, controller.tick(tick(10_000L, evidence)));
         assertEquals(1, controller.unstuckTries());
@@ -106,10 +110,13 @@ class AntiStuckControllerTest {
         assertEquals(458L, target.dueAtMillis().orElseThrow());
         assertEquals(Set.of(InputAction.FORWARD, InputAction.SNEAK, InputAction.ATTACK),
                 target.inputIntent().heldActions());
-        assertEquals(AntiStuckInputDecision.PRESERVE,
+        assertEquals(AntiStuckInputDecision.RELEASE,
                 target.inputIntent().decision(InputAction.USE));
-        assertEquals(AntiStuckInputDecision.PRESERVE,
+        assertEquals(AntiStuckInputDecision.RELEASE,
                 target.inputIntent().decision(InputAction.SPRINT));
+        assertEquals(AntiStuckInputDecision.HOLD,
+                target.inputIntent().decision(InputAction.ATTACK));
+        assertCompleteInputIntent(target.inputIntent());
 
         AntiStuckDecision release = controller.tick(tick(458L, evidence));
         assertEquals(AntiStuckState.COME_BACK, release.state());
@@ -117,6 +124,11 @@ class AntiStuckControllerTest {
         AntiStuckDecision returned = controller.tick(tick(557L, evidence));
         assertEquals(Set.of(InputAction.BACKWARD, InputAction.SNEAK, InputAction.ATTACK),
                 returned.inputIntent().heldActions());
+        assertEquals(AntiStuckInputDecision.RELEASE,
+                returned.inputIntent().decision(InputAction.USE));
+        assertEquals(AntiStuckInputDecision.RELEASE,
+                returned.inputIntent().decision(InputAction.SPRINT));
+        assertCompleteInputIntent(returned.inputIntent());
         assertEquals(716L, returned.dueAtMillis().orElseThrow());
         assertEquals(AntiStuckDecisionKind.WAITING,
                 controller.tick(tick(715L, evidence)).kind());
@@ -124,6 +136,8 @@ class AntiStuckControllerTest {
         AntiStuckDecision terminal = controller.tick(tick(716L, evidence));
         assertEquals(AntiStuckDecisionKind.STOPPED, terminal.kind());
         assertTrue(terminal.terminal());
+        assertEquals(EnumSet.allOf(InputAction.class), terminal.inputIntent().releasedActions());
+        assertCompleteInputIntent(terminal.inputIntent());
         assertTrue(terminal.inputIntent().heldActions().isEmpty());
         assertTrue(terminal.dueAtMillis().isEmpty());
         assertTrue(terminal.scheduledDelayMillis().isEmpty());
@@ -148,12 +162,21 @@ class AntiStuckControllerTest {
         assertEquals(AntiStuckState.RELEASE, target.state());
         assertEquals(Set.of(InputAction.FORWARD, InputAction.SNEAK, InputAction.ATTACK),
                 target.inputIntent().heldActions());
+        assertEquals(AntiStuckInputDecision.RELEASE,
+                target.inputIntent().decision(InputAction.USE));
+        assertEquals(AntiStuckInputDecision.RELEASE,
+                target.inputIntent().decision(InputAction.SPRINT));
+        assertCompleteInputIntent(target.inputIntent());
 
         AntiStuckDecision release = controller.tick(tick(230L, evidence));
         assertEquals(AntiStuckState.DISABLE, release.state());
         assertEquals(AntiStuckDecisionReason.RELEASE, release.reason());
+        assertEquals(EnumSet.allOf(InputAction.class), release.inputIntent().releasedActions());
+        assertCompleteInputIntent(release.inputIntent());
         AntiStuckDecision terminal = controller.tick(tick(280L, evidence));
         assertEquals(AntiStuckDecisionKind.STOPPED, terminal.kind());
+        assertEquals(EnumSet.allOf(InputAction.class), terminal.inputIntent().releasedActions());
+        assertCompleteInputIntent(terminal.inputIntent());
         assertEquals(1, terminal.unstuckTries());
     }
 
@@ -357,6 +380,14 @@ class AntiStuckControllerTest {
 
     private static AntiStuckTick tick(long nowMillis, AntiStuckRecoveryEvidence evidence) {
         return tick(ID, nowMillis, evidence);
+    }
+
+    private static void assertCompleteInputIntent(AntiStuckInputIntent intent) {
+        EnumSet<InputAction> partition = EnumSet.noneOf(InputAction.class);
+        partition.addAll(intent.heldActions());
+        partition.addAll(intent.releasedActions());
+        assertEquals(EnumSet.allOf(InputAction.class), partition);
+        assertTrue(intent.preservedActions().isEmpty());
     }
 
     private static AntiStuckTick tick(
