@@ -55,14 +55,11 @@ public final class ClientSpatialSnapshotCapture implements SpatialSnapshotCaptur
         try {
             ClientLevel level = client.level;
             CollisionContext collisionContext = CollisionContext.of(client.player);
-            Map<ChunkPosition, List<BlockPosition>> requestedByChunk = groupByChunk(request.blocks());
-            Map<ChunkPosition, ChunkSnapshot> chunks = new HashMap<>();
-            for (Map.Entry<ChunkPosition, List<BlockPosition>> entry : requestedByChunk.entrySet()) {
-                chunks.put(entry.getKey(), captureChunk(level, collisionContext, entry.getKey(), entry.getValue()));
-            }
             return Observation.present(capturedSnapshot(
                     request, level.getMinY(), level.getMaxY(),
-                    box(client.player.getBoundingBox()), chunks));
+                    box(client.player.getBoundingBox()),
+                    (position, requested, ignoredLoad) ->
+                            captureChunk(level, collisionContext, position, requested)));
         } catch (RuntimeException exception) {
             return Observation.unknown();
         }
@@ -79,6 +76,26 @@ public final class ClientSpatialSnapshotCapture implements SpatialSnapshotCaptur
         return new SpatialSnapshot(
                 request.worldEpoch(), request.requestToken(), request.bounds(),
                 minY, maxY, playerBox, chunks);
+    }
+
+    static SpatialSnapshot capturedSnapshot(
+            SpatialCaptureRequest request,
+            int minY,
+            int maxY,
+            BoxSnapshot playerBox,
+            FullChunkLookup lookup
+    ) {
+        Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(lookup, "lookup");
+        Map<ChunkPosition, ChunkSnapshot> chunks = new HashMap<>();
+        for (Map.Entry<ChunkPosition, List<BlockPosition>> entry
+                : groupByChunk(request.blocks()).entrySet()) {
+            ChunkSnapshot chunk = lookup.lookup(entry.getKey(), entry.getValue(), false);
+            if (chunk != null) {
+                chunks.put(entry.getKey(), chunk);
+            }
+        }
+        return capturedSnapshot(request, minY, maxY, playerBox, chunks);
     }
 
     private static ChunkSnapshot captureChunk(
@@ -170,4 +187,9 @@ public final class ClientSpatialSnapshotCapture implements SpatialSnapshotCaptur
     private static BoxSnapshot box(AABB box) {
         return new BoxSnapshot(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ);
     }
+}
+
+@FunctionalInterface
+interface FullChunkLookup {
+    ChunkSnapshot lookup(ChunkPosition position, List<BlockPosition> requested, boolean load);
 }
