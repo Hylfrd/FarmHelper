@@ -53,6 +53,20 @@ public final class SettingsDraft {
     private static boolean equivalent(FarmHelperConfig left, FarmHelperConfig right) {
         return Float.compare(left.targetYaw(), right.targetYaw()) == 0
                 && Float.compare(left.targetPitch(), right.targetPitch()) == 0
-                && left.openSettingsKey() == right.openSettingsKey();
+                && left.openSettingsKey() == right.openSettingsKey()
+                && left.macroMode() == right.macroMode()
+                && left.alwaysHoldW() == right.alwaysHoldW()
+                && left.holdLeftClickWhenChangingRow() == right.holdLeftClickWhenChangingRow()
+                && left.rotateAfterWarped() == right.rotateAfterWarped()
+                && left.rotateAfterDrop() == right.rotateAfterDrop()
+                && left.dontFixAfterWarping() == right.dontFixAfterWarping()
+                && left.customPitch() == right.customPitch()
+                && Float.compare(left.customPitchLevel(), right.customPitchLevel()) == 0
+                && left.customYaw() == right.customYaw()
+                && Float.compare(left.customYawLevel(), right.customYawLevel()) == 0
+                && left.checkDesync() == right.checkDesync()
+                && left.desyncPauseDelayMillis() == right.desyncPauseDelayMillis()
+                && Objects.equals(left.macroSpawn(), right.macroSpawn())
+                && left.macroRewarps().equals(right.macroRewarps());
     }
 }

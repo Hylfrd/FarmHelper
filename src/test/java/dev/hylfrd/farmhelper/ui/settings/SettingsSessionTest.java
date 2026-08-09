@@ -1,8 +1,13 @@
 package dev.hylfrd.farmhelper.ui.settings;
 
 import dev.hylfrd.farmhelper.config.FarmHelperConfig;
+import dev.hylfrd.farmhelper.config.FarmHelperConfigStore;
+import dev.hylfrd.farmhelper.macro.MacroMode;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
@@ -13,6 +18,140 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SettingsSessionTest {
+    @TempDir
+    Path temporaryDirectory;
+
+    @Test
+    void standardCatalogContainsOnlyPersistedMacroAndDesyncBehaviorFields() {
+        assertEquals(List.of(
+                        "rotation.targetYaw", "rotation.targetPitch", "rotation.reset",
+                        "interface.openSettingsKey", "macro.mode", "macro.alwaysHoldW",
+                        "macro.holdLeftClickWhenChangingRow", "rotation.rotateAfterWarped",
+                        "rotation.rotateAfterDrop", "rotation.dontFixAfterWarping",
+                        "rotation.customPitch", "rotation.customPitchLevel", "rotation.customYaw",
+                        "rotation.customYawLevel", "desync.checkDesync", "desync.pauseDelayMillis"),
+                SettingsCatalog.standard().definitions().stream()
+                        .map(SettingDefinition::id)
+                        .toList());
+        assertEquals(List.of(MacroMode.values()), SettingsCatalog.MACRO_MODE.choices());
+        assertEquals(SettingCategory.MACRO, SettingsCatalog.MACRO_MODE.category());
+        assertEquals(SettingCategory.ROTATION, SettingsCatalog.CUSTOM_PITCH_LEVEL.category());
+        assertEquals(SettingCategory.FAILSAFE, SettingsCatalog.CHECK_DESYNC.category());
+
+        FarmHelperConfig defaults = new FarmHelperConfig();
+        assertEquals(MacroMode.VERTICAL_NORMAL, SettingsCatalog.MACRO_MODE.read(defaults));
+        assertFalse(SettingsCatalog.ALWAYS_HOLD_W.read(defaults));
+        assertTrue(SettingsCatalog.HOLD_LEFT_CLICK_WHEN_CHANGING_ROW.read(defaults));
+        assertFalse(SettingsCatalog.ROTATE_AFTER_WARPED.read(defaults));
+        assertFalse(SettingsCatalog.ROTATE_AFTER_DROP.read(defaults));
+        assertFalse(SettingsCatalog.DONT_FIX_AFTER_WARPING.read(defaults));
+        assertFalse(SettingsCatalog.CUSTOM_PITCH.read(defaults));
+        assertEquals(0.0, SettingsCatalog.CUSTOM_PITCH_LEVEL.read(defaults));
+        assertFalse(SettingsCatalog.CUSTOM_YAW.read(defaults));
+        assertEquals(0.0, SettingsCatalog.CUSTOM_YAW_LEVEL.read(defaults));
+        assertEquals(FarmHelperConfig.DEFAULT_CHECK_DESYNC,
+                SettingsCatalog.CHECK_DESYNC.read(defaults));
+        assertEquals(FarmHelperConfig.DEFAULT_DESYNC_PAUSE_DELAY_MILLIS,
+                SettingsCatalog.DESYNC_PAUSE_DELAY.read(defaults));
+    }
+
+    @Test
+    void draftDirtyTrackingCoversMacroAndDesyncFieldsAndCanRevert() {
+        FarmHelperConfig live = new FarmHelperConfig();
+        live.setMacroMode(MacroMode.CIRCULAR.code());
+        live.setAlwaysHoldW(true);
+        live.setHoldLeftClickWhenChangingRow(false);
+        live.setRotateAfterWarped(true);
+        live.setRotateAfterDrop(true);
+        live.setDontFixAfterWarping(true);
+        live.setCustomPitch(true);
+        live.setCustomPitchLevel(-90.0F);
+        live.setCustomYaw(true);
+        live.setCustomYawLevel(180.0F);
+        live.setCheckDesync(false);
+        live.setDesyncPauseDelayMillis(FarmHelperConfig.MAX_DESYNC_PAUSE_DELAY_MILLIS);
+
+        SettingsDraft draft = new SettingsDraft(live);
+        draft.write(SettingsCatalog.MACRO_MODE, MacroMode.VERTICAL_NORMAL);
+        draft.write(SettingsCatalog.ALWAYS_HOLD_W, false);
+        draft.write(SettingsCatalog.HOLD_LEFT_CLICK_WHEN_CHANGING_ROW, true);
+        draft.write(SettingsCatalog.ROTATE_AFTER_WARPED, false);
+        draft.write(SettingsCatalog.ROTATE_AFTER_DROP, false);
+        draft.write(SettingsCatalog.DONT_FIX_AFTER_WARPING, false);
+        draft.write(SettingsCatalog.CUSTOM_PITCH, false);
+        draft.write(SettingsCatalog.CUSTOM_PITCH_LEVEL, 0.0);
+        draft.write(SettingsCatalog.CUSTOM_YAW, false);
+        draft.write(SettingsCatalog.CUSTOM_YAW_LEVEL, 0.0);
+        draft.write(SettingsCatalog.CHECK_DESYNC, true);
+        draft.write(SettingsCatalog.DESYNC_PAUSE_DELAY,
+                FarmHelperConfig.DEFAULT_DESYNC_PAUSE_DELAY_MILLIS);
+
+        assertTrue(draft.dirty());
+
+        draft.write(SettingsCatalog.MACRO_MODE, MacroMode.CIRCULAR);
+        draft.write(SettingsCatalog.ALWAYS_HOLD_W, true);
+        draft.write(SettingsCatalog.HOLD_LEFT_CLICK_WHEN_CHANGING_ROW, false);
+        draft.write(SettingsCatalog.ROTATE_AFTER_WARPED, true);
+        draft.write(SettingsCatalog.ROTATE_AFTER_DROP, true);
+        draft.write(SettingsCatalog.DONT_FIX_AFTER_WARPING, true);
+        draft.write(SettingsCatalog.CUSTOM_PITCH, true);
+        draft.write(SettingsCatalog.CUSTOM_PITCH_LEVEL, -90.0);
+        draft.write(SettingsCatalog.CUSTOM_YAW, true);
+        draft.write(SettingsCatalog.CUSTOM_YAW_LEVEL, 180.0);
+        draft.write(SettingsCatalog.CHECK_DESYNC, false);
+        draft.write(SettingsCatalog.DESYNC_PAUSE_DELAY,
+                FarmHelperConfig.MAX_DESYNC_PAUSE_DELAY_MILLIS);
+
+        assertFalse(draft.dirty());
+    }
+
+    @Test
+    void sessionSaveRoundTripsPersistedMacroAndDesyncBehavior() throws IOException {
+        FarmHelperConfig live = new FarmHelperConfig();
+        SettingsSession session = new SettingsSession(SettingsCatalog.standard(), live);
+        session.draft().write(SettingsCatalog.MACRO_MODE, MacroMode.MUSHROOM_SDS);
+        session.draft().write(SettingsCatalog.ALWAYS_HOLD_W, true);
+        session.draft().write(SettingsCatalog.HOLD_LEFT_CLICK_WHEN_CHANGING_ROW, false);
+        session.draft().write(SettingsCatalog.ROTATE_AFTER_WARPED, true);
+        session.draft().write(SettingsCatalog.ROTATE_AFTER_DROP, true);
+        session.draft().write(SettingsCatalog.DONT_FIX_AFTER_WARPING, true);
+        session.draft().write(SettingsCatalog.CUSTOM_PITCH, true);
+        session.draft().write(SettingsCatalog.CUSTOM_PITCH_LEVEL, -45.0);
+        session.draft().write(SettingsCatalog.CUSTOM_YAW, true);
+        session.draft().write(SettingsCatalog.CUSTOM_YAW_LEVEL, 135.0);
+        session.draft().write(SettingsCatalog.CHECK_DESYNC, false);
+        session.draft().write(SettingsCatalog.DESYNC_PAUSE_DELAY, 7_500);
+
+        FarmHelperConfigStore store = new FarmHelperConfigStore(
+                temporaryDirectory.resolve("settings-round-trip.json"));
+        assertTrue(session.save(candidate -> {
+            try {
+                store.save(candidate);
+                live.replaceWith(candidate);
+                return true;
+            } catch (IOException exception) {
+                return false;
+            }
+        }));
+
+        FarmHelperConfig loaded = store.load().config();
+        assertEquals(FarmHelperConfig.CURRENT_SCHEMA_VERSION, loaded.schemaVersion());
+        assertEquals(MacroMode.MUSHROOM_SDS.code(), loaded.macroMode());
+        assertTrue(loaded.alwaysHoldW());
+        assertFalse(loaded.holdLeftClickWhenChangingRow());
+        assertTrue(loaded.rotateAfterWarped());
+        assertTrue(loaded.rotateAfterDrop());
+        assertTrue(loaded.dontFixAfterWarping());
+        assertTrue(loaded.customPitch());
+        assertEquals(-45.0F, loaded.customPitchLevel());
+        assertTrue(loaded.customYaw());
+        assertEquals(135.0F, loaded.customYawLevel());
+        assertFalse(loaded.checkDesync());
+        assertEquals(7_500, loaded.desyncPauseDelayMillis());
+        assertEquals(loaded.macroMode(), live.macroMode());
+        assertFalse(session.draft().dirty());
+    }
+
     @Test
     void editsStayInDraftUntilValidatedSaveSucceeds() {
         FarmHelperConfig live = new FarmHelperConfig();
