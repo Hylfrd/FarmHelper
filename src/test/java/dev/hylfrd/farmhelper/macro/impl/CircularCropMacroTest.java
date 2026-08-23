@@ -248,7 +248,7 @@ class CircularCropMacroTest {
     }
 
     @Test
-    void everyDirectionRequestsItsProductionRelativeBodyAndSupportProbe() {
+    void everyDirectionRequestsItsBodySupportAndCollisionOriginHalo() {
         CircularCropMacro macro = started(quietSettings(), zeros(8), zeros(8));
         long now = enterD(macro, START);
         for (CircularCropMacro.State direction : List.of(
@@ -263,6 +263,12 @@ class CircularCropMacroTest {
             assertTrue(request.blocks().contains(
                     new BlockPosition(body.x(), body.y() - 1, body.z())),
                     direction + " support probe");
+            assertTrue(request.blocks().contains(new BlockPosition(
+                    body.x() - 1, body.y() - 2, body.z() - 1)),
+                    direction + " minimum collision origin");
+            assertTrue(request.blocks().contains(new BlockPosition(
+                    body.x() + 1, body.y() + 2, body.z() + 1)),
+                    direction + " maximum collision origin");
             now = completeCorner(macro, now, direction, START);
         }
     }
@@ -593,6 +599,25 @@ class CircularCropMacroTest {
     }
 
     @Test
+    void floatDerivedStandingAndShortPoseBoxesRemainCurrent() {
+        for (float height : List.of(1.8F, 1.5F)) {
+            CircularCropMacro macro = started(
+                    quietSettings(), new QueueRandom(), new QueueRandom());
+            PlayerSnapshot player = player(START, 45.0F, 3.0F, STILL);
+            SpatialCaptureRequest request = macro.spatialRequest(player, EPOCH).orElseThrow();
+            SpatialSnapshot captured = captured(request, START, Map.of());
+            SpatialSnapshot pose = new SpatialSnapshot(
+                    captured.worldEpoch(), captured.requestToken(), captured.bounds(),
+                    captured.minY(), captured.maxY(), playerBox(START, height), captured.chunks());
+
+            MacroDecision decision = macro.tick(context(
+                    0L, player, pose, grounded(), MacroRotationLeaseState.idle(0L)));
+
+            assertEquals("startup-fix-suppressed", decision.status(), "height=" + height);
+        }
+    }
+
+    @Test
     void staleTokenWorldBoundsBodyAndPhaseFailClosedAndTerminalStopInvalidatesRun() {
         assertStale(StaleKind.TOKEN);
         assertStale(StaleKind.WORLD);
@@ -908,9 +933,16 @@ class CircularCropMacroTest {
                 position, new ChunkSnapshot(position, true, values)));
         return new SpatialSnapshot(
                 request.worldEpoch(), request.requestToken(), request.bounds(), -64, 320,
-                new BoxSnapshot(player.x() - 0.3D, player.y(), player.z() - 0.3D,
-                        player.x() + 0.3D, player.y() + 1.8D, player.z() + 0.3D),
+                playerBox(player, 1.8F),
                 chunks);
+    }
+
+    private static BoxSnapshot playerBox(PositionSnapshot player, float height) {
+        double halfWidth = (double) (0.6F / 2.0F);
+        return new BoxSnapshot(
+                player.x() - halfWidth, player.y(), player.z() - halfWidth,
+                player.x() + halfWidth, player.y() + (double) height,
+                player.z() + halfWidth);
     }
 
     private static SpatialSnapshot rejected(SpatialSnapshot valid) {

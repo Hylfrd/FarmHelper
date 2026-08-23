@@ -27,6 +27,7 @@ import dev.hylfrd.farmhelper.runtime.snapshot.PositionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.RotationSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.BlockPosition;
 import dev.hylfrd.farmhelper.runtime.spatial.BoxSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.CollisionShapeSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.RelativeFrame;
 import dev.hylfrd.farmhelper.runtime.spatial.RewarpPosition;
 import dev.hylfrd.farmhelper.runtime.spatial.SpaceStatus;
@@ -46,6 +47,9 @@ public final class CircularCropMacro implements Macro {
     static final long WARP_RETRY_NANOS = TimeUnit.SECONDS.toNanos(5L);
     static final long AFTER_WARP_NANOS = TimeUnit.MILLISECONDS.toNanos(1_500L);
     static final long POST_REWARP_NANOS = TimeUnit.MILLISECONDS.toNanos(600L);
+    private static final double PLAYER_HALF_WIDTH = (double) (0.6F / 2.0F);
+    private static final double PLAYER_STANDING_HEIGHT = (double) 1.8F;
+    private static final double PLAYER_BOX_EPSILON = 1.0E-6D;
 
     private final MacroSettings settings;
     private final MacroRandom leafRandom;
@@ -530,7 +534,7 @@ public final class CircularCropMacro implements Macro {
     private SpaceStatus directionalWalkability(Observed observed, State direction) {
         return SpatialQueries.walkability(
                 observed.spatial(), observed.worldEpoch(),
-                movedBody(observed.position(), observed.cardinalFrame(), direction));
+                movedBody(observed.spatial().playerBox(), observed.cardinalFrame(), direction));
     }
 
     private Set<BlockPosition> requestedBlocks(PositionSnapshot position) {
@@ -538,13 +542,13 @@ public final class CircularCropMacro implements Macro {
         addBoxBlocks(blocks, body(position));
         if (state.direction()) {
             addWalkabilityBlocks(blocks,
-                    movedBody(position, RelativeFrame.cardinal(cardinalYaw), state));
+                    movedBody(body(position), RelativeFrame.cardinal(cardinalYaw), state));
         }
         return blocks;
     }
 
     private static BoxSnapshot movedBody(
-            PositionSnapshot position,
+            BoxSnapshot body,
             RelativeFrame frame,
             State direction
     ) {
@@ -560,17 +564,42 @@ public final class CircularCropMacro implements Macro {
             case S, W -> 0.0D;
             default -> throw new IllegalArgumentException("not a circular direction: " + direction);
         };
-        return body(position).move(
+        return body.move(
                 frame.forwardX() * forward + frame.rightX() * right,
                 0.0D,
                 frame.forwardZ() * forward + frame.rightZ() * right);
     }
 
     private static void addWalkabilityBlocks(Set<BlockPosition> blocks, BoxSnapshot candidate) {
-        addBoxBlocks(blocks, candidate);
-        addBoxBlocks(blocks, new BoxSnapshot(
+        addCollisionOriginBlocks(blocks, candidate);
+        addCollisionOriginBlocks(blocks, new BoxSnapshot(
                 candidate.minX(), candidate.minY() - 1.0D / 1024.0D, candidate.minZ(),
                 candidate.maxX(), candidate.minY(), candidate.maxZ()));
+    }
+
+    private static void addCollisionOriginBlocks(
+            Set<BlockPosition> blocks,
+            BoxSnapshot query
+    ) {
+        int minX = (int) Math.floor(
+                query.minX() - CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE) + 1;
+        int maxX = (int) Math.ceil(
+                query.maxX() - CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE) - 1;
+        int minY = (int) Math.floor(
+                query.minY() - CollisionShapeSnapshot.MAX_VERTICAL_LOCAL_COORDINATE) + 1;
+        int maxY = (int) Math.ceil(
+                query.maxY() - CollisionShapeSnapshot.MIN_VERTICAL_LOCAL_COORDINATE) - 1;
+        int minZ = (int) Math.floor(
+                query.minZ() - CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE) + 1;
+        int maxZ = (int) Math.ceil(
+                query.maxZ() - CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE) - 1;
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    blocks.add(new BlockPosition(x, y, z));
+                }
+            }
+        }
     }
 
     private static void addBoxBlocks(Set<BlockPosition> blocks, BoxSnapshot box) {
@@ -665,7 +694,8 @@ public final class CircularCropMacro implements Macro {
                 storedYaw, circularAnchor);
         CaptureKey key = captureKey(context.worldEpoch(), anchor);
         SpatialSnapshot spatial = context.spatial().get();
-        if (!captures.accepts(key, spatial, anchor.body())) {
+        if (!captures.accepts(key, spatial)
+                || !matchesCapturedPlayerBox(position, spatial.playerBox())) {
             invalidateCapture();
             return null;
         }
@@ -677,8 +707,33 @@ public final class CircularCropMacro implements Macro {
 
     private static BoxSnapshot body(PositionSnapshot position) {
         return new BoxSnapshot(
-                position.x() - 0.3D, position.y(), position.z() - 0.3D,
-                position.x() + 0.3D, position.y() + 1.8D, position.z() + 0.3D);
+                position.x() - PLAYER_HALF_WIDTH, position.y(),
+                position.z() - PLAYER_HALF_WIDTH,
+                position.x() + PLAYER_HALF_WIDTH,
+                position.y() + PLAYER_STANDING_HEIGHT,
+                position.z() + PLAYER_HALF_WIDTH);
+    }
+
+    private static boolean matchesCapturedPlayerBox(
+            PositionSnapshot position,
+            BoxSnapshot playerBox
+    ) {
+        if (!playerBox.hasPositiveVolume()) {
+            return false;
+        }
+        BoxSnapshot envelope = new BoxSnapshot(
+                position.x() - PLAYER_HALF_WIDTH - PLAYER_BOX_EPSILON,
+                position.y() - PLAYER_BOX_EPSILON,
+                position.z() - PLAYER_HALF_WIDTH - PLAYER_BOX_EPSILON,
+                position.x() + PLAYER_HALF_WIDTH + PLAYER_BOX_EPSILON,
+                position.y() + PLAYER_STANDING_HEIGHT + PLAYER_BOX_EPSILON,
+                position.z() + PLAYER_HALF_WIDTH + PLAYER_BOX_EPSILON);
+        return envelope.contains(playerBox)
+                && Math.abs((playerBox.minX() + playerBox.maxX()) * 0.5D
+                - position.x()) <= PLAYER_BOX_EPSILON
+                && Math.abs(playerBox.minY() - position.y()) <= PLAYER_BOX_EPSILON
+                && Math.abs((playerBox.minZ() + playerBox.maxZ()) * 0.5D
+                - position.z()) <= PLAYER_BOX_EPSILON;
     }
 
     private static BlockPosition block(PositionSnapshot position) {

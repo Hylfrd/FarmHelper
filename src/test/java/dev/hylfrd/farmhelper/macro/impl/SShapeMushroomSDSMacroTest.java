@@ -152,6 +152,17 @@ class SShapeMushroomSDSMacroTest {
     }
 
     @Test
+    void directionCaptureIncludesProtrudingCollisionOrigins() {
+        SShapeMushroomSDSMacro macro = scanningMacro();
+        SpatialCaptureRequest request = macro.spatialRequest(
+                player(START, 0.0F, 6.5F, STILL), EPOCH).orElseThrow();
+
+        assertTrue(request.blocks().contains(new BlockPosition(-2, -1, -1)));
+        assertTrue(request.blocks().contains(new BlockPosition(0, 3, 1)));
+        assertTrue(request.blocks().size() <= SpatialCaptureRequest.MAX_BLOCKS);
+    }
+
+    @Test
     void directionScanStartsAtOneEndsAt179AndChecksRightFirst() {
         SShapeMushroomSDSMacro rightPriority = scanningMacro();
         Map<BlockPosition, Observation<BlockStateSnapshot>> bothBlocked = Map.of(
@@ -373,6 +384,26 @@ class SShapeMushroomSDSMacroTest {
         assertTrue(completed.rotation().isEmpty());
         assertEquals(leafDraws, result.leaf().draws());
         assertEquals(entropyDraws, result.entropy().draws());
+    }
+
+    @Test
+    void floatDerivedStandingAndShortPoseBoxesRemainCurrent() {
+        for (float height : List.of(1.8F, 1.5F)) {
+            SShapeMushroomSDSMacro macro = new SShapeMushroomSDSMacro(
+                    validSettings(), zeros(20), zeros(20));
+            macro.onStart();
+            PlayerSnapshot player = player(START, 0.0F, 0.0F, STILL);
+            SpatialCaptureRequest request = macro.spatialRequest(player, EPOCH).orElseThrow();
+            SpatialSnapshot captured = captured(request, START, Map.of());
+            SpatialSnapshot pose = new SpatialSnapshot(
+                    captured.worldEpoch(), captured.requestToken(), captured.bounds(),
+                    captured.minY(), captured.maxY(), playerBox(START, height), captured.chunks());
+
+            MacroDecision decision = macro.tick(context(
+                    0L, EPOCH, player, pose, grounded(), MacroRotationLeaseState.idle(0L)));
+
+            assertEquals("startup-aligning", decision.status(), "height=" + height);
+        }
     }
 
     @Test
@@ -701,9 +732,15 @@ class SShapeMushroomSDSMacroTest {
     }
 
     private static BoxSnapshot body(PositionSnapshot player) {
+        return playerBox(player, 1.8F);
+    }
+
+    private static BoxSnapshot playerBox(PositionSnapshot player, float height) {
+        double halfWidth = (double) (0.6F / 2.0F);
         return new BoxSnapshot(
-                player.x() - 0.3D, player.y(), player.z() - 0.3D,
-                player.x() + 0.3D, player.y() + 1.8D, player.z() + 0.3D);
+                player.x() - halfWidth, player.y(), player.z() - halfWidth,
+                player.x() + halfWidth, player.y() + (double) height,
+                player.z() + halfWidth);
     }
 
     private static BlockStateSnapshot crop(String name) {

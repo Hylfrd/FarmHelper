@@ -28,6 +28,7 @@ import dev.hylfrd.farmhelper.runtime.snapshot.PositionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.RotationSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.BlockPosition;
 import dev.hylfrd.farmhelper.runtime.spatial.BoxSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.CollisionShapeSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.CropObservation;
 import dev.hylfrd.farmhelper.runtime.spatial.CropBlockKind;
 import dev.hylfrd.farmhelper.runtime.spatial.RelativeFrame;
@@ -56,6 +57,9 @@ public final class SShapeVerticalCropMacro implements Macro {
     static final long WARP_RETRY_NANOS = TimeUnit.SECONDS.toNanos(5L);
     static final long AFTER_WARP_NANOS = TimeUnit.MILLISECONDS.toNanos(1_500L);
     static final long POST_REWARP_NANOS = TimeUnit.MILLISECONDS.toNanos(600L);
+    private static final double PLAYER_HALF_WIDTH = (double) (0.6F / 2.0F);
+    private static final double PLAYER_STANDING_HEIGHT = (double) 1.8F;
+    private static final double PLAYER_BOX_EPSILON = 1.0E-6D;
 
     private final MacroSettings settings;
     private final MacroRandom leafRandom;
@@ -533,7 +537,7 @@ public final class SShapeVerticalCropMacro implements Macro {
                 || spatialScanAnchor == null
                 || !spatialScanAnchor.equals(currentAnchor)
                 || !pending.anchor().equals(spatialScanAnchor)
-                || !pending.anchor().footprint().equals(bodyFootprint(snapshot.playerBox()))) {
+                || !matchesCapturedPlayerBox(observed.position(), snapshot.playerBox())) {
             invalidateSpatialScan();
             return MacroDecision.failClosed("row-obstacle-scan-stale");
         }
@@ -993,7 +997,10 @@ public final class SShapeVerticalCropMacro implements Macro {
             return null;
         }
         SpatialSnapshot spatial = context.spatial().get();
-        if (spatial.worldEpoch() != context.worldEpoch()) {
+        if (spatial.worldEpoch() != context.worldEpoch()
+                || (spatial.requestToken() == 0L
+                        && !matchesCapturedPlayerBox(
+                                player.position().get(), spatial.playerBox()))) {
             return null;
         }
         RotationSnapshot rotation = player.rotation().get();
@@ -1003,8 +1010,34 @@ public final class SShapeVerticalCropMacro implements Macro {
     }
 
     private static BoxSnapshot body(PositionSnapshot position) {
-        return new BoxSnapshot(position.x() - 0.3D, position.y(), position.z() - 0.3D,
-                position.x() + 0.3D, position.y() + 1.8D, position.z() + 0.3D);
+        return new BoxSnapshot(
+                position.x() - PLAYER_HALF_WIDTH, position.y(),
+                position.z() - PLAYER_HALF_WIDTH,
+                position.x() + PLAYER_HALF_WIDTH,
+                position.y() + PLAYER_STANDING_HEIGHT,
+                position.z() + PLAYER_HALF_WIDTH);
+    }
+
+    private static boolean matchesCapturedPlayerBox(
+            PositionSnapshot position,
+            BoxSnapshot playerBox
+    ) {
+        if (!playerBox.hasPositiveVolume()) {
+            return false;
+        }
+        BoxSnapshot envelope = new BoxSnapshot(
+                position.x() - PLAYER_HALF_WIDTH - PLAYER_BOX_EPSILON,
+                position.y() - PLAYER_BOX_EPSILON,
+                position.z() - PLAYER_HALF_WIDTH - PLAYER_BOX_EPSILON,
+                position.x() + PLAYER_HALF_WIDTH + PLAYER_BOX_EPSILON,
+                position.y() + PLAYER_STANDING_HEIGHT + PLAYER_BOX_EPSILON,
+                position.z() + PLAYER_HALF_WIDTH + PLAYER_BOX_EPSILON);
+        return envelope.contains(playerBox)
+                && Math.abs((playerBox.minX() + playerBox.maxX()) * 0.5D
+                - position.x()) <= PLAYER_BOX_EPSILON
+                && Math.abs(playerBox.minY() - position.y()) <= PLAYER_BOX_EPSILON
+                && Math.abs((playerBox.minZ() + playerBox.maxZ()) * 0.5D
+                - position.z()) <= PLAYER_BOX_EPSILON;
     }
 
     private static ScanAnchor scanAnchor(PositionSnapshot position, RelativeFrame frame) {
@@ -1027,12 +1060,28 @@ public final class SShapeVerticalCropMacro implements Macro {
 
     /** Adds every clearance and support-probe cell read by {@link SpatialQueries#walkability}. */
     private static void addWalkabilityCells(Set<BlockPosition> blocks, BoxSnapshot body) {
-        int minX = (int) Math.floor(body.minX());
-        int maxX = (int) Math.floor(Math.nextDown(body.maxX()));
-        int minY = (int) Math.floor(body.minY() - 0.01D);
-        int maxY = (int) Math.floor(Math.nextDown(body.maxY()));
-        int minZ = (int) Math.floor(body.minZ());
-        int maxZ = (int) Math.floor(Math.nextDown(body.maxZ()));
+        addCollisionOriginBlocks(blocks, body);
+        addCollisionOriginBlocks(blocks, new BoxSnapshot(
+                body.minX(), body.minY() - 1.0D / 1024.0D, body.minZ(),
+                body.maxX(), body.minY(), body.maxZ()));
+    }
+
+    private static void addCollisionOriginBlocks(
+            Set<BlockPosition> blocks,
+            BoxSnapshot query
+    ) {
+        int minX = (int) Math.floor(
+                query.minX() - CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE) + 1;
+        int maxX = (int) Math.ceil(
+                query.maxX() - CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE) - 1;
+        int minY = (int) Math.floor(
+                query.minY() - CollisionShapeSnapshot.MAX_VERTICAL_LOCAL_COORDINATE) + 1;
+        int maxY = (int) Math.ceil(
+                query.maxY() - CollisionShapeSnapshot.MIN_VERTICAL_LOCAL_COORDINATE) - 1;
+        int minZ = (int) Math.floor(
+                query.minZ() - CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE) + 1;
+        int maxZ = (int) Math.ceil(
+                query.maxZ() - CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE) - 1;
         for (int x = minX; x <= maxX; x++) {
             for (int y = minY; y <= maxY; y++) {
                 for (int z = minZ; z <= maxZ; z++) {

@@ -1,0 +1,353 @@
+{
+  "schema_version": 1,
+  "slice_id": "AUDIT-006",
+  "baseline_sha": "10f11c36c1a16f0ee9e896f7696eccc6fbf4e412",
+  "baseline_tree": "1c5dbf9596803ec50067b6b70e9403e0a0f198d7",
+  "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
+  "paths_sha256": "379f6b661028369d44c40c5778bf3fe4433bca18ade48691bc7c78442442d0c3",
+  "entries": [
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/CircularCropMacro.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/CircularCropMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/CircularCropMacro.java#invokeState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/CircularCropMacro.java#onEnable",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onTick"
+      ],
+      "finding_ids": [
+        "AUDIT-006-001"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeCocoaBeanMacro.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeCocoaBeanMacro.java#onEnable",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeCocoaBeanMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeCocoaBeanMacro.java#invokeState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeCocoaBeanMacro.java#hasLineChanged",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeCocoaBeanMacro.java#shouldHugWall",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onTick"
+      ],
+      "finding_ids": [
+        "AUDIT-006-002",
+        "AUDIT-006-009"
+      ],
+      "disposition": "BLOCKED_BY_AUDIT_003"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMelonPumpkinDefaultMacro.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMelonPumpkinDefaultMacro.java#onEnable",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMelonPumpkinDefaultMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMelonPumpkinDefaultMacro.java#invokeState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMelonPumpkinDefaultMacro.java#calculateDirection",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onTick"
+      ],
+      "finding_ids": [
+        "AUDIT-006-003"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMushroomMacro.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomMacro.java#onEnable",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomMacro.java#invokeState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomMacro.java#mushroom45DegreeSide",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomMacro.java#calculateDirection",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onTick"
+      ],
+      "finding_ids": [
+        "AUDIT-006-004"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMushroomRotateMacro.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomRotateMacro.java#onEnable",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomRotateMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomRotateMacro.java#invokeState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomRotateMacro.java#shouldRotateAfterWarp",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomRotateMacro.java#calculateDirection",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onTick"
+      ],
+      "finding_ids": [
+        "AUDIT-006-005"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMushroomSDSMacro.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomSDSMacro.java#onEnable",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomSDSMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomSDSMacro.java#invokeState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomSDSMacro.java#calculateDirection",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onTick"
+      ],
+      "finding_ids": [
+        "AUDIT-006-006"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeSugarcaneMacro.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeSugarcaneMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeSugarcaneMacro.java#invokeState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeSugarcaneMacro.java#onEnable",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeSugarcaneMacro.java#calculateDirection",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeSugarcaneMacro.java#getNearestSideWall",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onTick"
+      ],
+      "finding_ids": [
+        "AUDIT-006-007",
+        "AUDIT-006-010"
+      ],
+      "disposition": "BLOCKED_BY_AUDIT_003"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeVerticalCropMacro.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeVerticalCropMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeVerticalCropMacro.java#invokeState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeVerticalCropMacro.java#onEnable",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeVerticalCropMacro.java#calculateDirection",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeVerticalCropMacro.java#lagBackDetected",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onTick"
+      ],
+      "finding_ids": [
+        "AUDIT-006-008"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/impl/CircularCropMacroTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/CircularCropMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/CircularCropMacro.java#invokeState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onTick"
+      ],
+      "finding_ids": [
+        "AUDIT-006-001"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/impl/SShapeCocoaBeanMacroTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeCocoaBeanMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeCocoaBeanMacro.java#hasLineChanged",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeCocoaBeanMacro.java#shouldHugWall"
+      ],
+      "finding_ids": [
+        "AUDIT-006-002"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/impl/SShapeMelonPumpkinDefaultMacroTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMelonPumpkinDefaultMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMelonPumpkinDefaultMacro.java#invokeState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMelonPumpkinDefaultMacro.java#calculateDirection"
+      ],
+      "finding_ids": [
+        "AUDIT-006-003"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/impl/SShapeMushroomMacroTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomMacro.java#mushroom45DegreeSide",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomMacro.java#calculateDirection"
+      ],
+      "finding_ids": [
+        "AUDIT-006-004"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/impl/SShapeMushroomRotateMacroTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomRotateMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomRotateMacro.java#shouldRotateAfterWarp",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomRotateMacro.java#calculateDirection"
+      ],
+      "finding_ids": [
+        "AUDIT-006-005"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/impl/SShapeMushroomSDSMacroTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomSDSMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomSDSMacro.java#invokeState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeMushroomSDSMacro.java#calculateDirection"
+      ],
+      "finding_ids": [
+        "AUDIT-006-006"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/impl/SShapeSugarcaneMacroTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeSugarcaneMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeSugarcaneMacro.java#calculateDirection",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeSugarcaneMacro.java#getNearestSideWall"
+      ],
+      "finding_ids": [
+        "AUDIT-006-007"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/impl/SShapeVerticalCropMacroTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeVerticalCropMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeVerticalCropMacro.java#invokeState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeVerticalCropMacro.java#calculateDirection",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeVerticalCropMacro.java#lagBackDetected"
+      ],
+      "finding_ids": [
+        "AUDIT-006-008"
+      ],
+      "disposition": "RESOLVED"
+    }
+  ],
+  "findings": [
+    {
+      "id": "AUDIT-006-001",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/CircularCropMacro.java",
+      "severity": "HIGH",
+      "summary": "Circular capture identity reconstructed an exact legacy-sized player box and omitted collision owners whose modern shapes protrude into the queried body or support probe.",
+      "upstream_behavior": "Fixed upstream CircularCropMacro#updateState and AbstractMacro#onTick read mc.thePlayer, GameStateHandler, and live world collision state on the client tick; they do not require an independently reconstructed AABB to equal a captured AABB.",
+      "incompatibility": "Minecraft 26.1.2 EntityDimensions stores width and height as float and makeBoundingBox widens after float division, while the leaf used exact 0.3D/1.8D coordinates and CaptureIdentityLedger exact equality. CollisionShapeSnapshot also permits bounded local shapes outside [0,1], but the request planner captured only origins overlapping the body/support boxes.",
+      "replacement": "Use the float-derived standing envelope only as a capture bound, accept positive centered pose-subset boxes with numeric tolerance, run movement queries against the captured playerBox, and capture every clearance/support collision origin implied by CollisionShapeSnapshot bounds. Shifted or oversized boxes still fail closed, preserving upstream live-player semantics.",
+      "automated_evidence": "javap of Minecraft 26.1.2 EntityDimensions verified float width/height and fdiv-to-double bounding-box construction; CircularCropMacroTest.floatDerivedStandingAndShortPoseBoxesRemainCurrent and everyDirectionRequestsItsBodySupportAndCollisionOriginHalo pass in the focused Gradle suite.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-006-002",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeCocoaBeanMacro.java",
+      "severity": "HIGH",
+      "summary": "Cocoa capture identity reconstructed an exact legacy-sized player box and its four walkability requests omitted protruding collision owners.",
+      "upstream_behavior": "Fixed upstream SShapeCocoaBeanMacro#updateState, #invokeState, #hasLineChanged, and #shouldHugWall use live player coordinates and GameStateHandler/BlockUtils observations on the client tick.",
+      "incompatibility": "The modern production snapshot uses LocalPlayer.getBoundingBox with float-derived dimensions and pose-dependent height, so exact 0.3D/1.8D equality can reject current captures. Bounded shapes owned outside each front/back/side body or support grid were also absent from request.blocks().",
+      "replacement": "Bind captures to a centered pose-subset box inside the float-derived standing envelope, query walkability with the captured playerBox, and include the exact collision-origin halo for each front/back/side clearance and support probe. Token, world, bounds, shifted-box, and unknown-evidence rejection remain intact.",
+      "automated_evidence": "SShapeCocoaBeanMacroTest.floatDerivedStandingAndShortPoseBoxesRemainCurrent, walkabilityCaptureIncludesProtrudingCollisionOrigins, and staleCaptureTokenBodyWorldAndPauseGenerationFailClosed pass in the focused Gradle suite.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-006-003",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMelonPumpkinDefaultMacro.java",
+      "severity": "HIGH",
+      "summary": "Default melon/pumpkin capture identity used an exact synthetic player box and obstacle/lane requests omitted protruding collision owners.",
+      "upstream_behavior": "Fixed upstream SShapeMelonPumpkinDefaultMacro#updateState, #invokeState, and #calculateDirection inspect the live player and BlockUtils/GameStateHandler state before selecting rows or lanes.",
+      "incompatibility": "Exact double reconstruction does not equal Minecraft 26.1.2's float-derived or shorter pose boxes. The modern collision model allows a neighboring origin's shape to intersect a scanned body or support probe, but those origins were not captured.",
+      "replacement": "Use a tolerant centered pose-subset identity, captured playerBox movement queries, and collision-bound origin halos for row obstacle and lane walkability requests. Crop target probes and upstream crop-before-obstacle ordering are unchanged.",
+      "automated_evidence": "SShapeMelonPumpkinDefaultMacroTest.floatDerivedStandingAndShortPoseBoxesRemainCurrent, obstacleCaptureIncludesProtrudingCollisionOrigins, and staleTokenAndChangedPlayerFootprintFailClosedWithoutDraws pass in the focused Gradle suite.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-006-004",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMushroomMacro.java",
+      "severity": "HIGH",
+      "summary": "The 45-degree mushroom leaf required exact synthetic player-box equality and omitted collision owners outside each side-scan body/support grid.",
+      "upstream_behavior": "Fixed upstream SShapeMushroomMacro#updateState, #invokeState, #mushroom45DegreeSide, and #calculateDirection consume live player/collision state without reconstructing an exact independent AABB.",
+      "incompatibility": "Minecraft 26.1.2 float dimensions and pose height make exact 0.3D/1.8D identity invalid. A collision shape owned at the bounded outer origin can reach the logical distance-179 body even though that owner is at distance 180.",
+      "replacement": "Accept centered pose-subset production boxes within the float-derived standing envelope, query side walkability with the captured playerBox, and capture bounded collision origins through the outer distance-180 owner while retaining the logical scan cap at 179.",
+      "automated_evidence": "SShapeMushroomMacroTest.floatDerivedStandingAndShortPoseBoxesRemainCurrent and scanCoversOneThrough179AndCapturesOnlyTheRequiredOuterOrigin pass; the latter requires distance 180 and rejects distance 181.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-006-005",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMushroomRotateMacro.java",
+      "severity": "HIGH",
+      "summary": "The rotating mushroom leaf required exact synthetic player-box equality and omitted protruding collision owners from direction and lane captures.",
+      "upstream_behavior": "Fixed upstream SShapeMushroomRotateMacro#updateState, #invokeState, #shouldRotateAfterWarp, and #calculateDirection use live player and block observations; the leaf explicitly disables generic post-warp rotation.",
+      "incompatibility": "Float-derived and shorter modern player boxes cannot satisfy exact synthetic equality, and request.blocks() lacked bounded neighboring origins whose shapes can intersect the scanned body/support probes.",
+      "replacement": "Use tolerant centered pose-subset identity, captured playerBox queries, and collision-origin halos for side scans and lane transitions. The upstream rotation ordering, previous-lane drop repair, and post-warp disablement remain unchanged.",
+      "automated_evidence": "SShapeMushroomRotateMacroTest.floatDerivedStandingAndShortPoseBoxesRemainCurrent and directionCaptureIncludesProtrudingCollisionOrigins pass in the focused Gradle suite alongside shifted/stale capture tests.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-006-006",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMushroomSDSMacro.java",
+      "severity": "HIGH",
+      "summary": "The mushroom SDS leaf required exact synthetic player-box equality and omitted protruding collision owners from lateral/back walkability captures.",
+      "upstream_behavior": "Fixed upstream SShapeMushroomSDSMacro#updateState, #invokeState, and #calculateDirection use live player, BlockUtils, and GameStateHandler observations for lateral farming and backward lane switching.",
+      "incompatibility": "Production AABBs are float-derived and pose-sensitive rather than exact 0.3D/1.8D boxes. Neighbor-owned bounded shapes may intersect the lateral/back body or support probe without their origins overlapping the queried box.",
+      "replacement": "Validate centered pose-subset boxes within the float-derived standing envelope, use the captured playerBox for lateral/back queries, and capture collision-origin halos for every such clearance/support pair. alwaysHoldW and exact SDS input semantics are preserved.",
+      "automated_evidence": "SShapeMushroomSDSMacroTest.floatDerivedStandingAndShortPoseBoxesRemainCurrent and directionCaptureIncludesProtrudingCollisionOrigins pass in the focused Gradle suite.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-006-007",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeSugarcaneMacro.java",
+      "severity": "HIGH",
+      "summary": "Sugar-cane capture identity used an exact synthetic player box and its mandatory footing request omitted protruding collision owners.",
+      "upstream_behavior": "Fixed upstream SShapeSugarcaneMacro#updateState, #invokeState, #calculateDirection, and #getNearestSideWall use live player and BlockUtils/GameStateHandler observations for water routes, walls, and movement.",
+      "incompatibility": "The production player AABB is float-derived and pose-sensitive, so exact 0.3D/1.8D equality is not a valid current-capture identity. The footing walkability query also needs neighboring origins allowed by CollisionShapeSnapshot bounds.",
+      "replacement": "Accept centered pose-subset boxes, query footing with the captured playerBox, and include the full bounded collision-origin halo in every request. The approved one-block repair of upstream's literal 11-block D-route typo and the A/D/S priorities remain unchanged.",
+      "automated_evidence": "SShapeSugarcaneMacroTest.floatDerivedPoseBoxesAndCollisionOriginHaloRemainCurrent and staleTokenEpochBoundsPlayerFootprintAndCompletedPhaseFailClosed pass in the focused Gradle suite.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-006-008",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeVerticalCropMacro.java",
+      "severity": "HIGH",
+      "summary": "Vertical-crop capture planning used a synthetic standing footprint for identity/request cells and omitted protruding collision owners across long side scans.",
+      "upstream_behavior": "Fixed upstream SShapeVerticalCropMacro#updateState, #invokeState, #calculateDirection, and #lagBackDetected operate on the live player and world for crop, void, obstacle, lane, and lag-back decisions.",
+      "incompatibility": "Float rounding or a shorter current pose can change the synthetic integer footprint at coordinate boundaries. Future conservative clearance/support enumeration requires owner origins outside each body/probe, including the distance-179 long scan, but the bounded request did not contain them.",
+      "replacement": "Build request envelopes with float-derived standing dimensions, validate centered pose-subset snapshots without requiring the same height, keep all movement queries on captured playerBox, and add exact collision-origin halos for current, lane, and both phased long-side walkability scans while retaining request limits.",
+      "automated_evidence": "SShapeVerticalCropMacroTest.capturedSnapshotMustMatchPendingBoundsAndPlayerFootprint accepts 1.8F/1.5F current boxes and rejects shifted boxes; longSideRequestsCaptureBodyAndSupportAtBothDistanceBounds checks halo corners at distances 1 and 179 and the MAX_BLOCKS/MAX_AXIS_SPAN limits.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-006-009",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeCocoaBeanMacro.java",
+      "severity": "HIGH",
+      "summary": "Cocoa onStart(long) rejects negative monotonic ticks supplied by the current raw System.nanoTime clock contract.",
+      "upstream_behavior": "Fixed upstream SShapeCocoaBeanMacro#onEnable has no arbitrary-origin monotonic timestamp parameter or nonnegative-origin assumption.",
+      "incompatibility": "At baseline SShapeCocoaBeanMacro.java:113 guards nowNanos as nonnegative, while MacroLifecycle#start passes SystemMonotonicClock.nowNanos and SystemMonotonicClock returns raw System.nanoTime, whose origin is arbitrary and whose value is permitted to be negative.",
+      "replacement": "AUDIT-003 owns the central SystemMonotonicClock contract repair. No duplicate leaf workaround or out-of-scope clock edit is included here.",
+      "automated_evidence": "Read-only trace anchors MacroLifecycle.java#start -> clock.nowNanos(), SystemMonotonicClock.java#nowNanos -> System.nanoTime(), and baseline SShapeCocoaBeanMacro.java:113; repair evidence remains owned by AUDIT-003.",
+      "status": "BLOCKED_BY_AUDIT_003"
+    },
+    {
+      "id": "AUDIT-006-010",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeSugarcaneMacro.java",
+      "severity": "HIGH",
+      "summary": "Sugar-cane onStart(long) rejects negative monotonic ticks supplied by the current raw System.nanoTime clock contract.",
+      "upstream_behavior": "Fixed upstream SShapeSugarcaneMacro#onEnable has no arbitrary-origin monotonic timestamp parameter or nonnegative-origin assumption.",
+      "incompatibility": "At baseline SShapeSugarcaneMacro.java:111 guards nowNanos as nonnegative, while MacroLifecycle#start passes SystemMonotonicClock.nowNanos and SystemMonotonicClock returns raw System.nanoTime, whose origin is arbitrary and whose value is permitted to be negative.",
+      "replacement": "AUDIT-003 owns the central SystemMonotonicClock contract repair. No duplicate leaf workaround or out-of-scope clock edit is included here.",
+      "automated_evidence": "Read-only trace anchors MacroLifecycle.java#start -> clock.nowNanos(), SystemMonotonicClock.java#nowNanos -> System.nanoTime(), and baseline SShapeSugarcaneMacro.java:111; repair evidence remains owned by AUDIT-003.",
+      "status": "BLOCKED_BY_AUDIT_003"
+    }
+  ]
+}

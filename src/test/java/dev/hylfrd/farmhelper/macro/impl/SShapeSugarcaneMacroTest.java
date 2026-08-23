@@ -417,6 +417,29 @@ class SShapeSugarcaneMacroTest {
     }
 
     @Test
+    void floatDerivedPoseBoxesAndCollisionOriginHaloRemainCurrent() {
+        for (float height : List.of(1.8F, 1.5F)) {
+            SShapeSugarcaneMacro macro = new SShapeSugarcaneMacro(
+                    validSettings(), new QueueRandom(new double[20]),
+                    new QueueRandom(new double[20]));
+            macro.onStart(0L);
+            PlayerSnapshot player = player(START, 45.0F, 0.0F, STILL);
+            SpatialCaptureRequest request = macro.spatialRequest(player, EPOCH).orElseThrow();
+            assertTrue(request.blocks().contains(new BlockPosition(-1, -1, -1)));
+            assertTrue(request.blocks().contains(new BlockPosition(1, 3, 1)));
+            assertTrue(request.blocks().size() <= SpatialCaptureRequest.MAX_BLOCKS);
+            SpatialSnapshot captured = captured(request, START, Map.of());
+            SpatialSnapshot pose = new SpatialSnapshot(
+                    captured.worldEpoch(), captured.requestToken(), captured.bounds(),
+                    captured.minY(), captured.maxY(), playerBox(START, height), captured.chunks());
+
+            MacroDecision decision = macro.tick(context(0L, player, pose, grounded()));
+
+            assertEquals("initial-aligning", decision.status(), "height=" + height);
+        }
+    }
+
+    @Test
     void staleTokenEpochBoundsPlayerFootprintAndCompletedPhaseFailClosed() {
         SShapeSugarcaneMacro macro = readyMacro(new QueueRandom(), new QueueRandom());
         PlayerSnapshot player = player(START, 45.0F, 0.0F, STILL);
@@ -780,9 +803,16 @@ class SShapeSugarcaneMacroTest {
                 position, new ChunkSnapshot(position, true, values)));
         return new SpatialSnapshot(
                 request.worldEpoch(), request.requestToken(), request.bounds(), -64, 320,
-                new BoxSnapshot(player.x() - 0.3D, player.y(), player.z() - 0.3D,
-                        player.x() + 0.3D, player.y() + 1.8D, player.z() + 0.3D),
+                playerBox(player, 1.8F),
                 chunks);
+    }
+
+    private static BoxSnapshot playerBox(PositionSnapshot player, float height) {
+        double halfWidth = (double) (0.6F / 2.0F);
+        return new BoxSnapshot(
+                player.x() - halfWidth, player.y(), player.z() - halfWidth,
+                player.x() + halfWidth, player.y() + (double) height,
+                player.z() + halfWidth);
     }
 
     private static BlockStateSnapshot water() {
