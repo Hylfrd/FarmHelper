@@ -38,7 +38,7 @@ import java.util.Optional;
 
 /** One ordered client-thread adapter for every active P0 runtime consumer. */
 public final class ClientTickAdapter implements ClientTickPipeline.Actions {
-    private static final ThreadLocal<Boolean> TRUSTED_SYSTEM_MESSAGE_SCOPE = new ThreadLocal<>();
+    private static final ThreadLocal<SystemMessageScope> SYSTEM_MESSAGE_SCOPE = new ThreadLocal<>();
 
     private final Minecraft client;
     private final FarmHelperClientRuntime runtime;
@@ -90,14 +90,17 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
                 ignored -> adapter.dispatch(adapter.clientLifecycle::clientStopping));
     }
 
-    /** Marks the fixed vanilla system-packet boundary used by the GAME callback. */
-    public static void beginSystemMessageScope(boolean overlay) {
-        TRUSTED_SYSTEM_MESSAGE_SCOPE.set(!overlay);
-    }
-
-    /** Clears the fixed vanilla system-packet boundary after callback delivery. */
-    public static void endSystemMessageScope() {
-        TRUSTED_SYSTEM_MESSAGE_SCOPE.remove();
+    /** Runs the fixed vanilla system-packet boundary used by the GAME callback. */
+    public static void withSystemMessageScope(boolean overlay, Runnable action) {
+        Objects.requireNonNull(action, "action");
+        SystemMessageScope previous = SYSTEM_MESSAGE_SCOPE.get();
+        SystemMessageScope current = new SystemMessageScope(previous, !overlay && previous == null);
+        SYSTEM_MESSAGE_SCOPE.set(current);
+        try {
+            action.run();
+        } finally {
+            current.close();
+        }
     }
 
     static String normalizeChatChannel() {
@@ -112,7 +115,42 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
     }
 
     private static boolean trustedSystemMessage(boolean overlay) {
-        return !overlay && Boolean.TRUE.equals(TRUSTED_SYSTEM_MESSAGE_SCOPE.get());
+        if (overlay) {
+            return false;
+        }
+        SystemMessageScope scope = SYSTEM_MESSAGE_SCOPE.get();
+        return scope != null && scope.claimTrust();
+    }
+
+    private static final class SystemMessageScope {
+        private final SystemMessageScope previous;
+        private final boolean trusted;
+        private boolean trustAvailable;
+
+        private SystemMessageScope(SystemMessageScope previous, boolean trusted) {
+            this.previous = previous;
+            this.trusted = trusted;
+            trustAvailable = trusted;
+        }
+
+        private boolean claimTrust() {
+            if (!trustAvailable) {
+                return false;
+            }
+            trustAvailable = false;
+            return trusted;
+        }
+
+        private void close() {
+            if (SYSTEM_MESSAGE_SCOPE.get() != this) {
+                throw new IllegalStateException("System message scopes must close in nesting order");
+            }
+            if (previous == null) {
+                SYSTEM_MESSAGE_SCOPE.remove();
+            } else {
+                SYSTEM_MESSAGE_SCOPE.set(previous);
+            }
+        }
     }
 
     private void dispatch(Runnable action) {

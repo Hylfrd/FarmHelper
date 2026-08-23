@@ -1,5 +1,7 @@
 package dev.hylfrd.farmhelper.client.platform.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import dev.hylfrd.farmhelper.client.FarmHelperClient;
 import dev.hylfrd.farmhelper.client.platform.ClientTickAdapter;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -13,20 +15,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Captures fixed client-packet boundaries for trusted text and the server-time heartbeat. */
 @Mixin(ClientPacketListener.class)
 abstract class ClientPacketListenerMixin {
-    @Inject(method = "handleSystemChat", at = @At("HEAD"))
-    private void farmhelper$beginSystemMessageScope(
+    @WrapMethod(method = "handleSystemChat")
+    private void farmhelper$handleSystemChat(
             ClientboundSystemChatPacket packet,
-            CallbackInfo callbackInfo
+            Operation<Void> original
     ) {
-        ClientTickAdapter.beginSystemMessageScope(packet.overlay());
-    }
-
-    @Inject(method = "handleSystemChat", at = @At("TAIL"))
-    private void farmhelper$endSystemMessageScope(
-            ClientboundSystemChatPacket packet,
-            CallbackInfo callbackInfo
-    ) {
-        ClientTickAdapter.endSystemMessageScope();
+        ClientTickAdapter.withSystemMessageScope(
+                packet.overlay(), () -> original.call(packet));
     }
 
     @Inject(method = "handleSetTime", at = @At("TAIL"))

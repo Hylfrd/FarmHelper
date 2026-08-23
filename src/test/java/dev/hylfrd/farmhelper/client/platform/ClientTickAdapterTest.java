@@ -39,6 +39,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClientTickAdapterTest {
@@ -48,13 +50,39 @@ class ClientTickAdapterTest {
         assertEquals("game", ClientTickAdapter.normalizeGameChannel(false));
         assertEquals("overlay", ClientTickAdapter.normalizeGameChannel(true));
 
-        ClientTickAdapter.beginSystemMessageScope(false);
-        try {
+        ClientTickAdapter.withSystemMessageScope(false, () -> {
             assertEquals("system", ClientTickAdapter.normalizeGameChannel(false));
             assertEquals("overlay", ClientTickAdapter.normalizeGameChannel(true));
-        } finally {
-            ClientTickAdapter.endSystemMessageScope();
-        }
+        });
+
+        assertEquals("game", ClientTickAdapter.normalizeGameChannel(false));
+    }
+
+    @Test
+    void systemScopeRestoresOnThrownHandlerAndNestedReentry() {
+        RuntimeException originalFailure = new RuntimeException("original handler failure");
+        assertSame(originalFailure, assertThrows(RuntimeException.class, () ->
+                ClientTickAdapter.withSystemMessageScope(false, () -> {
+                    throw originalFailure;
+                })));
+        assertEquals("game", ClientTickAdapter.normalizeGameChannel(false));
+
+        RuntimeException callbackFailure = new RuntimeException("callback failure");
+        assertSame(callbackFailure, assertThrows(RuntimeException.class, () ->
+                ClientTickAdapter.withSystemMessageScope(false, () -> {
+                    assertEquals("system", ClientTickAdapter.normalizeGameChannel(false));
+                    throw callbackFailure;
+                })));
+        assertEquals("game", ClientTickAdapter.normalizeGameChannel(false));
+
+        ClientTickAdapter.withSystemMessageScope(false, () -> {
+            ClientTickAdapter.withSystemMessageScope(false, () -> {
+                assertEquals("game", ClientTickAdapter.normalizeGameChannel(false));
+                assertEquals("overlay", ClientTickAdapter.normalizeGameChannel(true));
+            });
+            assertEquals("system", ClientTickAdapter.normalizeGameChannel(false));
+            assertEquals("game", ClientTickAdapter.normalizeGameChannel(false));
+        });
 
         assertEquals("game", ClientTickAdapter.normalizeGameChannel(false));
     }
