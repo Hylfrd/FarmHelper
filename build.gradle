@@ -217,6 +217,17 @@ tasks.named("jar", org.gradle.api.tasks.bundling.Jar) {
     }
 }
 
+tasks.named("sourcesJar", org.gradle.api.tasks.bundling.Jar) {
+    duplicatesStrategy = org.gradle.api.file.DuplicatesStrategy.FAIL
+
+    from(layout.projectDirectory.file("LICENSE")) {
+        into("META-INF")
+    }
+    from(layout.projectDirectory.file("NOTICE")) {
+        into("META-INF")
+    }
+}
+
 def packagedClientJar = providers.gradleProperty("packagedClientJar")
 def packagedClientJarSha256 = providers.gradleProperty("packagedClientJarSha256")
 def packagedClientDependency = providers.gradleProperty("packagedClientDependency")
