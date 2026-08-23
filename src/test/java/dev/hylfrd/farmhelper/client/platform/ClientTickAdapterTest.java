@@ -42,6 +42,23 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClientTickAdapterTest {
+    @Test
+    void normalizesOnlyTheFixedSystemPacketScopeAsTrusted() {
+        assertEquals("chat", ClientTickAdapter.normalizeChatChannel());
+        assertEquals("game", ClientTickAdapter.normalizeGameChannel(false));
+        assertEquals("overlay", ClientTickAdapter.normalizeGameChannel(true));
+
+        ClientTickAdapter.beginSystemMessageScope(false);
+        try {
+            assertEquals("system", ClientTickAdapter.normalizeGameChannel(false));
+            assertEquals("overlay", ClientTickAdapter.normalizeGameChannel(true));
+        } finally {
+            ClientTickAdapter.endSystemMessageScope();
+        }
+
+        assertEquals("game", ClientTickAdapter.normalizeGameChannel(false));
+    }
+
     @TempDir
     Path temporaryDirectory;
 

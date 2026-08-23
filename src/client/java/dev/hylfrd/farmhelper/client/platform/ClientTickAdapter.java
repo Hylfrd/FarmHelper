@@ -38,6 +38,8 @@ import java.util.Optional;
 
 /** One ordered client-thread adapter for every active P0 runtime consumer. */
 public final class ClientTickAdapter implements ClientTickPipeline.Actions {
+    private static final ThreadLocal<Boolean> TRUSTED_SYSTEM_MESSAGE_SCOPE = new ThreadLocal<>();
+
     private final Minecraft client;
     private final FarmHelperClientRuntime runtime;
     private final ClientSnapshotCapture snapshots;
@@ -79,11 +81,38 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         ClientPlayConnectionEvents.DISCONNECT.register(
                 (handler, ignored) -> adapter.dispatch(adapter.clientLifecycle::disconnect));
         ClientReceiveMessageEvents.CHAT.register((message, signed, profile, parameters, time) ->
-                adapter.dispatch(() -> adapter.acceptChat("chat", message)));
-        ClientReceiveMessageEvents.GAME.register((message, overlay) ->
-                adapter.dispatch(() -> adapter.acceptChat(overlay ? "overlay" : "game", message)));
+                adapter.dispatch(() -> adapter.acceptChat(normalizeChatChannel(), message)));
+        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+            String channel = normalizeGameChannel(overlay);
+            adapter.dispatch(() -> adapter.acceptChat(channel, message));
+        });
         ClientLifecycleEvents.CLIENT_STOPPING.register(
                 ignored -> adapter.dispatch(adapter.clientLifecycle::clientStopping));
+    }
+
+    /** Marks the fixed vanilla system-packet boundary used by the GAME callback. */
+    public static void beginSystemMessageScope(boolean overlay) {
+        TRUSTED_SYSTEM_MESSAGE_SCOPE.set(!overlay);
+    }
+
+    /** Clears the fixed vanilla system-packet boundary after callback delivery. */
+    public static void endSystemMessageScope() {
+        TRUSTED_SYSTEM_MESSAGE_SCOPE.remove();
+    }
+
+    static String normalizeChatChannel() {
+        return "chat";
+    }
+
+    static String normalizeGameChannel(boolean overlay) {
+        if (overlay) {
+            return "overlay";
+        }
+        return trustedSystemMessage(overlay) ? "system" : "game";
+    }
+
+    private static boolean trustedSystemMessage(boolean overlay) {
+        return !overlay && Boolean.TRUE.equals(TRUSTED_SYSTEM_MESSAGE_SCOPE.get());
     }
 
     private void dispatch(Runnable action) {

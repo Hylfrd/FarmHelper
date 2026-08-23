@@ -71,10 +71,13 @@
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/FarmHelper.java#initializeListeners",
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java#onTick",
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick",
-        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#triggerWarpGarden"
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#triggerWarpGarden",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java#onChatMessageReceived"
       ],
-      "finding_ids": [],
-      "disposition": "NO_FINDING"
+      "finding_ids": [
+        "AUDIT-008-001"
+      ],
+      "disposition": "RESOLVED"
     },
     {
       "path": "src/client/java/dev/hylfrd/farmhelper/client/platform/MinecraftGameTextSnapshotSource.java",
@@ -93,10 +96,13 @@
       "path": "src/client/java/dev/hylfrd/farmhelper/client/platform/mixin/ClientPacketListenerMixin.java",
       "classification": "DERIVED_WITH_ATTRIBUTION",
       "upstream_anchors": [
-        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/feature/impl/LagDetector.java#onReceivePacket"
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/feature/impl/LagDetector.java#onReceivePacket",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java#onChatMessageReceived"
       ],
-      "finding_ids": [],
-      "disposition": "NO_FINDING"
+      "finding_ids": [
+        "AUDIT-008-001"
+      ],
+      "disposition": "RESOLVED"
     },
     {
       "path": "src/client/java/dev/hylfrd/farmhelper/client/platform/mixin/MultiPlayerGameModeMixin.java",
@@ -473,8 +479,10 @@
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick",
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#triggerWarpGarden"
       ],
-      "finding_ids": [],
-      "disposition": "NO_FINDING"
+      "finding_ids": [
+        "AUDIT-008-001"
+      ],
+      "disposition": "RESOLVED"
     },
     {
       "path": "src/test/java/dev/hylfrd/farmhelper/client/platform/MinecraftGameTextSnapshotSourceTest.java",
@@ -511,8 +519,10 @@
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java#onWorldLoad",
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java#onChatMessageReceived"
       ],
-      "finding_ids": [],
-      "disposition": "NO_FINDING"
+      "finding_ids": [
+        "AUDIT-008-001"
+      ],
+      "disposition": "RESOLVED"
     },
     {
       "path": "src/test/java/dev/hylfrd/farmhelper/client/platform/WorldTransitionTrackerTest.java",
@@ -614,5 +624,24 @@
       "disposition": "NO_FINDING"
     }
   ],
-  "findings": []
+  "findings": [
+    {
+      "id": "AUDIT-008-001",
+      "path": "src/client/java/dev/hylfrd/farmhelper/client/platform/ClientTickAdapter.java",
+      "severity": "HIGH",
+      "summary": "The client adapter did not normalize trusted vanilla system messages to the parser's system channel.",
+      "upstream_behavior": "The fixed Minecraft 26.1.2 client packet boundary routes ClientboundSystemChatPacket through ClientPacketListener.handleSystemChat; Fabric API 0.153.0+26.1.2 exposes that route through GAME with overlay=false, while CHAT is player-sent and GAME also covers ordinary server game messages.",
+      "incompatibility": "ClientTickAdapter mapped every non-overlay GAME callback to 'game' and emitted no 'system' channel. GameStateParser intentionally converts only exact 'system' messages, so the production Limbo line was discarded as untrusted and the stable replacement sequence resolved the wrong location.",
+      "replacement": "Scope the fixed system-packet callback in ClientPacketListenerMixin and capture the trusted channel before ClientTickAdapter dispatch. Normalize only a non-overlay GAME callback inside that scope to 'system'; keep player CHAT as 'chat', ordinary GAME as 'game', and overlay GAME as 'overlay'.",
+      "automated_evidence": [
+        "ClientTickAdapterTest.normalizesOnlyTheFixedSystemPacketScopeAsTrusted proves chat, generic game, overlay, scoped system, and scope cleanup channels.",
+        "WorldTransitionParserSequenceTest.stableReplacementUnloadLoadChatResetAndDisconnectKeepExactLocationPriority proves the trusted Limbo line reaches the parser while ordinary chat remains ignored.",
+        "GameStateParserTest.convertsOnlySystemChannelMessages remains the read-only AUDIT-002 fail-closed parser contract.",
+        "Focused command .\\gradlew.bat --no-daemon --stacktrace test --tests ClientTickAdapterTest --tests WorldTransitionParserSequenceTest --tests GameStateParserTest --tests ClientLifecycleSequencerTest --tests ClientSnapshotCaptureTest --tests MinecraftGameTextSnapshotSourceTest --tests WorldTransitionTrackerTest exited 0 with BUILD SUCCESSFUL.",
+        "Full command .\\gradlew.bat --no-daemon --stacktrace test exited 0 with BUILD SUCCESSFUL.",
+        "Build command .\\gradlew.bat --no-daemon --stacktrace build exited 0 with BUILD SUCCESSFUL and dependency provenance verification passed."
+      ],
+      "status": "RESOLVED"
+    }
+  ]
 }
