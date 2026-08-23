@@ -445,6 +445,9 @@ public final class FarmHelperConfigStore {
         if (!root.has(field)) {
             throw new ConfigFormatException(name + "." + field + " is required");
         }
+        if (root.get(field).isJsonNull()) {
+            throw new ConfigFormatException(name + "." + field + " must be an integer");
+        }
         return optionalInteger(root, field, 0);
     }
 

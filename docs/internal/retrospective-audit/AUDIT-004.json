@@ -24,7 +24,7 @@
     {"path":"src/main/java/dev/hylfrd/farmhelper/config/ConfigLoadStatus.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"},
     {"path":"src/main/java/dev/hylfrd/farmhelper/config/FarmHelperConfig.java","classification":"DERIVED_WITH_ATTRIBUTION","upstream_anchors":["eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#macroType","eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#rotateAfterWarped","eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#checkDesync","eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#desyncPauseDelay"],"finding_ids":[],"disposition":"NO_FINDING"},
     {"path":"src/main/java/dev/hylfrd/farmhelper/config/FarmHelperConfigKey.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"},
-    {"path":"src/main/java/dev/hylfrd/farmhelper/config/FarmHelperConfigStore.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"},
+    {"path":"src/main/java/dev/hylfrd/farmhelper/config/FarmHelperConfigStore.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":["AUDIT-004-001"],"disposition":"RESOLVED"},
     {"path":"src/main/java/dev/hylfrd/farmhelper/config/MacroLocationConfig.java","classification":"DERIVED_WITH_ATTRIBUTION","upstream_anchors":["eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/struct/Rewarp.java#getDistance","eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#addRewarp"],"finding_ids":[],"disposition":"NO_FINDING"},
     {"path":"src/main/java/dev/hylfrd/farmhelper/config/package-info.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"},
     {"path":"src/main/java/dev/hylfrd/farmhelper/control/expectation/ActionToken.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"},
@@ -117,5 +117,28 @@
     {"path":"src/test/java/dev/hylfrd/farmhelper/ui/command/FarmHelperCommandTreeTest.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"},
     {"path":"src/test/java/dev/hylfrd/farmhelper/ui/settings/SettingsSessionTest.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"}
   ],
-  "findings": []
+  "findings": [
+    {
+      "id": "AUDIT-004-001",
+      "path": "src/main/java/dev/hylfrd/farmhelper/config/FarmHelperConfigStore.java",
+      "severity": "HIGH",
+      "summary": "Required macro location coordinates accepted explicit JSON null as coordinate zero and published fabricated positions.",
+      "source_anchor": "src/main/java/dev/hylfrd/farmhelper/config/FarmHelperConfigStore.java:444-451 (requiredInteger) and :497-513 (optionalInteger)",
+      "test_anchors": [
+        "src/test/java/dev/hylfrd/farmhelper/config/FarmHelperConfigStoreTest.java:311-355",
+        "src/test/java/dev/hylfrd/farmhelper/config/FarmHelperConfigStoreTest.java:357-407"
+      ],
+      "upstream_behavior": "Required persisted coordinates must be present and numeric; optional configuration fields retain their typed defaults when omitted or explicitly null.",
+      "incompatibility": "requiredInteger() checked only field presence and delegated explicit JsonNull to optionalInteger(..., 0), so null x/y/z values under macro.spawn or macro.rewarps became (0,0,0)-containing locations, returned LOADED, and reached FarmHelperRuntime.synchronizeMacroSettings().",
+      "replacement": "Reject explicit JsonNull in requiredInteger() before optional parsing, leaving optionalInteger() unchanged. The existing recoverDefaults() path then backs up the corrupt primary, saves defaults, and exposes no macro locations to runtime publication.",
+      "status": "RESOLVED",
+      "disposition": "RESOLVED",
+      "automated_evidence": [
+        "The exact focused command .\\gradlew.bat test --tests dev.hylfrd.farmhelper.config.FarmHelperConfigStoreTest --tests dev.hylfrd.farmhelper.config.FarmHelperConfigTest --tests dev.hylfrd.farmhelper.runtime.FarmHelperRuntimeTest --tests dev.hylfrd.farmhelper.ui.settings.SettingsSessionTest --tests dev.hylfrd.farmhelper.client.ui.settings.FarmHelperSettingsControllerTest --tests dev.hylfrd.farmhelper.client.ui.settings.FarmHelperSettingsScreenTest exited 0 with BUILD SUCCESSFUL; the six selected suites executed 54 tests with 0 failures, 0 errors, and 0 skipped.",
+        "FarmHelperConfigStoreTest.explicitNullRequiredLocationCoordinatesAreBackedUpAndNeverPublished covers macro.spawn x/y/z and macro.rewarps x/y/z explicit nulls, exact corrupt-primary backup preservation, RECOVERED_DEFAULTS then LOADED recovery, and empty runtime macro spawn/rewarp settings.",
+        "FarmHelperConfigStoreTest.requiredLocationCoordinatesAcceptZeroAndOptionalNullsKeepDefaults proves numeric zero coordinates remain valid and optional JSON nulls retain typed defaults.",
+        "The exact broad command .\\gradlew.bat test build exited 0 with BUILD SUCCESSFUL; 76 test suites executed 653 tests with 0 failures, 0 errors, and 0 skipped, verifyDependencyProvenance passed, and FarmHelper-26.1.2.jar was produced."
+      ]
+    }
+  ]
 }
