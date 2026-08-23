@@ -1,0 +1,368 @@
+{
+  "schema_version": 1,
+  "slice_id": "AUDIT-002",
+  "baseline_sha": "10f11c36c1a16f0ee9e896f7696eccc6fbf4e412",
+  "baseline_tree": "1c5dbf9596803ec50067b6b70e9403e0a0f198d7",
+  "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
+  "paths_sha256": "85ef5c352faf318dd87ea7dab7467877e5a5bd06cc4918c44f8810ecf7eebf1d",
+  "entries": [
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/BuffSnapshot.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:82-93",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:533-583"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/BuffStatus.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:834-839"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/DiagnosticSink.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/EconomySnapshot.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:95-101",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:392-428",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:585-588"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/GameChatSignal.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:155-163",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/impl/GuestVisitFailsafe.java:95-111",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/feature/impl/PestFarmer.java:194-204",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/feature/impl/AutoRepellent.java:407-424"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/GameChatSignalType.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:155-163",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/impl/GuestVisitFailsafe.java:95-111",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/feature/impl/PestFarmer.java:194-204",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/feature/impl/AutoRepellent.java:407-424",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/FailsafeManager.java:426-450"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/GameStateParser.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:141-315",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:317-437",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:439-518",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:533-588",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:754-848",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/ScoreboardUtils.java:26-99",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/impl/GuestVisitFailsafe.java:95-111",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/feature/impl/PestFarmer.java:194-204",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/feature/impl/AutoRepellent.java:407-424",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/FailsafeManager.java:179-188"
+      ],
+      "finding_ids": [
+        "AUDIT-002-001",
+        "AUDIT-002-002"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/GameStateParseResult.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/GameStateSnapshot.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:54-130"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/GameTextInputBudget.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/GameTextSnapshotSource.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/GardenCrop.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:317-340",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java:2925-2949"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/GardenStateSnapshot.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:62-62",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:103-113",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:439-518",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:754-784"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/JacobContestSnapshot.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:115-121",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:342-390"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/JacobMedal.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:373-383",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:841-848"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/JacobNextContestSnapshot.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:115-119",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:184-230"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/JacobStateSnapshot.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:61-61",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:115-125"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/package-info.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/impl/GuestVisitFailsafe.java:95-111",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/feature/impl/PestFarmer.java:194-204",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/feature/impl/AutoRepellent.java:407-424",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/FailsafeManager.java:426-450"
+      ],
+      "finding_ids": [
+        "AUDIT-002-003"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/ParseDiagnostic.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/ParseDiagnosticCode.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/PlayerFacts.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:166-175",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:585-588"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/RateLimitedDiagnosticSink.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/RawChatMessage.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/RawGameTextSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/SemanticLocation.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:187-202",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:806-832"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/StrictGameNumber.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/WorldTransition.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:141-145",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:270-280"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/gamestate/DiagnosticSinkTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/gamestate/FixturePrivacyTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/gamestate/GameStateFixtureTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [
+        "AUDIT-002-001"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/gamestate/GameStateParserTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [
+        "AUDIT-002-001",
+        "AUDIT-002-002"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/gamestate/RawGameTextSnapshotTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/resources/dev/hylfrd/farmhelper/runtime/gamestate/s2t5/garden-positive.txt",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [
+        "AUDIT-002-001"
+      ],
+      "disposition": "RESOLVED"
+    }
+  ],
+  "findings": [
+    {
+      "id": "AUDIT-002-001",
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/GameStateParser.java",
+      "severity": "MEDIUM",
+      "summary": "Explicit Jacob collection counts were conflated with medal-threshold lines.",
+      "upstream_behavior": "Pinned GameStateHandler.checkJacob accepts a numeric suffix from either a line containing 'with' or one starting with 'Collected', so successive scoreboard updates can overwrite the same mutable count.",
+      "incompatibility": "The immutable parser receives the complete scoreboard at once. Resolving both shapes as equal candidates turns a legitimate Collected value and a different medal threshold into CONFLICT/unknown instead of preserving the explicit count.",
+      "replacement": "Resolve explicit Collected lines first, consult a medal 'with' line only when explicit text is absent, and parse the medal independently. This keeps the upstream fallback without importing its update-order dependence.",
+      "automated_evidence": [
+        "GameStateParserTest.parsesAllSharedFieldsIncludingLegalZeroAndUnicode: Collected 1,234 plus GOLD with 2,345 must produce 1,234 and GOLD.",
+        "GameStateParserTest.preservesUpstreamJacobCountFallbackWhenCollectedLineIsAbsent: a lone GOLD with 2,345 line must still supply 2,345.",
+        "GameStateFixtureTest.parsesTheAnonymousFrozenShapeFixture: the divergent anonymous fixture must parse without diagnostics.",
+        "The granted focused Gradle command for GameStateParserTest, GameStateFixtureTest, and FixturePrivacyTest completed with exit 0 and BUILD SUCCESSFUL."
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-002-002",
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/GameStateParser.java",
+      "severity": "MEDIUM",
+      "summary": "Chat signal conversion ignored the normalized message channel.",
+      "upstream_behavior": "Pinned GameStateHandler.onChatMessageReceived, PestFarmer.onChat, and FailsafeManager.onChatDetection reject Forge chat events whose type is not 0 before recognizing shared game messages.",
+      "incompatibility": "RawChatMessage already normalizes modern channels, but the parser examined every channel. Player chat or game-info text matching a signature could therefore become a trusted system signal.",
+      "replacement": "Keep sequence validation over the full immutable batch, but convert signatures only when channel is exactly 'system'. This replaces the Forge byte-type assumption with the explicit adapter contract.",
+      "automated_evidence": [
+        "GameStateParserTest.convertsOnlySystemChannelMessages: matching game_info and chat messages are ignored while a continuous system message is converted.",
+        "GameStateParserTest.treatsChannelDifferencesAsConflictingDuplicateContent: full-batch sequence integrity remains channel-sensitive.",
+        "The granted focused Gradle command for GameStateParserTest, GameStateFixtureTest, and FixturePrivacyTest completed with exit 0 and BUILD SUCCESSFUL."
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-002-003",
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/package-info.java",
+      "severity": "LOW",
+      "summary": "Package provenance named only GameStateHandler although chat signatures came from four additional upstream classes.",
+      "upstream_behavior": "The pinned guest, pest-spawn, repellent, and evacuation vocabulary is anchored in GuestVisitFailsafe, PestFarmer, AutoRepellent, and FailsafeManager respectively.",
+      "incompatibility": "The previous package comment attributed all parsing semantics only to GameStateHandler, leaving the source of identity-free chat conversion behavior undisclosed even though the repository NOTICE provided project-level attribution.",
+      "replacement": "Name the full upstream paths for all five source classes and bind them to the fixed commit while retaining the documented Fabric snapshot rewrite differences.",
+      "automated_evidence": [
+        "git grep -n at eacb323fbde3eff94d4f2ee7baacb059d84b8e3a locates each preserved chat signature in the newly named source path.",
+        "A static package-info check verifies the fixed commit and all five source paths are present."
+      ],
+      "status": "RESOLVED"
+    }
+  ]
+}

@@ -30,7 +30,7 @@ class GameStateParserTest {
                         "Jacob's Contest",
                         "Wheat 2m30s",
                         "Collected 1,234",
-                        "GOLD with 1,234",
+                        "GOLD with 2,345",
                         "The Garden ൠ x0",
                         "Plot 12 x0",
                         "Server closing: 1:05 soon"),
@@ -273,6 +273,20 @@ class GameStateParserTest {
     }
 
     @Test
+    void preservesUpstreamJacobCountFallbackWhenCollectedLineIsAbsent() {
+        RawGameTextSnapshot raw = raw(
+                "SKYBLOCK", List.of("Jacob's Contest", "Wheat 2m30s", "GOLD with 2,345"),
+                List.of("Area: Garden"), List.of("Active Effects"), List.of(), List.of(),
+                PlayerFacts.unknown(), Observation.present(WorldTransition.STABLE));
+
+        JacobContestSnapshot current = parser.parse(multiplayer(), raw)
+                .snapshot().jacob().currentContest().get();
+
+        assertEquals(2_345L, current.collected().get());
+        assertEquals(JacobMedal.GOLD, current.medal().get());
+    }
+
+    @Test
     void conflictingSequenceMakesTheBatchUnknownWithoutLeakingText() {
         String sensitive = "[SkyBlock] HiddenIdentity is visiting Your Garden!";
         RawGameTextSnapshot raw = withChat(
@@ -359,6 +373,18 @@ class GameStateParserTest {
         assertTrue(result.chatSignals().isUnknown());
         assertEquals(List.of(new ParseDiagnostic(
                 "chat.sequence", ParseDiagnosticCode.CHAT_SEQUENCE_CONFLICT)), result.diagnostics());
+    }
+
+    @Test
+    void convertsOnlySystemChannelMessages() {
+        GameStateParseResult result = chatResult(List.of(
+                new RawChatMessage(7, "game_info", "YUCK!"),
+                new RawChatMessage(8, "chat", "Server is restarting! Evacuate!"),
+                new RawChatMessage(9, "system", "YUM! ൠ Pests will now spawn twice as fast!")));
+
+        assertEquals(List.of(new GameChatSignal(
+                9, GameChatSignalType.REPELLENT_ACTIVATED)), result.chatSignals().get());
+        assertTrue(result.diagnostics().isEmpty());
     }
 
     @Test

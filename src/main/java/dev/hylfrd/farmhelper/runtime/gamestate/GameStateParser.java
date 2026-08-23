@@ -248,7 +248,11 @@ public final class GameStateParser {
         }
         List<GameChatSignal> signals = new ArrayList<>();
         for (Map.Entry<Long, RawChatMessage> entry : messages.entrySet()) {
-            GameChatSignalType type = chatType(clean(entry.getValue().text()));
+            RawChatMessage message = entry.getValue();
+            if (!message.channel().equals("system")) {
+                continue;
+            }
+            GameChatSignalType type = chatType(clean(message.text()));
             if (type != null) {
                 signals.add(new GameChatSignal(entry.getKey(), type));
             }
@@ -434,7 +438,7 @@ public final class GameStateParser {
         }
 
         Observation<Long> collected = resolvePresent(lines, "jacob.current.collected", line -> {
-            if (!line.startsWith("Collected") && !line.contains(" with ")) {
+            if (!line.startsWith("Collected")) {
                 return Match.irrelevant();
             }
             String token = line.substring(line.lastIndexOf(' ') + 1);
@@ -444,6 +448,20 @@ public final class GameStateParser {
                 return Match.invalid(failure.code());
             }
         }, context);
+        if (collected.isAbsent()) {
+            // Upstream accepts both shapes; explicit collection text outranks a medal threshold.
+            collected = resolvePresent(lines, "jacob.current.collected", line -> {
+                if (!line.contains(" with ")) {
+                    return Match.irrelevant();
+                }
+                String token = line.substring(line.lastIndexOf(' ') + 1);
+                try {
+                    return Match.valid(StrictGameNumber.longValue(token, false));
+                } catch (StrictGameNumber.NumericFailure failure) {
+                    return Match.invalid(failure.code());
+                }
+            }, context);
+        }
         Observation<JacobMedal> medal = resolvePresent(lines, "jacob.current.medal", line -> {
             if (!line.contains(" with ")) {
                 return Match.irrelevant();
