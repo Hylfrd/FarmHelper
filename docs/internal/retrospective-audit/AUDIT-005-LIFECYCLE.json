@@ -26,9 +26,12 @@
       "TIME"
     ]
   },
-  "line_count_method": "LF-delimited physical lines; a trailing empty split segment is not counted.",
+  "line_count_method": "Physical normalized LF-delimited lines; a terminal empty split segment is not counted.",
   "baseline_line_count": 1436,
   "candidate_line_count": 1527,
+  "legacy_split_record_count_method": "For each LF-normalized file, PowerShell [string]::Split([char]10).Count, including the terminal empty segment produced by the trailing LF.",
+  "legacy_split_record_baseline_count": 1454,
+  "legacy_split_record_candidate_count": 1545,
   "baseline_files": [
     {"path": "src/main/java/dev/hylfrd/farmhelper/macro/FeatureSuspension.java", "blob": "d4392622aed80ff4e096f2c0eac1a760596ccf62", "lines": 31},
     {"path": "src/main/java/dev/hylfrd/farmhelper/macro/LaneChangeDirection.java", "blob": "667f1cf6455e904feb754d16631bfe6778730559", "lines": 20},
