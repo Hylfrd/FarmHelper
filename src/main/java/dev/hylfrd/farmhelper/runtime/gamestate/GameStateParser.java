@@ -31,6 +31,11 @@ public final class GameStateParser {
             "^Starts In:\\s*(?:(\\d{1,9})m)?\\s*(?:(\\d{1,9})s)?$");
     private static final Pattern SERVER_CLOSING = Pattern.compile(
             "^Server closing:\\s*(\\d{1,9}):(\\d{2})(?:\\s+.*)?$");
+    private static final String JACOB_COUNT_TOKEN = "[0-9](?:[0-9,. ]*[0-9])?";
+    private static final Pattern JACOB_COLLECTED = Pattern.compile(
+            "^Collected (" + JACOB_COUNT_TOKEN + ")$");
+    private static final Pattern JACOB_MEDAL_THRESHOLD = Pattern.compile(
+            "^(BRONZE|SILVER|GOLD|PLATINUM|DIAMOND) with (" + JACOB_COUNT_TOKEN + ")$");
     private static final Pattern GUESTS = Pattern.compile("^Guests(?:\\s+|\\s*\\()(\\d+)(?:\\))?$", Pattern.CASE_INSENSITIVE);
     private static final Pattern VACUUM = Pattern.compile("^Vacuum Bag:\\s*(.+?)\\s+Pests?$", Pattern.CASE_INSENSITIVE);
     private static final Pattern COMPOSTER_RESOURCE = Pattern.compile(
@@ -438,43 +443,59 @@ public final class GameStateParser {
         }
 
         Observation<Long> collected = resolvePresent(lines, "jacob.current.collected", line -> {
-            if (!line.startsWith("Collected")) {
+            if (!upper(line).startsWith("COLLECTED")) {
                 return Match.irrelevant();
             }
-            String token = line.substring(line.lastIndexOf(' ') + 1);
-            try {
-                return Match.valid(StrictGameNumber.longValue(token, false));
-            } catch (StrictGameNumber.NumericFailure failure) {
-                return Match.invalid(failure.code());
+            Matcher matcher = JACOB_COLLECTED.matcher(line);
+            if (!matcher.matches()) {
+                return Match.invalid(ParseDiagnosticCode.UNKNOWN_FORMAT);
             }
+            return parseJacobCount(matcher.group(1));
         }, context);
         if (collected.isAbsent()) {
-            // Upstream accepts both shapes; explicit collection text outranks a medal threshold.
+            // The upstream fallback is limited to the five recognized medal threshold lines.
             collected = resolvePresent(lines, "jacob.current.collected", line -> {
-                if (!line.contains(" with ")) {
+                if (!containsJacobWithToken(line)) {
                     return Match.irrelevant();
                 }
-                String token = line.substring(line.lastIndexOf(' ') + 1);
-                try {
-                    return Match.valid(StrictGameNumber.longValue(token, false));
-                } catch (StrictGameNumber.NumericFailure failure) {
-                    return Match.invalid(failure.code());
+                Matcher matcher = JACOB_MEDAL_THRESHOLD.matcher(line);
+                if (!matcher.matches()) {
+                    return Match.invalid(ParseDiagnosticCode.UNKNOWN_FORMAT);
                 }
+                return parseJacobCount(matcher.group(2));
             }, context);
         }
         Observation<JacobMedal> medal = resolvePresent(lines, "jacob.current.medal", line -> {
-            if (!line.contains(" with ")) {
+            if (!containsJacobWithToken(line)) {
                 return Match.irrelevant();
             }
-            String normalized = upper(line);
-            for (JacobMedal value : JacobMedal.values()) {
-                if (normalized.contains(value.name() + " WITH")) {
-                    return Match.valid(value);
-                }
+            Matcher matcher = JACOB_MEDAL_THRESHOLD.matcher(line);
+            if (!matcher.matches()) {
+                return Match.invalid(ParseDiagnosticCode.UNKNOWN_FORMAT);
             }
-            return Match.irrelevant();
+            Match<Long> count = parseJacobCount(matcher.group(2));
+            if (count.error != null) {
+                return Match.invalid(count.error);
+            }
+            return Match.valid(JacobMedal.valueOf(matcher.group(1)));
         }, context);
         return Observation.present(new JacobContestSnapshot(remaining, crop, collected, medal));
+    }
+
+    private static Match<Long> parseJacobCount(String token) {
+        try {
+            return Match.valid(StrictGameNumber.longValue(token, false));
+        } catch (StrictGameNumber.NumericFailure failure) {
+            return Match.invalid(failure.code());
+        }
+    }
+
+    private static boolean containsJacobWithToken(String line) {
+        String normalized = upper(line);
+        return normalized.equals("WITH")
+                || normalized.startsWith("WITH ")
+                || normalized.endsWith(" WITH")
+                || normalized.contains(" WITH ");
     }
 
     private static Observation<JacobNextContestSnapshot> parseNextJacob(

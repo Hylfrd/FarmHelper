@@ -85,7 +85,8 @@
       ],
       "finding_ids": [
         "AUDIT-002-001",
-        "AUDIT-002-002"
+        "AUDIT-002-002",
+        "AUDIT-002-004"
       ],
       "disposition": "RESOLVED"
     },
@@ -299,7 +300,8 @@
       "upstream_anchors": [],
       "finding_ids": [
         "AUDIT-002-001",
-        "AUDIT-002-002"
+        "AUDIT-002-002",
+        "AUDIT-002-004"
       ],
       "disposition": "RESOLVED"
     },
@@ -363,6 +365,23 @@
       "automated_evidence": [
         "git grep -n at eacb323fbde3eff94d4f2ee7baacb059d84b8e3a locates each preserved chat signature in the newly named source path.",
         "A static package-info check verifies the fixed commit and all seven fixed-upstream source paths used by this package are present."
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-002-004",
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/gamestate/GameStateParser.java",
+      "severity": "MEDIUM",
+      "summary": "Jacob count parsing accepted prefix matches and arbitrary 'with' labels.",
+      "upstream_behavior": "Pinned GameStateHandler.checkJacob at eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java:342-383 triggers numeric parsing for any line containing 'with' or starting with 'Collected', while medal state recognizes only BRONZE, SILVER, GOLD, PLATINUM, and DIAMOND followed by ' with'.",
+      "incompatibility": "The replacement parser previously accepted a numeric suffix after a Collected prefix or arbitrary with label, so Collected bogus 1,234, CollectedX 1,234, and Other with 2,345 became PRESENT despite not being valid Jacob lines. Last-token extraction also accepted ambiguous multi-number lines.",
+      "replacement": "Require complete cleaned lines matching 'Collected <strict-number>' or '(BRONZE|SILVER|GOLD|PLATINUM|DIAMOND) with <strict-number>'. Treat malformed marker-bearing lines as UNKNOWN with diagnostics, preserve valid explicit-count priority over recognized medal thresholds, and keep medal parsing independent.",
+      "automated_evidence": [
+        "GameStateParserTest.acceptsExactJacobCountAndRecognizedMedalThresholdLines covers explicit priority and all five recognized medal fallback lines.",
+        "GameStateParserTest.rejectsJacobCountPrefixesAndUnrecognizedMedalLabels covers Collected bogus 1,234, CollectedX 1,234, Other with 2,345, near-prefix/extra-token lines, uppercase-token and Unicode-lookalike labels.",
+        "GameStateParserTest.rejectsMalformedAndAmbiguousJacobCountNumbers covers malformed grouping and multiple-number lines with MALFORMED diagnostics.",
+        "A direct classpath probe on reviewed base 7a26dac8e598a9c14dd1c480db5ab49382aa43c9 produced PRESENT for all three reported strings; the candidate probe produces UNKNOWN with jacob.current.collected diagnostics.",
+        "The focused parser, fixture, privacy, raw-snapshot, diagnostic, sequence, client-source, access-widener, provenance, full check, and build commands are rerun for the candidate before publication."
       ],
       "status": "RESOLVED"
     }

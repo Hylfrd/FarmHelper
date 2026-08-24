@@ -287,6 +287,49 @@ class GameStateParserTest {
     }
 
     @Test
+    void acceptsExactJacobCountAndRecognizedMedalThresholdLines() {
+        GameStateParseResult explicit = jacobResult("Collected 1,234", "GOLD with 2,345");
+        JacobContestSnapshot explicitContest = explicit.snapshot().jacob().currentContest().get();
+        assertEquals(1_234L, explicitContest.collected().get());
+        assertEquals(JacobMedal.GOLD, explicitContest.medal().get());
+        assertTrue(explicit.diagnostics().isEmpty());
+
+        for (JacobMedal medal : JacobMedal.values()) {
+            GameStateParseResult fallback = jacobResult(medal.name() + " with 2,345");
+            JacobContestSnapshot current = fallback.snapshot().jacob().currentContest().get();
+            assertEquals(2_345L, current.collected().get(), medal.name());
+            assertEquals(medal, current.medal().get(), medal.name());
+            assertTrue(fallback.diagnostics().isEmpty(), medal.name() + fallback.diagnostics());
+        }
+    }
+
+    @Test
+    void rejectsJacobCountPrefixesAndUnrecognizedMedalLabels() {
+        for (String line : List.of(
+                "Collected bogus 1,234",
+                "CollectedX 1,234",
+                "Other with 2,345",
+                "GOLDEN with 2,345",
+                "GOLD WITH 2,345",
+                "G\u041eLD with 2,345",
+                "GOLD with 2,345 extra")) {
+            GameStateParseResult result = jacobResult(line);
+            assertUnknownJacobCount(result, ParseDiagnosticCode.UNKNOWN_FORMAT);
+        }
+    }
+
+    @Test
+    void rejectsMalformedAndAmbiguousJacobCountNumbers() {
+        for (String line : List.of(
+                "Collected 1,234 5,678",
+                "GOLD with 1,234 5,678",
+                "GOLD with 12,34")) {
+            GameStateParseResult result = jacobResult(line);
+            assertUnknownJacobCount(result, ParseDiagnosticCode.MALFORMED);
+        }
+    }
+
+    @Test
     void conflictingSequenceMakesTheBatchUnknownWithoutLeakingText() {
         String sensitive = "[SkyBlock] HiddenIdentity is visiting Your Garden!";
         RawGameTextSnapshot raw = withChat(
@@ -435,6 +478,24 @@ class GameStateParserTest {
     private GameStateParseResult chatResult(List<RawChatMessage> chat) {
         return parser.parse(multiplayer(), withChat(
                 minimalRaw(List.of("Area: Garden"), Observation.present(WorldTransition.STABLE)), chat));
+    }
+
+    private GameStateParseResult jacobResult(String... countLines) {
+        List<String> scoreboard = new ArrayList<>(List.of("Jacob's Contest", "Wheat 2m30s"));
+        scoreboard.addAll(List.of(countLines));
+        return parser.parse(multiplayer(), raw(
+                "SKYBLOCK", scoreboard, List.of("Area: Garden"), List.of("Active Effects"),
+                List.of(), List.of(), PlayerFacts.unknown(), Observation.present(WorldTransition.STABLE)));
+    }
+
+    private static void assertUnknownJacobCount(
+            GameStateParseResult result,
+            ParseDiagnosticCode code
+    ) {
+        JacobContestSnapshot current = result.snapshot().jacob().currentContest().get();
+        assertTrue(current.collected().isUnknown());
+        assertTrue(result.diagnostics().contains(new ParseDiagnostic(
+                "jacob.current.collected", code)), result.diagnostics().toString());
     }
 
     private static RawGameTextSnapshot minimalRaw(
