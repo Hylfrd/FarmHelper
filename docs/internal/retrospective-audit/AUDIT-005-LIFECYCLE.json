@@ -63,9 +63,12 @@
   ],
   "candidate_metadata": {
     "branch": "codex/audit-005-lifecycle",
-    "pull_request": null,
+    "pull_request": 12,
+    "pull_request_url": "https://github.com/Hylfrd/FarmHelper/pull/12",
     "candidate_head": "f9a3155a4342dd2eada5debd8523409a3bc3f744",
     "candidate_tree": "4b816b730a32596a79fba0dab8e23c88f4811be5",
+    "published_head": "620b40c3bcafbbaa528c77a18c2823de16c25c9a",
+    "published_tree": "6bf791ef9ed16270b7771a1d0d6fd344bf836ead",
     "scope_paths": 18,
     "scope_paths_sha256": "702f5097cc83741554b6007c67e6d54d1a4b0456262c2daaaa60f788c80e7dca",
     "production_changes": true,
