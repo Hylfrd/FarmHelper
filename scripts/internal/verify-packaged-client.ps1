@@ -24,6 +24,7 @@ $gradlePropertiesPath = Join-Path $repositoryRoot 'gradle.properties'
 $approvedFabricApiCoordinate = 'net.fabricmc.fabric-api:fabric-api'
 $approvedFabricApiVersion = '0.153.0+26.1.2'
 $approvedFabricApiSha256 = '2A604CCC66C1294F860ACB8D0763C8887E927B3ED34AA262AC79E26D8626B94C'
+$packagedClientUsernameProperty = 'packaged_client_verification_username'
 
 function Read-GradleProperties {
     param(
@@ -38,6 +39,25 @@ function Read-GradleProperties {
         }
     }
     return $properties
+}
+
+function Assert-PackagedClientUsername {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string] $Username
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Username)) {
+        throw 'Packaged client username is absent or blank.'
+    }
+    if ($Username.Length -gt 16) {
+        throw 'Packaged client username exceeds the 16-character login limit.'
+    }
+    if ($Username -notmatch '^[A-Za-z0-9_]{3,16}$') {
+        throw 'Packaged client username is invalid; expected 3-16 ASCII letters, digits, or underscore.'
+    }
+    return $Username
 }
 
 function Resolve-RepositoryPath {
@@ -478,6 +498,28 @@ function Find-OwnedGameProcess {
     return $null
 }
 
+function Assert-ObservedPackagedClientUsername {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $CommandLine,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Username
+    )
+
+    $escapedUsername = [Regex]::Escape($Username)
+    $pattern = '(?i)(?:^|\s)--username(?:=|\s+)(?:"' + $escapedUsername + '"|' +
+        $escapedUsername + ')(?=\s|$)'
+    if ($CommandLine -notmatch $pattern) {
+        throw "Owned KnotClient command line does not contain the configured --username ${Username}: $CommandLine"
+    }
+    return [pscustomobject]@{
+        argument = '--username'
+        value = $Username
+        observed = $true
+    }
+}
+
 function Get-OwnedProcessHandle {
     param(
         [Parameter(Mandatory = $true)]
@@ -749,6 +791,8 @@ $minecraftVersion = [string] $properties['minecraft_version']
 if ([string]::IsNullOrWhiteSpace($minecraftVersion)) {
     throw 'minecraft_version is missing from gradle.properties.'
 }
+$packagedClientVerificationUsername = Assert-PackagedClientUsername `
+    -Username ([string] $properties[$packagedClientUsernameProperty])
 
 Assert-NoReparsePathComponents -Path $repositoryRoot -Description 'Repository root'
 Assert-NoReparsePathComponents -Path $wrapper -Description 'Gradle wrapper'
@@ -870,6 +914,8 @@ $proof = [ordered]@{
         mainClass = 'net.fabricmc.loader.impl.launch.knot.KnotClient'
         development = $false
         noGui = $true
+        username = $packagedClientVerificationUsername
+        usernameArgument = '--username'
         addMods = @(
             [IO.Path]::GetFullPath($candidate.path)
             [IO.Path]::GetFullPath($fabricApi.source)
@@ -912,6 +958,7 @@ $ownedGameProcessHandle = $null
 $rootExitCode = $null
 $gameExitCode = $null
 $loaded = $false
+$loginUsernameProof = $null
 $controlledTerminationEvidence = $null
 
 try {
@@ -937,6 +984,11 @@ try {
                 -ObservedProcess $ownedGameProcess `
                 -CandidatePath $candidate.path
         }
+        if ($null -ne $ownedGameProcessHandle -and $null -eq $loginUsernameProof) {
+            $loginUsernameProof = Assert-ObservedPackagedClientUsername `
+                -CommandLine ([string] $ownedGameProcess.CommandLine) `
+                -Username $packagedClientVerificationUsername
+        }
 
         if ($process.HasExited) {
             $rootExitCode = [int] $process.ExitCode
@@ -950,7 +1002,8 @@ try {
         $hasClassProof = (Test-Path -LiteralPath $classLoadLog -PathType Leaf) -and
             (Select-String -LiteralPath $classLoadLog -SimpleMatch 'dev.hylfrd.farmhelper.client.FarmHelperClient' -Quiet)
 
-        if ($null -ne $ownedGameProcessHandle -and $hasMarker -and $hasClassProof) {
+        if ($null -ne $ownedGameProcessHandle -and $null -ne $loginUsernameProof -and
+                $hasMarker -and $hasClassProof) {
             $loaded = $true
             break
         }
@@ -964,6 +1017,7 @@ try {
 
     $proof.launch.gameProcessId = [int] $ownedGameProcess.ProcessId
     $proof.launch.gameProcessCommandLine = [string] $ownedGameProcess.CommandLine
+    $proof.launch.loginUsername = $loginUsernameProof
     $proof.launch.classLoad = Read-LoadedClassProof `
         -ClassLoadLog (Join-Path $RunDirectory 'class-load.log') `
         -CandidatePath $candidate.path
