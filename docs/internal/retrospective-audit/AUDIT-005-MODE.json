@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "slice_id": "AUDIT-005-MODE",
+  "baseline_sha": "10f11c36c1a16f0ee9e896f7696eccc6fbf4e412",
+  "baseline_tree": "1c5dbf9596803ec50067b6b70e9403e0a0f198d7",
+  "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
+  "paths_sha256": "c60c2015ed18fe60c33d2596f9d7c6e25c79e0b1b62da3669627741d35967bef",
+  "entries": [
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/CropCompatibility.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroCrop.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#CropEnum",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onEnable"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroFamily.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#getMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#Macros"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroMode.java",
+      "classification": "MECHANICAL_PORT_REQUIRES_REWORK",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#getMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#MacroEnum",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#getMacro"
+      ],
+      "finding_ids": [
+        "AUDIT-005-F001"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroSettings.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#macroType",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#addRewarp",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#removeRewarp",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onEnable"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/VerticalCropMode.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#MacroEnum",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeVerticalCropMacro.java#onEnable"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/MacroModeTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#MacroEnum",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#getMacro"
+      ],
+      "finding_ids": [
+        "AUDIT-005-F001"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/MacroSettingsTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#addRewarp",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#removeRewarp"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    }
+  ],
+  "findings": [
+    {
+      "id": "AUDIT-005-F001",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroMode.java",
+      "severity": "MEDIUM",
+      "summary": "Persisted macro codes were still resolved through enum declaration order.",
+      "upstream_behavior": "FarmHelperConfig.getMacro() indexes MacroEnum.values() with macroType, and MacroHandler.getMacro() dispatches that enum to eight macro implementations.",
+      "incompatibility": "The replacement enum declares an explicit stable code, but the baseline fromCode implementation still used values()[code]. A declaration-order edit could therefore redirect persisted configuration despite the explicit code field, and the baseline test reinforced that ordinal coupling.",
+      "replacement": "Resolve by comparing the persisted value with each MacroMode.code, and assert an explicit code-to-enum table before checking the eight-family mapping.",
+      "automated_evidence": [
+        "Static repair check: MacroMode.fromCode compares mode.code with the persisted code, and MacroModeTest asserts all fourteen explicit modes and their eight families without any values()[code] lookup.",
+        "Focused command .\\gradlew.bat --no-daemon --console=plain --stacktrace test --tests dev.hylfrd.farmhelper.macro.MacroModeTest --tests dev.hylfrd.farmhelper.macro.MacroSettingsTest exited 0 with BUILD SUCCESSFUL on Java 25.0.3, Gradle 9.5.1, and Fabric Loom 1.17.17.",
+        "Full command .\\gradlew.bat --no-daemon --console=plain --stacktrace test exited 0 with BUILD SUCCESSFUL.",
+        "Verification command .\\gradlew.bat --no-daemon --console=plain --stacktrace check build verifyDependencyProvenance exited 0 with BUILD SUCCESSFUL; validateAccessWidener reported NO-SOURCE and dependency provenance verified 3 runtime dependencies, 1 platform dependency, and Loom 1.17.17.",
+        "Exact A006 base 354dd647ed81912d7e19e0eee996e65cafbb43ef with tree f394db2f21c1a07878df4e235a8769298f9da09d6 remains the composition base; 31 non-MODE checkpoint paths were compared against it with zero blob mismatches."
+      ],
+      "status": "RESOLVED"
+    }
+  ]
+}
