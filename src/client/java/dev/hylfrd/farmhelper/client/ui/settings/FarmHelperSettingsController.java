@@ -16,7 +16,6 @@ public final class FarmHelperSettingsController implements SettingsScreenOpener 
             Identifier.fromNamespaceAndPath(FarmHelper.MOD_ID, "settings"));
     private final FarmHelperClientRuntime runtime;
     private final KeyMapping openKey;
-    private final KeyPressState keyPressState = new KeyPressState();
     private int appliedConfigKey;
     private boolean openRequested;
 
@@ -46,34 +45,13 @@ public final class FarmHelperSettingsController implements SettingsScreenOpener 
         syncConfiguredKey();
         if (openRequested) {
             openRequested = false;
-            openSettings(client, client.screen);
+            client.setScreen(new FarmHelperSettingsScreen(client.screen, runtime, openKey));
         }
-        boolean mappedClick = consumeClicks(openKey);
-        boolean keyPress = keyPressState.observe(
-                openKey.isDown() || isConfiguredKeyDown(client, runtime.core().config().openSettingsKey()));
-        if (shouldOpenFromKey(mappedClick, keyPress, client.screen != null)) {
-            openSettings(client, null);
+        while (openKey.consumeClick()) {
+            if (client.screen == null) {
+                client.setScreen(new FarmHelperSettingsScreen(null, runtime, openKey));
+            }
         }
-    }
-
-    private void openSettings(Minecraft client, net.minecraft.client.gui.screens.Screen parent) {
-        client.setScreen(new FarmHelperSettingsScreen(parent, runtime, openKey));
-    }
-
-    private static boolean isConfiguredKeyDown(Minecraft client, int configuredKey) {
-        return configuredKey >= 0 && InputConstants.isKeyDown(client.getWindow(), configuredKey);
-    }
-
-    static boolean consumeClicks(KeyMapping mapping) {
-        boolean clicked = false;
-        while (mapping.consumeClick()) {
-            clicked = true;
-        }
-        return clicked;
-    }
-
-    static boolean shouldOpenFromKey(boolean mappedClick, boolean keyPress, boolean screenOpen) {
-        return !screenOpen && (mappedClick || keyPress);
     }
 
     private void syncConfiguredKey() {
@@ -83,25 +61,10 @@ public final class FarmHelperSettingsController implements SettingsScreenOpener 
         }
         openKey.setKey(InputConstants.Type.KEYSYM.getOrCreate(configuredKey));
         KeyMapping.resetMapping();
-        keyPressState.reset();
         appliedConfigKey = configuredKey;
     }
 
     static boolean needsKeyMappingUpdate(int appliedConfigKey, int configuredKey) {
         return appliedConfigKey != configuredKey;
-    }
-
-    static final class KeyPressState {
-        private boolean wasDown;
-
-        boolean observe(boolean isDown) {
-            boolean pressed = isDown && !wasDown;
-            wasDown = isDown;
-            return pressed;
-        }
-
-        void reset() {
-            wasDown = false;
-        }
     }
 }
