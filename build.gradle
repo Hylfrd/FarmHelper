@@ -5,6 +5,10 @@ plugins {
 
 def modVersion = project.mod_version.toString()
 def minecraftVersion = project.minecraft_version.toString()
+def packagedClientVerificationUsername =
+        project.findProperty("packaged_client_verification_username")?.toString() ?: ""
+def packagedClientVerificationUuid = "00000000-0000-0000-0000-000000000000"
+def packagedClientVerificationAccessToken = "offline-verification-token"
 
 version = modVersion
 group = project.maven_group
@@ -262,9 +266,9 @@ tasks.register("verifyPackagedClient", net.fabricmc.loom.task.prod.ClientProduct
         "-Dfabric.modsFolder=${project.file(it).absolutePath}\\mods"
     })
     getProgramArgs().addAll([
-        "--username", "FarmHelperVerification",
-        "--uuid", "00000000-0000-0000-0000-000000000000",
-        "--accessToken", "offline-verification-token",
+        "--username", packagedClientVerificationUsername,
+        "--uuid", packagedClientVerificationUuid,
+        "--accessToken", packagedClientVerificationAccessToken,
         "--version", minecraftVersion,
         "--versionType", "release"
     ])
@@ -282,6 +286,27 @@ tasks.register("verifyPackagedClient", net.fabricmc.loom.task.prod.ClientProduct
 
         def fail = { message ->
             throw new GradleException("Packaged client boundary verification failed: ${message}")
+        }
+        if (packagedClientVerificationUsername.trim().isEmpty()) {
+            fail("packaged client username is absent or blank")
+        }
+        if (packagedClientVerificationUsername.length() > 16) {
+            fail("packaged client username exceeds the 16-character login limit")
+        }
+        if (!(packagedClientVerificationUsername ==~ /^[A-Za-z0-9_]{3,16}$/)) {
+            fail("packaged client username is invalid; expected 3-16 ASCII letters, digits, or underscore")
+        }
+        def configuredProgramArgs = getProgramArgs().get().collect { it.toString() }
+        def usernameFlagIndices = []
+        configuredProgramArgs.eachWithIndex { argument, index ->
+            if (argument == "--username") {
+                usernameFlagIndices << index
+            }
+        }
+        if (usernameFlagIndices.size() != 1 ||
+                usernameFlagIndices[0] + 1 >= configuredProgramArgs.size() ||
+                configuredProgramArgs[usernameFlagIndices[0] + 1] != packagedClientVerificationUsername) {
+            fail("effective launch arguments do not contain the configured packaged client username")
         }
         def normalizeHash = { value, description ->
             def normalized = value.toString().toUpperCase(Locale.ROOT)
@@ -404,6 +429,7 @@ tasks.register("verifyPackagedClient", net.fabricmc.loom.task.prod.ClientProduct
         logger.lifecycle("Packaged client provenance boundary: verifyPackagedClientProvenanceGate")
         logger.lifecycle("Packaged client run directory: ${expectedRunDir}")
         logger.lifecycle("Packaged client mode: production; fabric.development=false; fabric.noGui=true")
+        logger.lifecycle("Packaged client login username: ${packagedClientVerificationUsername} (offline)")
     }
 }
 

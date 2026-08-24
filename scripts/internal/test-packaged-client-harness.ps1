@@ -6,6 +6,8 @@ Set-StrictMode -Version Latest
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $verificationScript = Join-Path $PSScriptRoot 'verify-packaged-client.ps1'
+$gradlePropertiesPath = Join-Path $repositoryRoot 'gradle.properties'
+$buildGradlePath = Join-Path $repositoryRoot 'build.gradle'
 $wrapper = Join-Path $repositoryRoot 'gradlew.bat'
 $librariesDirectory = Join-Path $repositoryRoot 'build\libs'
 $candidatePath = Join-Path $librariesDirectory 'FarmHelper-26.1.2.jar'
@@ -13,6 +15,101 @@ $fabricApiVersion = '0.153.0+26.1.2'
 $fabricApiArtifactName = "fabric-api-$fabricApiVersion.jar"
 $fabricApiCacheRoot = Join-Path $env:USERPROFILE (
     ".gradle\caches\modules-2\files-2.1\net.fabricmc.fabric-api\fabric-api\$fabricApiVersion")
+
+function Read-ConfiguredGradleProperty {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Name
+    )
+
+    $pattern = '(?m)^[\t ]*' + [Regex]::Escape($Name) + '[\t ]*=[\t ]*([^\r\n]*)$'
+    $propertyMatches = [Regex]::Matches([IO.File]::ReadAllText($Path), $pattern)
+    if ($propertyMatches.Count -ne 1) {
+        throw "Expected exactly one $Name entry in $Path; found $($propertyMatches.Count)."
+    }
+    return $propertyMatches[0].Groups[1].Value
+}
+
+function Assert-TestPackagedClientUsername {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string] $Username
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Username)) {
+        throw 'Packaged client username is absent or blank.'
+    }
+    if ($Username.Length -gt 16) {
+        throw 'Packaged client username exceeds the 16-character login limit.'
+    }
+    if ($Username -notmatch '^[A-Za-z0-9_]{3,16}$') {
+        throw 'Packaged client username is invalid; expected 3-16 ASCII letters, digits, or underscore.'
+    }
+    return $Username
+}
+
+function Invoke-UsernameExpectedFailure {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Name,
+
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string] $Value,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ExpectedMessage
+    )
+
+    $failed = $false
+    try {
+        [void] (Assert-TestPackagedClientUsername -Username $Value)
+    } catch {
+        $failed = $true
+        if ($_.Exception.Message -notmatch [Regex]::Escape($ExpectedMessage)) {
+            throw "$Name failed for the wrong reason: $($_.Exception.Message)"
+        }
+    }
+    if (-not $failed) {
+        throw "$Name unexpectedly passed."
+    }
+    Write-Output "USERNAME_NEGATIVE_OK $Name"
+}
+
+$configuredUsername = Read-ConfiguredGradleProperty `
+    -Path $gradlePropertiesPath `
+    -Name 'packaged_client_verification_username'
+[void] (Assert-TestPackagedClientUsername -Username $configuredUsername)
+$buildText = [IO.File]::ReadAllText($buildGradlePath)
+if ($buildText -match 'FarmHelperVerification' -or
+    $buildText -notmatch 'project\.findProperty\("packaged_client_verification_username"\)' -or
+    $buildText -notmatch '"--username",\s*packagedClientVerificationUsername' -or
+    $buildText -notmatch 'effective launch arguments do not contain the configured packaged client username') {
+    throw 'Packaged client username configuration is not bound to the validated effective launch arguments.'
+}
+Invoke-UsernameExpectedFailure `
+    -Name 'absent username' `
+    -Value $null `
+    -ExpectedMessage 'absent or blank'
+Invoke-UsernameExpectedFailure `
+    -Name 'blank username' `
+    -Value '' `
+    -ExpectedMessage 'absent or blank'
+Invoke-UsernameExpectedFailure `
+    -Name 'over-limit username' `
+    -Value 'FarmHelperVerification' `
+    -ExpectedMessage '16-character login limit'
+Invoke-UsernameExpectedFailure `
+    -Name 'malformed username' `
+    -Value 'Farm Helper' `
+    -ExpectedMessage '3-16 ASCII letters'
+Write-Output "PACKAGED_CLIENT_USERNAME_INVARIANTS_OK username=$configuredUsername invalidCount=4"
 
 if (-not (Test-Path -LiteralPath $candidatePath -PathType Leaf)) {
     throw "Build the candidate JAR first: $candidatePath"
@@ -81,7 +178,9 @@ function Invoke-GradleExpectedFailure {
         [string] $DependencyHash,
 
         [Parameter(Mandatory = $true)]
-        [string] $RunDirectory
+        [string] $RunDirectory,
+
+        [string] $Username
     )
 
     $arguments = @(
@@ -93,9 +192,12 @@ function Invoke-GradleExpectedFailure {
         '--project-prop', "packagedClientJarSha256=$CandidateHash",
         '--project-prop', "packagedClientDependency=$fabricApiPath",
         '--project-prop', "packagedClientDependencySha256=$DependencyHash",
-        '--project-prop', "packagedClientRunDir=$RunDirectory",
-        'verifyPackagedClient'
+        '--project-prop', "packagedClientRunDir=$RunDirectory"
     )
+    if ($PSBoundParameters.ContainsKey('Username')) {
+        $arguments += @('--project-prop', "packaged_client_verification_username=$Username")
+    }
+    $arguments += 'verifyPackagedClient'
     $output = @(& $wrapper @arguments 2>&1)
     $exitCode = $LASTEXITCODE
     $text = $output -join "`n"
@@ -129,6 +231,8 @@ try {
     if ([string] $positiveProof.status -ne 'preflight-passed' -or
         [string] $positiveProof.provenanceBoundary.gradleTask -ne 'verifyPackagedClientProvenanceGate' -or
         [bool] $positiveProof.provenanceBoundary.packagedTaskDependsOnProvenance -ne $true -or
+        [string] $positiveProof.launch.username -ne $configuredUsername -or
+        [string] $positiveProof.launch.usernameArgument -ne '--username' -or
         [int] $positiveProof.assets.verifiedObjectCount -ne [int] $positiveProof.assets.objectCount -or
         [int] $positiveProof.assets.objectCount -le 0) {
         throw "positive preflight returned incomplete proof: $($positiveOutput -join "`n")"
@@ -363,6 +467,34 @@ exit /b %ERRORLEVEL%
         -DependencyHash ('0' * 64) `
         -RunDirectory $gradleBoundaryRunDirectory
     Write-Output 'GRADLE_HASH_BOUNDARY_NEGATIVES_OK count=2'
+
+    $usernameGradleCases = @(
+        [pscustomobject]@{
+            name = 'Gradle blank packaged-client username'
+            value = ''
+            message = 'packaged client username is absent or blank'
+        },
+        [pscustomobject]@{
+            name = 'Gradle over-limit packaged-client username'
+            value = 'FarmHelperVerification'
+            message = 'packaged client username exceeds the 16-character login limit'
+        },
+        [pscustomobject]@{
+            name = 'Gradle malformed packaged-client username'
+            value = 'Farm Helper'
+            message = 'packaged client username is invalid'
+        }
+    )
+    foreach ($usernameCase in $usernameGradleCases) {
+        Invoke-GradleExpectedFailure `
+            -Name $usernameCase.name `
+            -ExpectedMessage $usernameCase.message `
+            -CandidateHash $sha256 `
+            -DependencyHash $fabricApiSha256 `
+            -RunDirectory $gradleBoundaryRunDirectory `
+            -Username $usernameCase.value
+    }
+    Write-Output 'GRADLE_USERNAME_INVARIANT_NEGATIVES_OK count=3'
 } finally {
     if (Test-Path -LiteralPath $fixtureRoot) {
         Remove-Item -LiteralPath $fixtureRoot -Recurse -Force

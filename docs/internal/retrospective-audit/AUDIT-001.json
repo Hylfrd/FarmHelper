@@ -22,9 +22,10 @@
         "JellyLabScripts/FarmHelper@eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:build.gradle.kts"
       ],
       "finding_ids": [
-        "AUDIT-001-F002"
+        "AUDIT-001-F002",
+        "AUDIT-001-F003"
       ],
-      "disposition": "RESOLVED"
+      "disposition": "REPAIR_PENDING_HEAVY_VERIFICATION"
     },
     {
       "path": "dependency-provenance.json",
@@ -41,8 +42,10 @@
       "upstream_anchors": [
         "JellyLabScripts/FarmHelper@eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:gradle.properties"
       ],
-      "finding_ids": [],
-      "disposition": "NO_FINDING"
+      "finding_ids": [
+        "AUDIT-001-F003"
+      ],
+      "disposition": "REPAIR_PENDING_HEAVY_VERIFICATION"
     },
     {
       "path": "gradle/wrapper/gradle-wrapper.jar",
@@ -128,8 +131,10 @@
         "JellyLabScripts/FarmHelper@eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:build.gradle.kts#loom.launchConfigs",
         "JellyLabScripts/FarmHelper@eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:build.gradle.kts#dependencies"
       ],
-      "finding_ids": [],
-      "disposition": "NO_FINDING"
+      "finding_ids": [
+        "AUDIT-001-F003"
+      ],
+      "disposition": "REPAIR_PENDING_HEAVY_VERIFICATION"
     },
     {
       "path": "scripts/internal/verify-dependency-provenance.ps1",
@@ -147,8 +152,10 @@
         "JellyLabScripts/FarmHelper@eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:build.gradle.kts#loom.launchConfigs",
         "JellyLabScripts/FarmHelper@eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:build.gradle.kts#dependencies"
       ],
-      "finding_ids": [],
-      "disposition": "NO_FINDING"
+      "finding_ids": [
+        "AUDIT-001-F003"
+      ],
+      "disposition": "REPAIR_PENDING_HEAVY_VERIFICATION"
     },
     {
       "path": "settings.gradle",
@@ -211,6 +218,19 @@
       "replacement": "Configure sourcesJar to embed LICENSE and NOTICE under META-INF with duplicate entries rejected. Only attribution metadata is added, so source contents, compiled behavior, and fidelity to the modern implementation are unchanged.",
       "automated_evidence": "A baseline clean offline build produced a 359-entry sources JAR with both attribution entries absent; after the repair, .\\gradlew.bat clean build --offline --no-daemon --console=plain succeeds and archive inspection finds exactly one META-INF/LICENSE and one META-INF/NOTICE in both produced JARs.",
       "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-001-F003",
+      "path": "build.gradle",
+      "severity": "HIGH",
+      "summary": "Packaged-client verification supplied a protocol-invalid offline username and failed when an integrated server accepted the new world login.",
+      "player_observed_evidence": "The exact Player P0-02 failure is recorded at canonical logs/player/player-audit001-20260824T0320/batch-02-p0-02-failure.json; the rebound 54-case matrix has SHA-256 9903542fcaf34554381efd967532f34590f9c113d135c19fa9a9c391af9186e4.",
+      "upstream_behavior": "Vanilla ServerboundHelloPacket login encoding accepts a player username of at most 16 characters. The offline packaged-client launch must pass a stable protocol-valid name while retaining its explicit offline UUID and access-token arguments.",
+      "incompatibility": "The failed packaged client passed FarmHelperVerification (22 characters) through --username. After Create New World started the integrated server, vanilla login codec validation rejected that value and the client reported a codec exception instead of completing the login.",
+      "replacement": "Declare packaged_client_verification_username=FarmHelperTest (14 characters) as the single verification setting. Validate absence, blank values, length, allowed username characters, and the effective --username argument before launch; preserve UUID 00000000-0000-0000-0000-000000000000, accessToken offline-verification-token, the candidate JAR identity checks, and dependency provenance checks.",
+      "automated_evidence": "The focused packaged-client harness now checks the configured valid name, absent/blank/over-limit/malformed negative cases, and Gradle rejection of invalid overrides. The verifier records the configured username in preflight proof and requires the owned KnotClient command line to contain the exact --username value. Gradle/Java execution, the broad build, and PR CI remain pending the post-Player HEAVY checkpoint.",
+      "disposition": "REPAIR_PENDING_HEAVY_VERIFICATION",
+      "status": "REPAIRED_PENDING_HEAVY_VERIFICATION"
     }
   ]
 }
