@@ -46,6 +46,21 @@ tasks.named("test") {
 }
 
 def provenanceFile = layout.projectDirectory.file("dependency-provenance.json")
+def expectedCollisionMetadataSha256 =
+        "257A144E784CFF7FACBCC68B09D5D10C2BAC441565388E827B8BEBB2D4AE79D2"
+def expectedCollisionMetadataRelativePath =
+        "caches/fabric-loom/26.1.2/mojang_minecraft_info.json"
+def expectedCollisionLibrarySetSha256 =
+        "BBAF6586E110F676A03300BD98C2412AD6F1D84044B590262C22D4818E720F44"
+def expectedCollisionCommonJarSha256 =
+        "2692634287E54AABD918F6E68E1877C9BB8E36D81C7B9FE10460FA3B24DA04CD"
+def expectedCollisionCommonJarRelativePath =
+        "caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-common-deobf/26.1.2/" +
+                "minecraft-common-deobf-26.1.2.jar"
+def expectedCollisionCommonJarSize = 23536519
+def expectedCollisionLibraryCanonicalization =
+        "ordinal-sort(name|downloads.artifact.path|downloads.artifact.sha1.lower|downloads.artifact.size)" +
+                "+UTF-8+SHA-256+without-trailing-newline"
 
 tasks.register("verifyDependencyProvenance") {
     group = "verification"
@@ -63,6 +78,21 @@ tasks.register("verifyDependencyProvenance") {
         def provenance = new groovy.json.JsonSlurper().parse(provenanceFile.asFile)
         if (provenance.schemaVersion != 1) {
             fail("unsupported schemaVersion ${provenance.schemaVersion}")
+        }
+        def collisionAudit = provenance.minecraftCollisionAudit
+        if (collisionAudit == null ||
+                collisionAudit.schemaVersion != 1 ||
+                collisionAudit.minecraftVersion.toString() != minecraftVersion ||
+                collisionAudit.metadataRelativePath.toString() != expectedCollisionMetadataRelativePath ||
+                collisionAudit.metadataSha256.toString() != expectedCollisionMetadataSha256 ||
+                collisionAudit.librarySetSha256.toString() != expectedCollisionLibrarySetSha256 ||
+                collisionAudit.libraryCount != 107 ||
+                collisionAudit.classpathJarCount != 51 ||
+                collisionAudit.commonJarRelativePath.toString() != expectedCollisionCommonJarRelativePath ||
+                collisionAudit.commonJarSha256.toString() != expectedCollisionCommonJarSha256 ||
+                collisionAudit.commonJarSize != expectedCollisionCommonJarSize ||
+                collisionAudit.libraryCanonicalization.toString() != expectedCollisionLibraryCanonicalization) {
+            fail("minecraft collision audit provenance pin is missing or inconsistent")
         }
 
         def declaredRuntime = configurations.implementation.dependencies.collectEntries { dependency ->

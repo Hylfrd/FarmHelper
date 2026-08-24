@@ -8,6 +8,7 @@ Set-StrictMode -Version Latest
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $verificationScript = Join-Path $PSScriptRoot 'verify-packaged-client.ps1'
+$collisionAuditScript = Join-Path $PSScriptRoot 'audit-minecraft-collision-bounds.ps1'
 $gradlePropertiesPath = Join-Path $repositoryRoot 'gradle.properties'
 $buildGradlePath = Join-Path $repositoryRoot 'build.gradle'
 $wrapper = Join-Path $repositoryRoot 'gradlew.bat'
@@ -26,7 +27,6 @@ $defaultUserGradleHome = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE '.gr
 if ($gradleUserHome.Equals($defaultUserGradleHome, [StringComparison]::OrdinalIgnoreCase)) {
     throw "The packaged-client harness refuses the default user-level Gradle cache: $gradleUserHome"
 }
-$env:GRADLE_USER_HOME = $gradleUserHome
 $fabricApiCacheRoot = Join-Path $gradleUserHome (
     "caches\modules-2\files-2.1\net.fabricmc.fabric-api\fabric-api\$fabricApiVersion")
 
@@ -230,7 +230,63 @@ function Invoke-GradleExpectedFailure {
     Write-Output "GRADLE_NEGATIVE_OK $Name exit=$exitCode"
 }
 
+function Invoke-CollisionExpectedFailure {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Name,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ExpectedMessage,
+
+        [Parameter(Mandatory = $true)]
+        [string] $FixtureGradleHome
+    )
+
+    $output = @(
+        & $powershell -NoProfile -File $collisionAuditScript `
+            -GradleUserHome $FixtureGradleHome 2>&1
+    )
+    $exitCode = $LASTEXITCODE
+    $text = $output -join "`n"
+    if ($exitCode -eq 0) {
+        throw "$Name unexpectedly passed."
+    }
+    if ($text -notmatch [Regex]::Escape($ExpectedMessage)) {
+        throw "$Name failed for the wrong reason: $text"
+    }
+    Write-Output "COLLISION_NEGATIVE_OK $Name"
+}
+
+function New-CollisionFixtureHome {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Name
+    )
+
+    $fixtureGradleHome = Join-Path $fixtureRoot $Name
+    $metadataDirectory = Join-Path $fixtureGradleHome 'caches\fabric-loom\26.1.2'
+    $commonDirectory = Join-Path $fixtureGradleHome (
+        'caches\fabric-loom\minecraftMaven\net\minecraft\minecraft-common-deobf\26.1.2')
+    New-Item -ItemType Directory -Path $metadataDirectory -Force | Out-Null
+    New-Item -ItemType Directory -Path $commonDirectory -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $gradleUserHome 'caches\fabric-loom\26.1.2\mojang_minecraft_info.json') `
+        -Destination (Join-Path $metadataDirectory 'mojang_minecraft_info.json')
+    Copy-Item -LiteralPath (Join-Path $gradleUserHome (
+            'caches\fabric-loom\minecraftMaven\net\minecraft\minecraft-common-deobf\26.1.2\' +
+            'minecraft-common-deobf-26.1.2.jar')) `
+        -Destination (Join-Path $commonDirectory 'minecraft-common-deobf-26.1.2.jar')
+    return $fixtureGradleHome
+}
+
+$callerGradleUserHomeWasSet = Test-Path Env:GRADLE_USER_HOME
+$callerGradleUserHome = if ($callerGradleUserHomeWasSet) {
+    [string] $env:GRADLE_USER_HOME
+} else {
+    $null
+}
+
 try {
+    $env:GRADLE_USER_HOME = $gradleUserHome
     $positiveFixture = Join-Path $fixtureRoot 'positive-preflight'
     New-Item -ItemType Directory -Path (Join-Path $positiveFixture 'mods') -Force | Out-Null
     $positiveOutput = @(
@@ -251,6 +307,8 @@ try {
         [bool] $positiveProof.provenanceBoundary.packagedTaskDependsOnProvenance -ne $true -or
         [string] $positiveProof.launch.username -ne $configuredUsername -or
         [string] $positiveProof.launch.usernameArgument -ne '--username' -or
+        [string] $positiveProof.gradleUserHome -ne $gradleUserHome -or
+        [string] $positiveProof.gradleUserHomeBinding -ne 'explicit-child-process-environment' -or
         [int] $positiveProof.assets.verifiedObjectCount -ne [int] $positiveProof.assets.objectCount -or
         [int] $positiveProof.assets.objectCount -le 0) {
         throw "positive preflight returned incomplete proof: $($positiveOutput -join "`n")"
@@ -295,6 +353,20 @@ try {
         -ExpectedMessage 'reparse-point component' `
         -FixtureDirectory (Join-Path $junctionParent 'escaped-run') `
         -Hash $sha256
+
+    $gradleHomeJunctionFixture = Join-Path $fixtureRoot 'gradle home junction'
+    $gradleHomeJunctionTarget = Join-Path $gradleHomeJunctionFixture 'outside'
+    $gradleHomeJunction = Join-Path $gradleHomeJunctionFixture 'gradle-link'
+    New-Item -ItemType Directory -Path $gradleHomeJunctionTarget -Force | Out-Null
+    New-Item -ItemType Junction -Path $gradleHomeJunction -Target $gradleHomeJunctionTarget -ErrorAction Stop | Out-Null
+    $gradleHomeJunctionRun = Join-Path $gradleHomeJunctionFixture 'run'
+    New-Item -ItemType Directory -Path (Join-Path $gradleHomeJunctionRun 'mods') -Force | Out-Null
+    Invoke-ExpectedFailure `
+        -Name 'Gradle-home junction escape' `
+        -ExpectedMessage 'Gradle user home contains a reparse-point component' `
+        -FixtureDirectory $gradleHomeJunctionRun `
+        -Hash $sha256 `
+        -GradleUserHome (Join-Path $gradleHomeJunction 'home')
 
     $assetFixture = Join-Path $fixtureRoot 'asset hash mismatch'
     $assetGradleHome = Join-Path $assetFixture 'gradle home'
@@ -341,7 +413,7 @@ try {
         -Hash $sha256 `
         -GradleUserHome $assetGradleHome
 
-    Write-Output 'PACKAGED_CLIENT_NEGATIVE_TESTS_OK count=5'
+    Write-Output 'PACKAGED_CLIENT_NEGATIVE_TESTS_OK count=6'
 
     $validLaunchFixture = Join-Path $fixtureRoot 'valid launch cache'
     $validGradleHome = Join-Path $validLaunchFixture 'gradle home'
@@ -386,7 +458,10 @@ try {
     $capturePath = Join-Path $launcherFixture 'captured arguments.txt'
     $captureScript = Join-Path $launcherFixture 'capture launcher.ps1'
     @'
-$env:FARMHELPER_CAPTURED_ARGS | Set-Content -LiteralPath $env:FARMHELPER_VERIFIER_CAPTURE -Encoding utf8
+[ordered]@{
+    arguments = $env:FARMHELPER_CAPTURED_ARGS
+    gradleUserHome = $env:GRADLE_USER_HOME
+} | ConvertTo-Json -Compress | Set-Content -LiteralPath $env:FARMHELPER_VERIFIER_CAPTURE -Encoding utf8
 [Console]::Error.WriteLine('forced nonzero launcher exit')
 exit 37
 '@ | Set-Content -LiteralPath $captureScript -Encoding utf8
@@ -405,10 +480,14 @@ exit /b %ERRORLEVEL%
     $oldTestLauncher = $env:FARMHELPER_VERIFIER_TEST_LAUNCHER
     $oldCapturePath = $env:FARMHELPER_VERIFIER_CAPTURE
     $oldCapturedArguments = $env:FARMHELPER_CAPTURED_ARGS
+    $ambientGradleHome = Join-Path $launcherFixture 'ambient gradle home'
+    New-Item -ItemType Directory -Path $ambientGradleHome -Force | Out-Null
+    $oldAmbientGradleHome = $env:GRADLE_USER_HOME
     try {
         $env:FARMHELPER_VERIFIER_TEST_MODE = '1'
         $env:FARMHELPER_VERIFIER_TEST_LAUNCHER = $launcherPath
         $env:FARMHELPER_VERIFIER_CAPTURE = $capturePath
+        $env:GRADLE_USER_HOME = $ambientGradleHome
         $launchOutput = @(
             & $powershell -NoProfile -File $verificationScript `
                 -ExpectedSha256 $sha256 `
@@ -425,7 +504,8 @@ exit /b %ERRORLEVEL%
         if (-not (Test-Path -LiteralPath $capturePath -PathType Leaf)) {
             throw 'forced nonzero launcher test did not capture its arguments.'
         }
-        $capturedArguments = Get-Content -LiteralPath $capturePath -Raw
+        $capturedLaunch = Get-Content -LiteralPath $capturePath -Raw | ConvertFrom-Json
+        $capturedArguments = [string] $capturedLaunch.arguments
         $expectedArguments = @(
             "packagedClientJar=$candidatePath",
             "packagedClientJarSha256=$sha256",
@@ -443,7 +523,14 @@ exit /b %ERRORLEVEL%
                 throw "spaced launcher argument was truncated or changed: $expectedArgument; captured=$capturedArguments"
             }
         }
-        Write-Output 'NEGATIVE_OK forced nonzero launcher and spaced arguments'
+        if ([IO.Path]::GetFullPath([string] $capturedLaunch.gradleUserHome) -ne
+            [IO.Path]::GetFullPath($validGradleHome)) {
+            throw "explicit Gradle home did not override ambient home: captured=$($capturedLaunch.gradleUserHome) expected=$validGradleHome"
+        }
+        if ([IO.Path]::GetFullPath($env:GRADLE_USER_HOME) -ne [IO.Path]::GetFullPath($ambientGradleHome)) {
+            throw 'verifier changed the caller ambient Gradle home while launching its child.'
+        }
+        Write-Output 'NEGATIVE_OK forced nonzero launcher, spaced arguments, explicit Gradle-home binding'
     } finally {
         if ($null -eq $oldTestMode) {
             Remove-Item Env:FARMHELPER_VERIFIER_TEST_MODE -ErrorAction SilentlyContinue
@@ -464,6 +551,11 @@ exit /b %ERRORLEVEL%
             Remove-Item Env:FARMHELPER_CAPTURED_ARGS -ErrorAction SilentlyContinue
         } else {
             $env:FARMHELPER_CAPTURED_ARGS = $oldCapturedArguments
+        }
+        if ($null -eq $oldAmbientGradleHome) {
+            Remove-Item Env:GRADLE_USER_HOME -ErrorAction SilentlyContinue
+        } else {
+            $env:GRADLE_USER_HOME = $oldAmbientGradleHome
         }
         if (Test-Path -LiteralPath $spacedVerificationParent) {
             Remove-Item -LiteralPath $spacedVerificationParent -Recurse -Force
@@ -513,8 +605,112 @@ exit /b %ERRORLEVEL%
             -Username $usernameCase.value
     }
     Write-Output 'GRADLE_USERNAME_INVARIANT_NEGATIVES_OK count=3'
+
+    $collisionHomeJunctionFixture = Join-Path $fixtureRoot 'collision gradle-home junction'
+    $collisionHomeJunctionTarget = Join-Path $collisionHomeJunctionFixture 'outside'
+    $collisionHomeJunction = Join-Path $collisionHomeJunctionFixture 'gradle-link'
+    New-Item -ItemType Directory -Path $collisionHomeJunctionTarget -Force | Out-Null
+    New-Item -ItemType Junction -Path $collisionHomeJunction -Target $collisionHomeJunctionTarget -ErrorAction Stop | Out-Null
+    Invoke-CollisionExpectedFailure `
+        -Name 'collision Gradle-home junction' `
+        -ExpectedMessage 'Gradle user home contains a reparse-point component' `
+        -FixtureGradleHome (Join-Path $collisionHomeJunction 'home')
+
+    $metadataJunctionHome = Join-Path $fixtureRoot 'collision metadata junction'
+    $metadataJunctionTarget = Join-Path $metadataJunctionHome 'metadata-target'
+    $metadataJunctionVersion = Join-Path $metadataJunctionHome 'gradle\caches\fabric-loom\26.1.2'
+    New-Item -ItemType Directory -Path $metadataJunctionTarget -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $gradleUserHome 'caches\fabric-loom\26.1.2\mojang_minecraft_info.json') `
+        -Destination (Join-Path $metadataJunctionTarget 'mojang_minecraft_info.json')
+    New-Item -ItemType Directory -Path (Split-Path -Parent $metadataJunctionVersion) -Force | Out-Null
+    New-Item -ItemType Junction -Path $metadataJunctionVersion -Target $metadataJunctionTarget -ErrorAction Stop | Out-Null
+    Invoke-CollisionExpectedFailure `
+        -Name 'collision metadata junction' `
+        -ExpectedMessage 'Minecraft metadata contains a reparse-point component' `
+        -FixtureGradleHome (Join-Path $metadataJunctionHome 'gradle')
+
+    $commonJunctionHome = New-CollisionFixtureHome -Name 'collision common JAR junction'
+    $commonJunctionPath = Join-Path $commonJunctionHome (
+        'caches\fabric-loom\minecraftMaven\net\minecraft\minecraft-common-deobf\26.1.2')
+    $commonJunctionTarget = Join-Path $commonJunctionHome 'common-target'
+    Remove-Item -LiteralPath $commonJunctionPath -Recurse -Force
+    New-Item -ItemType Directory -Path $commonJunctionTarget -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $gradleUserHome (
+            'caches\fabric-loom\minecraftMaven\net\minecraft\minecraft-common-deobf\26.1.2\' +
+            'minecraft-common-deobf-26.1.2.jar')) `
+        -Destination (Join-Path $commonJunctionTarget 'minecraft-common-deobf-26.1.2.jar')
+    New-Item -ItemType Junction -Path $commonJunctionPath -Target $commonJunctionTarget -ErrorAction Stop | Out-Null
+    Invoke-CollisionExpectedFailure `
+        -Name 'collision common JAR junction' `
+        -ExpectedMessage 'Minecraft common-deobf JAR contains a reparse-point component' `
+        -FixtureGradleHome $commonJunctionHome
+
+    $libraryJunctionHome = New-CollisionFixtureHome -Name 'collision library junction'
+    $sourceMetadataPath = Join-Path $gradleUserHome 'caches\fabric-loom\26.1.2\mojang_minecraft_info.json'
+    $sourceMetadata = Get-Content -LiteralPath $sourceMetadataPath -Raw | ConvertFrom-Json
+    $firstLibrary = @($sourceMetadata.libraries)[0]
+    $firstLibraryParts = ([string] $firstLibrary.name) -split ':'
+    $libraryJunctionPath = Join-Path $libraryJunctionHome (
+        'caches\modules-2\files-2.1\' + $firstLibraryParts[0] + '\' +
+        $firstLibraryParts[1] + '\' + $firstLibraryParts[2])
+    $libraryJunctionTarget = Join-Path $libraryJunctionHome 'library-target'
+    New-Item -ItemType Directory -Path $libraryJunctionTarget -Force | Out-Null
+    New-Item -ItemType Directory -Path (Split-Path -Parent $libraryJunctionPath) -Force | Out-Null
+    New-Item -ItemType Junction -Path $libraryJunctionPath -Target $libraryJunctionTarget -ErrorAction Stop | Out-Null
+    Invoke-CollisionExpectedFailure `
+        -Name 'collision library junction' `
+        -ExpectedMessage 'Minecraft library directory' `
+        -FixtureGradleHome $libraryJunctionHome
+
+    $tamperedMetadataHome = New-CollisionFixtureHome -Name 'collision tampered metadata'
+    $tamperedMetadataPath = Join-Path $tamperedMetadataHome 'caches\fabric-loom\26.1.2\mojang_minecraft_info.json'
+    $tamperedMetadata = Get-Content -LiteralPath $tamperedMetadataPath -Raw | ConvertFrom-Json
+    $tamperedMetadata.assetIndex.id = 'tampered'
+    [IO.File]::WriteAllText(
+        $tamperedMetadataPath,
+        ($tamperedMetadata | ConvertTo-Json -Depth 100),
+        [Text.UTF8Encoding]::new($false))
+    Invoke-CollisionExpectedFailure `
+        -Name 'collision tampered metadata' `
+        -ExpectedMessage 'Unexpected Minecraft metadata SHA-256' `
+        -FixtureGradleHome $tamperedMetadataHome
+
+    $tamperedLibraryHome = New-CollisionFixtureHome -Name 'collision tampered library list'
+    $tamperedLibraryPath = Join-Path $tamperedLibraryHome 'caches\fabric-loom\26.1.2\mojang_minecraft_info.json'
+    $tamperedLibrary = Get-Content -LiteralPath $tamperedLibraryPath -Raw | ConvertFrom-Json
+    $tamperedLibrary.libraries[0].name = 'tampered:library:1.0.0'
+    [IO.File]::WriteAllText(
+        $tamperedLibraryPath,
+        ($tamperedLibrary | ConvertTo-Json -Depth 100),
+        [Text.UTF8Encoding]::new($false))
+    Invoke-CollisionExpectedFailure `
+        -Name 'collision tampered library list' `
+        -ExpectedMessage 'Unexpected Minecraft metadata SHA-256' `
+        -FixtureGradleHome $tamperedLibraryHome
+
+    $escapedLibraryHome = New-CollisionFixtureHome -Name 'collision library path escape'
+    $escapedLibraryPath = Join-Path $escapedLibraryHome 'caches\fabric-loom\26.1.2\mojang_minecraft_info.json'
+    $escapedLibrary = Get-Content -LiteralPath $escapedLibraryPath -Raw | ConvertFrom-Json
+    $escapedLibrary.libraries[0].downloads.artifact.path = '..\..\outside.jar'
+    [IO.File]::WriteAllText(
+        $escapedLibraryPath,
+        ($escapedLibrary | ConvertTo-Json -Depth 100),
+        [Text.UTF8Encoding]::new($false))
+    Invoke-CollisionExpectedFailure `
+        -Name 'collision library path escape' `
+        -ExpectedMessage 'Unexpected Minecraft metadata SHA-256' `
+        -FixtureGradleHome $escapedLibraryHome
+
+    Write-Output 'COLLISION_PATH_AND_PROVENANCE_NEGATIVES_OK count=7'
 } finally {
+    if ($callerGradleUserHomeWasSet) {
+        $env:GRADLE_USER_HOME = $callerGradleUserHome
+    } else {
+        Remove-Item Env:GRADLE_USER_HOME -ErrorAction SilentlyContinue
+    }
     if (Test-Path -LiteralPath $fixtureRoot) {
         Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
     }
 }
+
+exit 0

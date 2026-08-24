@@ -23,7 +23,8 @@
       ],
       "finding_ids": [
         "AUDIT-001-F002",
-        "AUDIT-001-F003"
+        "AUDIT-001-F003",
+        "AUDIT-001-F005"
       ],
       "disposition": "RESOLVED"
     },
@@ -33,8 +34,10 @@
       "upstream_anchors": [
         "JellyLabScripts/FarmHelper@eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:build.gradle.kts#dependencies"
       ],
-      "finding_ids": [],
-      "disposition": "NO_FINDING"
+      "finding_ids": [
+        "AUDIT-001-F005"
+      ],
+      "disposition": "RESOLVED"
     },
     {
       "path": "gradle.properties",
@@ -111,8 +114,10 @@
         "JellyLabScripts/FarmHelper@eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#blockHasCollision",
         "JellyLabScripts/FarmHelper@eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#hasCollision"
       ],
-      "finding_ids": [],
-      "disposition": "NO_FINDING"
+      "finding_ids": [
+        "AUDIT-001-F005"
+      ],
+      "disposition": "RESOLVED"
     },
     {
       "path": "scripts/internal/audit-packaged-jar.ps1",
@@ -132,7 +137,9 @@
         "JellyLabScripts/FarmHelper@eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:build.gradle.kts#dependencies"
       ],
       "finding_ids": [
-        "AUDIT-001-F003"
+        "AUDIT-001-F003",
+        "AUDIT-001-F004",
+        "AUDIT-001-F005"
       ],
       "disposition": "RESOLVED"
     },
@@ -153,7 +160,8 @@
         "JellyLabScripts/FarmHelper@eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:build.gradle.kts#dependencies"
       ],
       "finding_ids": [
-        "AUDIT-001-F003"
+        "AUDIT-001-F003",
+        "AUDIT-001-F004"
       ],
       "disposition": "RESOLVED"
     },
@@ -228,7 +236,31 @@
       "upstream_behavior": "Vanilla ServerboundHelloPacket login encoding accepts a player username of at most 16 characters. The offline packaged-client launch must pass a stable protocol-valid name while retaining its explicit offline UUID and access-token arguments.",
       "incompatibility": "The failed packaged client passed FarmHelperVerification (22 characters) through --username. After Create New World started the integrated server, vanilla login codec validation rejected that value and the client reported a codec exception instead of completing the login.",
       "replacement": "Declare packaged_client_verification_username=FarmHelperTest (14 characters) as the single verification setting. Validate absence, blank values, length, allowed username characters, and the effective --username argument before launch; preserve UUID 00000000-0000-0000-0000-000000000000, accessToken offline-verification-token, the candidate JAR identity checks, and dependency provenance checks.",
-      "automated_evidence": "The independently provisioned isolated home recorded successful online asset provisioning before relocation; the target .gradle/audit-001-user-home then passed two offline downloadAssets receipts, with the second UP-TO-DATE and zero transfer/fetch lines. The 26.1.2-30 asset index SHA-256 is D43F145337DDF8B1258F92D5E8CD8EF4E5E2B37D220FEF2D013987B2EF0EBC90 and all 4,750 indexed objects passed SHA-1 verification and path-safety checks. The verified Loom common-deobf artifact retains the pinned SHA-256 2692634287E54AABD918F6E68E1877C9BB8E36D81C7B9FE10460FA3B24DA04CD; the exact collision audit passes 51 JARs, 19,046 states, 43,820 boxes, zero errors, and all four moving-shape oracles. With BellSoft JDK 25.0.3 and Gradle 9.5.1, two clean offline builds, focused test, dependency provenance, packaged provenance, deterministic archive, license/resource, and PowerShell gates pass. The exact packaged-client harness exits 0 with four username invariants, five verifier negatives, spaced-argument launcher coverage, two Gradle hash-boundary negatives, and three Gradle username negatives; the configured offline username is FarmHelperTest and no Minecraft or Player case executes.",
+      "automated_evidence": "The independently provisioned isolated home recorded successful online asset provisioning before relocation; the target .gradle/audit-001-user-home then passed two offline downloadAssets receipts, with the second UP-TO-DATE and zero transfer/fetch lines. The 26.1.2-30 asset index SHA-256 is D43F145337DDF8B1258F92D5E8CD8EF4E5E2B37D220FEF2D013987B2EF0EBC90 and all 4,750 indexed objects passed SHA-1 verification and path-safety checks. The verified Loom common-deobf artifact retains the pinned SHA-256 2692634287E54AABD918F6E68E1877C9BB8E36D81C7B9FE10460FA3B24DA04CD; the exact collision audit passes 51 JARs, 19,046 states, 43,820 boxes, zero errors, and all four moving-shape oracles. With BellSoft JDK 25.0.3 and Gradle 9.5.1, two clean offline builds, focused test, dependency provenance, packaged provenance, deterministic archive, license/resource, and PowerShell gates pass. The exact packaged-client harness exits 0 with four username invariants, six verifier negatives, explicit-vs-ambient Gradle-home binding, spaced-argument launcher coverage, two Gradle hash-boundary negatives, and three Gradle username negatives; the configured offline username is FarmHelperTest and no Minecraft or Player case executes.",
+      "disposition": "RESOLVED",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-001-F004",
+      "path": "scripts/internal/verify-packaged-client.ps1",
+      "severity": "HIGH",
+      "summary": "Packaged-client verification validated an explicit Gradle home for cache reads but launched Gradle under the caller's ambient GRADLE_USER_HOME.",
+      "upstream_behavior": "A verifier supplied with an explicit isolated Gradle user home must make the same home authoritative for every Gradle and Loom child process, regardless of the caller environment.",
+      "incompatibility": "The prior verifier used the selected home for offline asset and dependency checks but did not bind GRADLE_USER_HOME in ProcessStartInfo, so an ambient cache could control the child Gradle launch and invalidate the isolation proof.",
+      "replacement": "Canonicalize and validate the selected home, bind that exact path in the child ProcessStartInfo environment, record the binding in preflight proof, and leave the caller environment unchanged.",
+      "automated_evidence": "The isolated harness passed a valid explicit home while setting a different ambient GRADLE_USER_HOME. The forced launcher captured the explicit home, confirmed the ambient value remained unchanged after child launch, and the harness restored the caller environment in finally. The same harness passed the Gradle-home junction negative and all existing username, hash, asset, duplicate, non-clean, and spaced-argument gates.",
+      "disposition": "RESOLVED",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-001-F005",
+      "path": "scripts/internal/audit-minecraft-collision-bounds.ps1",
+      "severity": "HIGH",
+      "summary": "The collision audit accepted reparse-mediated cache paths and let mojang_minecraft_info.json self-authorize library SHA-1 and size checks.",
+      "upstream_behavior": "A collision-bound audit must read only canonical, non-reparse cache paths and must resolve its full offline classpath from independently pinned repository provenance.",
+      "incompatibility": "The prior audit trusted metadata-provided library checksum and size fields, and its Gradle-home, metadata, common-JAR, and library paths were not rejected when a junction or escape component redirected them outside the intended cache.",
+      "replacement": "Require the repository-owned collision pin in dependency-provenance.json and the matching hardcoded audit constants: metadata SHA-256 257A144E784CFF7FACBCC68B09D5D10C2BAC441565388E827B8BEBB2D4AE79D2, 107-record library aggregate BBAF6586E110F676A03300BD98C2412AD6F1D84044B590262C22D4818E720F44, common-JAR SHA-256 2692634287E54AABD918F6E68E1877C9BB8E36D81C7B9FE10460FA3B24DA04CD and size 23536519. Reject reparse components and path escapes before reading, hashing, or loading every relevant artifact, while preserving the 51-JAR, 19,046-state, 43,820-box, and four moving-shape oracles.",
+      "automated_evidence": "The isolated collision audit passes JDK 25, Minecraft 26.1.2, 51 classpath JARs, the pinned common JAR, metadata and library aggregates, 19,046 states, 43,820 boxes, zero errors, and all four moving-shape oracles. The harness passes seven collision negatives without mutating the user cache: Gradle-home junction, metadata junction, common-JAR junction, library junction, tampered metadata, tampered library list, and library artifact path escape.",
       "disposition": "RESOLVED",
       "status": "RESOLVED"
     }

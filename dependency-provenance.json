@@ -5,6 +5,19 @@
     "platformDependencies": "Direct dependencies declared through Fabric Loom's minecraft configuration, tracked separately and external to the runtime JAR.",
     "testDependencies": "Test-only dependencies are outside this runtime provenance record."
   },
+  "minecraftCollisionAudit": {
+    "schemaVersion": 1,
+    "minecraftVersion": "26.1.2",
+    "metadataRelativePath": "caches/fabric-loom/26.1.2/mojang_minecraft_info.json",
+    "metadataSha256": "257A144E784CFF7FACBCC68B09D5D10C2BAC441565388E827B8BEBB2D4AE79D2",
+    "librarySetSha256": "BBAF6586E110F676A03300BD98C2412AD6F1D84044B590262C22D4818E720F44",
+    "libraryCount": 107,
+    "classpathJarCount": 51,
+    "commonJarRelativePath": "caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-common-deobf/26.1.2/minecraft-common-deobf-26.1.2.jar",
+    "commonJarSha256": "2692634287E54AABD918F6E68E1877C9BB8E36D81C7B9FE10460FA3B24DA04CD",
+    "commonJarSize": 23536519,
+    "libraryCanonicalization": "ordinal-sort(name|downloads.artifact.path|downloads.artifact.sha1.lower|downloads.artifact.size)+UTF-8+SHA-256+without-trailing-newline"
+  },
   "runtimeDependencies": [
     {
       "coordinate": "net.fabricmc:fabric-loader",

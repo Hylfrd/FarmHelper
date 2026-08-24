@@ -586,7 +586,10 @@ function New-LauncherStartInfo {
         [string] $WorkingDirectory,
 
         [Parameter(Mandatory = $true)]
-        [string[]] $Arguments
+        [string[]] $Arguments,
+
+        [Parameter(Mandatory = $true)]
+        [string] $GradleUserHome
     )
 
     $startInfo = [Diagnostics.ProcessStartInfo]::new()
@@ -595,6 +598,11 @@ function New-LauncherStartInfo {
     $startInfo.CreateNoWindow = $true
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
+
+    if ([string]::IsNullOrWhiteSpace($GradleUserHome)) {
+        throw 'The Gradle user home cannot be blank when launching the verifier child.'
+    }
+    $startInfo.Environment['GRADLE_USER_HOME'] = [IO.Path]::GetFullPath($GradleUserHome)
 
     if ($LauncherPath -match '(?i)\.(bat|cmd)$') {
         $commandShell = [Environment]::GetEnvironmentVariable('ComSpec')
@@ -859,13 +867,25 @@ if (-not (Test-Path -LiteralPath $modsDirectory)) {
 }
 Assert-CleanModsDirectory -ModsDirectory $modsDirectory
 
-$gradleHome = if (-not [string]::IsNullOrWhiteSpace($GradleUserHome)) {
-    [IO.Path]::GetFullPath($GradleUserHome)
-} elseif ($env:GRADLE_USER_HOME) {
-    [IO.Path]::GetFullPath($env:GRADLE_USER_HOME)
+$gradleHomeSource = if (-not [string]::IsNullOrWhiteSpace($GradleUserHome)) {
+    'explicit-parameter'
+} elseif (-not [string]::IsNullOrWhiteSpace([string] $env:GRADLE_USER_HOME)) {
+    'ambient-environment'
+} else {
+    'default-user-home'
+}
+$gradleHomeInput = if (-not [string]::IsNullOrWhiteSpace($GradleUserHome)) {
+    $GradleUserHome
+} elseif (-not [string]::IsNullOrWhiteSpace([string] $env:GRADLE_USER_HOME)) {
+    $env:GRADLE_USER_HOME
 } else {
     Join-Path ([Environment]::GetFolderPath('UserProfile')) '.gradle'
 }
+Assert-NoReparsePathComponents -Path $gradleHomeInput -Description 'Gradle user home'
+if (-not (Test-Path -LiteralPath $gradleHomeInput -PathType Container)) {
+    throw "Gradle user home is missing or is not a directory: $gradleHomeInput"
+}
+$gradleHome = Get-CanonicalPath -Path $gradleHomeInput
 Assert-NoReparsePathComponents -Path $gradleHome -Description 'Gradle user home'
 $assets = Assert-OfflineAssets -MinecraftVersion $minecraftVersion -GradleHome $gradleHome
 $fabricApi = Resolve-ApprovedFabricApi -GradleHome $gradleHome -Properties $properties
@@ -904,6 +924,9 @@ $proof = [ordered]@{
         fabricApiHashCheckedInsideGradle = $true
     }
     runDirectory = [IO.Path]::GetFullPath($RunDirectory)
+    gradleUserHome = $gradleHome
+    gradleUserHomeSource = $gradleHomeSource
+    gradleUserHomeBinding = 'explicit-child-process-environment'
     modsDirectory = [IO.Path]::GetFullPath($modsDirectory)
     modsDirectoryEntries = @($modsDirectoryEntries)
     offline = $true
@@ -965,7 +988,8 @@ try {
     $startInfo = New-LauncherStartInfo `
         -LauncherPath $launcherPath `
         -WorkingDirectory $repositoryRoot `
-        -Arguments $gradleArguments
+        -Arguments $gradleArguments `
+        -GradleUserHome $gradleHome
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
     if (-not $process.Start()) {
