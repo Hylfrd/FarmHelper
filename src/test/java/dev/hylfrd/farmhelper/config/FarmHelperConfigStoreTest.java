@@ -1,5 +1,6 @@
 package dev.hylfrd.farmhelper.config;
 
+import dev.hylfrd.farmhelper.runtime.FarmHelperRuntime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -304,6 +305,111 @@ class FarmHelperConfigStoreTest {
         assertEquals(ConfigLoadStatus.RECOVERED_DEFAULTS, result.status());
         assertEquals(FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY, result.config().openSettingsKey());
         assertTrue(result.backup().isPresent());
+    }
+
+    @Test
+    void explicitNullRequiredLocationCoordinatesAreBackedUpAndNeverPublished() throws IOException {
+        for (String locationKind : List.of("spawn", "rewarps")) {
+            for (String field : List.of("x", "y", "z")) {
+                String location = """
+                        {"x":%s,"y":%s,"z":%s}
+                        """.formatted(
+                        "x".equals(field) ? "null" : "10",
+                        "y".equals(field) ? "null" : "70",
+                        "z".equals(field) ? "null" : "-10");
+                String spawn = "spawn".equals(locationKind)
+                        ? location
+                        : "{\"x\":100,\"y\":70,\"z\":100}";
+                String rewarps = "rewarps".equals(locationKind) ? location : "";
+                String corrupt = """
+                        {
+                          "schemaVersion": 7,
+                          "macro": {
+                            "spawn": %s,
+                            "rewarps": [%s]
+                          }
+                        }
+                        """.formatted(spawn, rewarps);
+                Path path = temporaryDirectory.resolve(locationKind + "-" + field + "-null.json");
+                Files.writeString(path, corrupt, StandardCharsets.UTF_8);
+
+                ConfigLoadResult result = new FarmHelperConfigStore(path).load();
+
+                assertEquals(ConfigLoadStatus.RECOVERED_DEFAULTS, result.status(),
+                        locationKind + "." + field);
+                assertTrue(result.backup().isPresent(), locationKind + "." + field);
+                assertEquals(corrupt, Files.readString(result.backup().orElseThrow(), StandardCharsets.UTF_8),
+                        locationKind + "." + field);
+                assertTrue(result.config().macroSpawn().isEmpty(), locationKind + "." + field);
+                assertTrue(result.config().macroRewarps().isEmpty(), locationKind + "." + field);
+                FarmHelperRuntime runtime = new FarmHelperRuntime(result.config());
+                assertTrue(runtime.macroManager().settings().spawn().isEmpty(),
+                        locationKind + "." + field);
+                assertTrue(runtime.macroManager().settings().rewarps().isEmpty(),
+                        locationKind + "." + field);
+                assertEquals(ConfigLoadStatus.LOADED, new FarmHelperConfigStore(path).load().status(),
+                        locationKind + "." + field);
+            }
+        }
+    }
+
+    @Test
+    void requiredLocationCoordinatesAcceptZeroAndOptionalNullsKeepDefaults() throws IOException {
+        Path zeroPath = temporaryDirectory.resolve("zero-location.json");
+        Files.writeString(zeroPath, """
+                {
+                  "schemaVersion": 7,
+                  "macro": {
+                    "spawn": {"x": 0, "y": 0, "z": 0},
+                    "rewarps": []
+                  }
+                }
+                """, StandardCharsets.UTF_8);
+
+        ConfigLoadResult zeroResult = new FarmHelperConfigStore(zeroPath).load();
+
+        assertEquals(ConfigLoadStatus.LOADED, zeroResult.status());
+        assertEquals(new MacroLocationConfig(0, 0, 0, 0.0F, 0.0F, -1),
+                zeroResult.config().macroSpawn().orElseThrow());
+
+        Path optionalPath = temporaryDirectory.resolve("optional-nulls.json");
+        Files.writeString(optionalPath, """
+                {
+                  "schemaVersion": 7,
+                  "rotation": {"targetYaw": null, "targetPitch": null},
+                  "ui": {"openSettingsKey": null},
+                  "macro": {
+                    "mode": null,
+                    "spawn": null,
+                    "rewarps": null,
+                    "alwaysHoldW": null,
+                    "holdLeftClickWhenChangingRow": null,
+                    "rotateAfterWarped": null,
+                    "rotateAfterDrop": null,
+                    "dontFixAfterWarping": null,
+                    "customPitch": null,
+                    "customPitchLevel": null,
+                    "customYaw": null,
+                    "customYawLevel": null
+                  },
+                  "desync": {"checkDesync": null, "desyncPauseDelay": null}
+                }
+                """, StandardCharsets.UTF_8);
+
+        ConfigLoadResult optionalResult = new FarmHelperConfigStore(optionalPath).load();
+
+        assertEquals(ConfigLoadStatus.LOADED, optionalResult.status());
+        assertEquals(0.0F, optionalResult.config().targetYaw());
+        assertEquals(0.0F, optionalResult.config().targetPitch());
+        assertEquals(FarmHelperConfig.DEFAULT_OPEN_SETTINGS_KEY, optionalResult.config().openSettingsKey());
+        assertEquals(0, optionalResult.config().macroMode());
+        assertTrue(optionalResult.config().macroSpawn().isEmpty());
+        assertTrue(optionalResult.config().macroRewarps().isEmpty());
+        assertFalse(optionalResult.config().alwaysHoldW());
+        assertTrue(optionalResult.config().holdLeftClickWhenChangingRow());
+        assertTrue(optionalResult.config().checkDesync());
+        assertEquals(FarmHelperConfig.DEFAULT_DESYNC_PAUSE_DELAY_MILLIS,
+                optionalResult.config().desyncPauseDelayMillis());
     }
 
     @Test
