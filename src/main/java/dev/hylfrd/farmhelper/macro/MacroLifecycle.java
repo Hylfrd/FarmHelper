@@ -69,8 +69,20 @@ public final class MacroLifecycle {
         try {
             target.start(generation, clock.nowNanos());
         } catch (RuntimeException | Error failure) {
+            long failedGeneration = generation;
             state = MacroState.STOPPED;
-            generation = nextGeneration();
+            manualPause = false;
+            screenOpen = false;
+            environmentUnavailable = false;
+            featureLeases.clear();
+            invalidateGeneration();
+            try {
+                target.stop(failedGeneration, MacroTerminalReason.EXCEPTION);
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) {
+                    failure.addSuppressed(cleanupFailure);
+                }
+            }
             throw failure;
         }
     }
@@ -150,7 +162,7 @@ public final class MacroLifecycle {
         screenOpen = false;
         environmentUnavailable = false;
         featureLeases.clear();
-        generation = nextGeneration();
+        invalidateGeneration();
         target.stop(stoppedGeneration, reason);
     }
 
@@ -181,5 +193,11 @@ public final class MacroLifecycle {
             throw new IllegalStateException("macro run generation exhausted");
         }
         return generation + 1L;
+    }
+
+    private void invalidateGeneration() {
+        if (generation != Long.MAX_VALUE) {
+            generation++;
+        }
     }
 }

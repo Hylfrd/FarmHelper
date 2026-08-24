@@ -143,6 +143,21 @@ class MacroLifecycleTest {
         }
     }
 
+    @Test
+    void failedTargetStartIsTerminallyCleanedAndInvalidatesGeneration() {
+        FailingStartTarget target = new FailingStartTarget();
+        MacroLifecycle lifecycle = new MacroLifecycle(target, new MutableClock());
+
+        IllegalStateException failure = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, lifecycle::start);
+
+        assertEquals("start failed", failure.getMessage());
+        assertEquals(MacroState.STOPPED, lifecycle.state());
+        assertFalse(lifecycle.accepts(1L));
+        assertEquals(1, target.stopCount);
+        assertEquals(MacroTerminalReason.EXCEPTION, target.stopReason);
+    }
+
     private static final class MutableClock implements dev.hylfrd.farmhelper.runtime.time.MonotonicClock {
         private long now;
 
@@ -181,6 +196,30 @@ class MacroLifecycleTest {
         public void stop(long generation, MacroTerminalReason reason) {
             stopCount++;
             events.add("stop:" + reason);
+        }
+    }
+
+    private static final class FailingStartTarget implements MacroLifecycleTarget {
+        private int stopCount;
+        private MacroTerminalReason stopReason;
+
+        @Override
+        public void start(long generation, long nowNanos) {
+            throw new IllegalStateException("start failed");
+        }
+
+        @Override
+        public void pause(long generation, long nowNanos, Set<MacroPauseCause> causes) {
+        }
+
+        @Override
+        public void resume(long generation, long nowNanos) {
+        }
+
+        @Override
+        public void stop(long generation, MacroTerminalReason reason) {
+            stopCount++;
+            stopReason = reason;
         }
     }
 }
