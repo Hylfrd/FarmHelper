@@ -154,12 +154,12 @@
     "candidate_artifact_size_bytes": 890472,
     "branch": "codex/audit-right-shift-keybinding",
     "pull_request": "https://github.com/Hylfrd/FarmHelper/pull/14",
-    "publication_sha": "d32c5c83476cc3ddfdcacd4f121345996eee23c3",
-    "publication_tree": "ada137a5f0f4b0f6179fe4748d4dbc49c1204b7d",
+    "publication_sha": "b5bcf603430b0c4153f090723b9081b90700e135",
+    "publication_tree": "d71b87076f56c787c3743537d2a1c7fa3b3987da",
     "exact_head_ci": {
-      "head_sha": "d32c5c83476cc3ddfdcacd4f121345996eee23c3",
-      "push_run": 32788004207,
-      "pull_request_run": 32788008275,
+      "head_sha": "b5bcf603430b0c4153f090723b9081b90700e135",
+      "push_run": 32788329026,
+      "pull_request_run": 32788331861,
       "conclusion": "success",
       "jobs": [
         "Linux / test",
@@ -187,6 +187,6 @@
     ],
     "commands_pending": [],
     "status": "LOCAL_GATES_PASSED_AND_EXACT_HEAD_CI_PASSED",
-    "ci": "Exact-head CI for publication head d32c5c83476cc3ddfdcacd4f121345996eee23c3 passed in push run 32788004207 and pull_request run 32788008275."
+    "ci": "Exact-head CI for publication head b5bcf603430b0c4153f090723b9081b90700e135 passed in push run 32788329026 and pull_request run 32788331861."
   }
 }
