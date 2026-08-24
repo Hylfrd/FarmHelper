@@ -360,7 +360,7 @@
       "finding_ids": [
         "AUDIT-003-F001"
       ],
-      "disposition": "PENDING_VERIFICATION"
+      "disposition": "RESOLVED"
     },
     {
       "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/SpatialScanResult.java",
@@ -454,7 +454,7 @@
       "finding_ids": [
         "AUDIT-003-F002"
       ],
-      "disposition": "PENDING_VERIFICATION"
+      "disposition": "RESOLVED"
     },
     {
       "path": "src/main/java/dev/hylfrd/farmhelper/runtime/time/TaskHandle.java",
@@ -579,7 +579,7 @@
       "finding_ids": [
         "AUDIT-003-F001"
       ],
-      "disposition": "PENDING_VERIFICATION"
+      "disposition": "RESOLVED"
     },
     {
       "path": "src/test/java/dev/hylfrd/farmhelper/runtime/spatial/SpatialTestFixtures.java",
@@ -588,7 +588,7 @@
       "finding_ids": [
         "AUDIT-003-F001"
       ],
-      "disposition": "PENDING_VERIFICATION"
+      "disposition": "RESOLVED"
     },
     {
       "path": "src/test/java/dev/hylfrd/farmhelper/runtime/spatial/UpstreamCurrentYawFrameTest.java",
@@ -626,7 +626,7 @@
       "finding_ids": [
         "AUDIT-003-F002"
       ],
-      "disposition": "PENDING_VERIFICATION"
+      "disposition": "RESOLVED"
     },
     {
       "path": "src/test/java/dev/hylfrd/farmhelper/runtime/time/RandomDelaySourceTest.java",
@@ -648,14 +648,24 @@
       "upstream_behavior": "Fixed upstream BlockUtils.canWalkThrough and BlockUtils.blockHasCollision ask Minecraft 1.8.9 passability and collision APIs about the target block cells. That implementation has no modern moving-piston collision-origin halo.",
       "incompatibility": "Minecraft 26.1.2 VoxelShape collision boxes captured by this slice are explicitly allowed to extend from their owning block to X/Z [-1,2] and Y [-1,2.5]. The baseline SpatialQueries enumerated only blocks whose unit cells overlapped the body or support probe, so it could return PASSABLE without inspecting an adjacent origin whose shape intersects the query. Expanded central enumeration also depends on the separately owned AUDIT-006 leaf capture halos; absent origin evidence must remain UNKNOWN rather than fabricated air.",
       "replacement": "SpatialQueries now derives the complete collision-origin grid from the audited local minima and maxima for both clearance and support, applies fluid policy only when an origin's unit cell overlaps the query, and retains the 8,192-origin pre-iteration bound. In-scope regression fixtures provide explicit known-empty halos and prove a neighboring protruding shape blocks clearance and supplies support. Main accepted the durable AUDIT-006 leaf capture-halo evidence as the capture-side prerequisite.",
+      "resolution_scope": "SPATIAL_QUERY_CONTRACT",
+      "cross_item_dependencies": [
+        "AUDIT-006: leaf macros must capture every collision origin required by the expanded clearance/support halo and update fixtures whose injected unknown origin is now consulted by an earlier body or side query. Under exact composition, 75 of 79 A003-only macro failures disappear; four residual status-precedence failures remain in SShapeCocoaBeanMacroTest, SShapeSugarcaneMacroTest, and SShapeVerticalCropMacroTest."
+      ],
+      "closure_note": "AUDIT-003-F001 is resolved for the runtime query and capture contract in this PR. The product-wide macro suite is not claimed green until AUDIT-006 resolves its capture/fixture dependency; UNKNOWN remains fail-closed.",
       "automated_evidence": [
         "PowerShell baseline geometry oracle result: query X [1.25,1.75] positively intersects origin-0 local shape X [1.5,2.0]; baseline boundedGrid origins are [1], audited collision origins are [0,1,2], and MissesCollidingOrigin=true.",
         "Static source check after repair finds SpatialQueries collisionOrigins(query/probe) using CollisionShapeSnapshot audited bounds and fluid checks gated by positive unit-cell/query intersection.",
         "PowerShell boundary oracle confirms a 30x13x14 integer-aligned query expands to 32x16x16 collision origins, exactly the 8,192-cell limit.",
         "Focused SpatialQueriesTest and SpatialTestFixtures regression coverage was added for protruding clearance/support, known halos, boundary contact, scan budgets, walkability, drops, and end-row scans.",
-        "Gradle verification is pending the required combined HEAVY slot and is not yet claimed."
+        "Gradle command .\\gradlew.bat --no-daemon --stacktrace test --tests \"dev.hylfrd.farmhelper.runtime.spatial.*\" --tests \"dev.hylfrd.farmhelper.runtime.time.*\" exited 0 with BUILD SUCCESSFUL on Java 25.0.3, Gradle 9.5.1, and Fabric Loom 1.17.17.",
+        "Gradle command .\\gradlew.bat --no-daemon --stacktrace test --tests \"dev.hylfrd.farmhelper.runtime.ClientTickPipelineTest\" --tests \"dev.hylfrd.farmhelper.runtime.FarmHelperRuntimeTest\" --tests \"dev.hylfrd.farmhelper.runtime.interaction.*\" --tests \"dev.hylfrd.farmhelper.runtime.lifecycle.*\" --tests \"dev.hylfrd.farmhelper.runtime.snapshot.*\" exited 0 with BUILD SUCCESSFUL.",
+        "A003-only composition broad test .\\gradlew.bat --no-daemon --stacktrace test exited 1 with 656 tests completed and 79 failed; failures are concentrated in macro leaves that require AUDIT-006 capture contracts.",
+        "Gradle .\\gradlew.bat --no-daemon --stacktrace build -x test exited 0 with BUILD SUCCESSFUL, validateAccessWidener NO-SOURCE, and dependency provenance verified; full build exited 1 only because the same 79 macro tests fail.",
+        "Temporary exact composition with AUDIT-006 commit dcf7925a9e0719621677285d78d264e10d97d30c reduced the same broad result from 79 failures to 4. The residuals are SShapeCocoaBeanMacroTest.unknownWalkabilityWallAndLineEvidenceFailClosed, SShapeSugarcaneMacroTest.unknownRearOrSideFailsClosedBeforeWatchdogMovement, SShapeSugarcaneMacroTest.unknownWaterWallsAndSideScanFailClosedWithoutFalseTransitionOrDraw, and SShapeVerticalCropMacroTest.unknownAtAnyScanBoundaryNeverBecomesExhausted; each remains fail-closed with an earlier body/side query status.",
+        "Upstream comparison at eacb323fbde3eff94d4f2ee7baacb059d84b8e3a confirms BlockUtils.canWalkThrough and blockHasCollision inspect target 1.8.9 block cells only; the modern collision-origin halo is a necessary replacement, not copied upstream behavior."
       ],
-      "status": "PENDING_VERIFICATION"
+      "status": "RESOLVED"
     },
     {
       "id": "AUDIT-003-F002",
@@ -665,11 +675,15 @@
       "upstream_behavior": "Fixed upstream Clock and Timer use non-negative wall-clock milliseconds from System.currentTimeMillis for deadlines and elapsed intervals.",
       "incompatibility": "The modern replacement correctly selected System.nanoTime for elapsed-time measurement, but returned its raw value. The Java contract gives nanoTime an arbitrary origin and permits negative values, while ServerTimeTracker, row-progress, rewarp, and related runtime consumers require non-negative nowNanos values.",
       "replacement": "Sample one System.nanoTime origin when the production clock is initialized and expose only wrap-safe elapsed nanoseconds from that origin. This preserves monotonic differences, does not reinterpret nanoTime as an epoch, and retains the SystemMonotonicClock.INSTANCE API.",
+      "resolution_scope": "RUNTIME_CLOCK_CONTRACT",
+      "closure_note": "AUDIT-003-F002 is resolved for production monotonic timestamps, elapsed monotonicity, and pause/timer consumers in this PR.",
       "automated_evidence": [
         "Focused PausableTimerTest coverage was added for a negative raw origin, non-negative elapsed output, signed long wrap, backward-sample clamping, and the production singleton contract.",
-        "Gradle verification is pending the required HEAVY slot and is not yet claimed."
+        "Gradle command .\\gradlew.bat --no-daemon --stacktrace test --tests \"dev.hylfrd.farmhelper.runtime.spatial.*\" --tests \"dev.hylfrd.farmhelper.runtime.time.*\" exited 0 with BUILD SUCCESSFUL; successive production singleton readings were nonnegative and ordered.",
+        "Upstream comparison at eacb323fbde3eff94d4f2ee7baacb059d84b8e3a confirms Clock and Timer use System.currentTimeMillis for nonnegative wall-clock deadlines and elapsed intervals; SystemMonotonicClock intentionally replaces that source with an origin-normalized System.nanoTime elapsed contract.",
+        "The clock implementation retains wrap-safe elapsed differences and clamps backward samples through the existing PausableTimer elapsed contract; no pause or timer semantics were weakened."
       ],
-      "status": "PENDING_VERIFICATION"
+      "status": "RESOLVED"
     }
   ]
 }

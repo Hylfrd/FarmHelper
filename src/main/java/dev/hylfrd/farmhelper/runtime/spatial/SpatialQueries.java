@@ -273,7 +273,11 @@ public final class SpatialQueries {
             long sizeX = Math.subtractExact(maxXExclusive, minX);
             long sizeY = Math.subtractExact(maxYExclusive, minY);
             long sizeZ = Math.subtractExact(maxZExclusive, minZ);
-            if (sizeX <= 0L || sizeY <= 0L || sizeZ <= 0L) {
+            if (minX < Integer.MIN_VALUE || minY < Integer.MIN_VALUE || minZ < Integer.MIN_VALUE
+                    || maxXExclusive > (long) Integer.MAX_VALUE + 1L
+                    || maxYExclusive > (long) Integer.MAX_VALUE + 1L
+                    || maxZExclusive > (long) Integer.MAX_VALUE + 1L
+                    || sizeX <= 0L || sizeY <= 0L || sizeZ <= 0L) {
                 return null;
             }
             long cellCount = Math.multiplyExact(Math.multiplyExact(sizeX, sizeY), sizeZ);

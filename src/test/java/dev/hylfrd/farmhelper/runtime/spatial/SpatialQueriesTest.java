@@ -163,6 +163,18 @@ class SpatialQueriesTest {
     }
 
     @Test
+    void collisionOriginCoordinateOverflowFailsClosedBeforeNarrowing() {
+        double maximumBlockCoordinate = Integer.MAX_VALUE;
+        SpatialSnapshot upperEdge = snapshot(
+                new BoxSnapshot(maximumBlockCoordinate - 2.0D, 0, 0,
+                        maximumBlockCoordinate + 1.0D, 1, 1), Map.of());
+
+        assertEquals(SpaceStatus.UNKNOWN, SpatialQueries.clearance(upperEdge, EPOCH,
+                new BoxSnapshot(maximumBlockCoordinate - 1.0D, 0.1D, 0.1D,
+                        maximumBlockCoordinate + 0.5D, 0.9D, 0.9D)));
+    }
+
+    @Test
     void clearanceSupportAndDropShareTheSamePreIterationBudgetGuard() {
         BoxSnapshot bounds = new BoxSnapshot(0, 0, 0, 129, 3, 65);
         SpatialSnapshot sparse = snapshot(bounds, Map.of());
