@@ -159,6 +159,44 @@ function Assert-PathUnder {
     }
 }
 
+function Assert-SafeAssetIndexId {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string] $AssetIndexId
+    )
+
+    $invalidFileNameChars = [IO.Path]::GetInvalidFileNameChars()
+    $isRootedOrPathLike = [IO.Path]::IsPathRooted($AssetIndexId) -or
+        $AssetIndexId -match '^[\\/]' -or
+        $AssetIndexId -match '^[A-Za-z]:'
+    $hasSeparator = $AssetIndexId.IndexOfAny([char[]] @('\', '/')) -ge 0
+
+    if ([string]::IsNullOrWhiteSpace($AssetIndexId) -or
+        $AssetIndexId -ne $AssetIndexId.Trim()) {
+        throw "Minecraft asset index id must be a non-empty filename component: '$AssetIndexId'"
+    }
+    if ($isRootedOrPathLike) {
+        throw "Minecraft asset index id must not be rooted or path-like: '$AssetIndexId'"
+    }
+    if ($hasSeparator) {
+        throw "Minecraft asset index id must not contain path separators: '$AssetIndexId'"
+    }
+    if ($AssetIndexId -in @('.', '..')) {
+        throw "Minecraft asset index id must not be '.' or '..': '$AssetIndexId'"
+    }
+    if ($AssetIndexId.IndexOfAny($invalidFileNameChars) -ge 0 -or
+        $AssetIndexId -notmatch '^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$') {
+        throw "Minecraft asset index id is not a valid filename component: '$AssetIndexId'"
+    }
+    if ($AssetIndexId -match '(?i)^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)') {
+        throw "Minecraft asset index id uses a reserved filename: '$AssetIndexId'"
+    }
+    if ($AssetIndexId.Length -gt 240) {
+        throw "Minecraft asset index id is too long for an index filename: '$AssetIndexId'"
+    }
+}
+
 function Read-FabricModMetadata {
     param(
         [Parameter(Mandatory = $true)]
@@ -390,17 +428,43 @@ function Assert-OfflineAssets {
         throw "Minecraft metadata has no usable asset index: $metadataPath"
     }
 
-    $indexName = if ([string] $metadata.assetIndex.id -eq $MinecraftVersion) {
+    if ($metadata.assetIndex.id -isnot [string]) {
+        throw "Minecraft metadata asset index id must be a JSON string: $metadataPath"
+    }
+    $assetIndexId = [string] $metadata.assetIndex.id
+    Assert-SafeAssetIndexId -AssetIndexId $assetIndexId
+
+    $assetsRoot = Join-Path $GradleHome 'caches\fabric-loom\assets'
+    Assert-NoReparsePathComponents -Path $assetsRoot -Description 'Loom asset cache'
+    $indexesRoot = Join-Path $assetsRoot 'indexes'
+    Assert-PathLexicallyUnder `
+        -Path $indexesRoot `
+        -Root $assetsRoot `
+        -Description 'Loom asset indexes root'
+    Assert-NoReparsePathComponents -Path $indexesRoot -Description 'Loom asset indexes root'
+    if (-not (Test-Path -LiteralPath $indexesRoot -PathType Container)) {
+        throw "Offline asset index directory is missing: $indexesRoot"
+    }
+    $canonicalIndexesRoot = Get-CanonicalPath -Path $indexesRoot
+
+    $indexName = if ($assetIndexId -eq $MinecraftVersion) {
         $MinecraftVersion
     } else {
-        "$MinecraftVersion-$($metadata.assetIndex.id)"
+        "$MinecraftVersion-$assetIndexId"
     }
-    $assetsRoot = Join-Path $GradleHome 'caches\fabric-loom\assets'
-    $indexPath = Join-Path $assetsRoot "indexes\$indexName.json"
+    $indexFileName = "$indexName.json"
+    if ($indexFileName.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0 -or
+        $indexFileName.Length -gt 255) {
+        throw "Minecraft asset index filename is invalid: $indexFileName"
+    }
+    $indexPath = Join-Path $canonicalIndexesRoot $indexFileName
+    Assert-PathLexicallyUnder `
+        -Path $indexPath `
+        -Root $canonicalIndexesRoot `
+        -Description 'Minecraft asset index'
     if (-not (Test-Path -LiteralPath $indexPath -PathType Leaf)) {
         throw "Offline asset index is missing: $indexPath"
     }
-    Assert-NoReparsePathComponents -Path $assetsRoot -Description 'Loom asset cache'
     Assert-NoReparsePathComponents -Path $indexPath -Description 'Minecraft asset index'
     if ([string] $metadata.assetIndex.sha1 -notmatch '^[0-9a-fA-F]{40}$') {
         throw "Minecraft metadata has an invalid asset index SHA-1: $metadataPath"
