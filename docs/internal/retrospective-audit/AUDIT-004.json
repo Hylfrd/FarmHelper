@@ -144,24 +144,25 @@
       "id": "AUDIT-004-002",
       "path": "src/client/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreen.java",
       "severity": "MEDIUM",
-      "summary": "Settings Reset restored valid draft values but left stale invalidSettings markers, so Save still refused the reset draft.",
-      "source_anchor": "src/client/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreen.java:109-115 (category Reset), :230-249 (reset marker cleanup), and :262-268 (save gate)",
+      "summary": "Settings Screen rebuilds discarded all validation markers, so category and rotation resets could let unrelated invalid draft values reach Save.",
+      "source_anchor": "src/client/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreen.java:58-59 (Screen init lifecycle), :108-114 (category Reset rebuild), :229-248 (selective marker cleanup), and :261-267 (save gate)",
       "test_anchors": [
-        "src/test/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreenTest.java:31-51",
-        "src/test/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreenTest.java:54-76",
-        "src/test/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreenTest.java:78-101"
+        "src/test/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreenTest.java:48-94 (fresh open, native invalid input, resize/scroll/category rebuild, Reset, Save gate, reopen)",
+        "src/test/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreenTest.java:96-126 (native rotation.reset action/rebuild and Save gate)",
+        "src/test/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreenTest.java:129-200 (selective cleanup unit coverage)"
       ],
-      "upstream_behavior": "At fixed upstream commit eacb323fbde3eff94d4f2ee7baacb059d84b8e3a, FarmHelperConfig.java:_resetSpawnPos (lines 258-267) writes reset values and immediately calls save(); reset actions therefore complete with persisted defaults rather than leaving a separate stale validation gate.",
-      "incompatibility": "The native screen called SettingsSession.resetCategory() and rebuilt controls from the valid reset draft, but invalidSettings was not updated. save() rejected any non-empty invalidSettings before invoking SettingsSession.save(), so an invalid edit followed by Reset displayed valid defaults while still refusing Save. The rotation.reset action had the same stale-marker behavior for yaw and pitch.",
-      "replacement": "Clear invalidSettings only for the non-action definitions reset by the selected category, and clear only targetYaw/targetPitch for the rotation.reset action. Leave markers for untouched fields in place, then use the existing draft/session validation, active-config isolation, and atomic runtime save path unchanged.",
+      "upstream_behavior": "At fixed upstream commit eacb323fbde3eff94d4f2ee7baacb059d84b8e3a, FarmHelperConfig.java:_resetSpawnPos (lines 258-267) writes reset values and immediately calls save(); reset actions therefore complete with persisted defaults. The replacement screen keeps resets in a draft until Save, so its validation state must remain coherent across the native Screen lifecycle.",
+      "incompatibility": "The replacement screen's init() unconditionally cleared invalidSettings. In Minecraft 26.1.2, Screen.rebuildWidgets() clears widgets and focus, calls init(), then restores initial focus; resize() reaches the same path through repositionElements(). Category selection, category Reset, rotation.reset, search refresh, scrolling, and resize therefore erased markers for unrelated fields before save(), allowing an invalid draft to pass the screen gate. The originally alleged parent stale-marker rejection is not reproducible under this pinned lifecycle: the parent clears the markers first.",
+      "replacement": "Keep invalidSettings across init()/rebuilds; a new screen instance starts with its newly constructed empty set. Retain the existing selective cleanup before reset rebuild: category Reset removes only non-action definitions in the selected category, and rotation.reset removes only targetYaw/targetPitch. Unrelated markers survive focus/scroll/resize/rebuild paths and save() continues to reject them, with no validation bypass or stale reset markers.",
       "status": "RESOLVED",
       "disposition": "RESOLVED",
       "automated_evidence": [
-        "The focused Gradle 9.5.1 command with --no-daemon --console=plain test and the six settings/config/runtime test selectors exited 0 with BUILD SUCCESSFUL; 56 tests executed with 0 failures, 0 errors, and 0 skipped.",
-        "FarmHelperSettingsScreenTest.categoryResetClearsItsValidationMarkerAndAllowsTheResetDraftToSave covers the invalid-marker-to-category-Reset-to-valid-default-to-save flow and verifies the persisted candidate contains the reset yaw.",
-        "FarmHelperSettingsScreenTest.resetMarkersDoNotClearUnrelatedCategoryErrorsOrActionFields verifies category cleanup preserves unrelated category/action markers and rotationResetAction cleanup removes only yaw/pitch markers.",
-        "FarmHelperSettingsScreenTest.rotationResetActionClearsItsMarkersAndAllowsTheResetDraftToSave covers the rotation.reset action path and verifies both reset values are accepted by the existing session save boundary.",
-        "The full Gradle 9.5.1 command with --no-daemon --console=plain test check build exited 0 with BUILD SUCCESSFUL; 76 suites executed 656 tests with 0 failures, 0 errors, and 0 skipped, validateAccessWidener was NO-SOURCE, verifyDependencyProvenance passed, and build/libs/FarmHelper-26.1.2.jar was produced."
+        "At exact parent d5649d9b635f0885373aa3ec70a4003fbe847fa2, the same candidate regression test overlaid in a detached proof worktree exited 1: 6 tests completed, 2 failed at the unrelated-marker preservation assertions after real resize/category and rotation.reset rebuilds (FarmHelperSettingsScreenTest.java:63 and :110).",
+        "The candidate focused Gradle 9.5.1 command with --no-daemon --console=plain --rerun-tasks test and the six settings/config/runtime selectors exited 0 with BUILD SUCCESSFUL; 58 tests executed with 0 failures, 0 errors, and 0 skipped, including 6 FarmHelperSettingsScreenTest cases.",
+        "FarmHelperSettingsScreenTest.freshScreenStartsCleanAndRealCategoryResetPreservesUnrelatedInvalidMarkers covers initial-open empty state, native invalid input, real Screen resize/scroll/category rebuilds, selective category Reset cleanup, Save blocking by the unrelated marker, and a fresh reopened screen.",
+        "FarmHelperSettingsScreenTest.realRotationResetActionClearsOnlyItsMarkersAndKeepsSaveBlockedByUnrelatedMarker covers native rotation.reset activation, real rebuild, selective yaw/pitch cleanup, and Save blocking by the unrelated marker.",
+        "The existing helper tests remain as focused selective-cleanup coverage; the two lifecycle tests invoke actual EditBox responders, Button.onPress callbacks, Screen.resize/mouseScrolled, and the real Screen.rebuildWidgets path.",
+        "The full Gradle 9.5.1 command with --no-daemon --console=plain test check build exited 0 in both the normal and isolated Gradle homes; 76 suites executed 658 tests with 0 failures, 0 errors, and 0 skipped, validateAccessWidener was NO-SOURCE, verifyDependencyProvenance passed, and build/libs/FarmHelper-26.1.2.jar was produced."
       ]
     }
   ]

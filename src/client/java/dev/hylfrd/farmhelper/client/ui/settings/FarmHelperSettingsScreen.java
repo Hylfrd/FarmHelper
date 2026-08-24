@@ -56,7 +56,6 @@ public final class FarmHelperSettingsScreen extends Screen {
 
     @Override
     protected void init() {
-        invalidSettings.clear();
         Layout layout = Layout.compute(width, height);
         contentX = layout.contentX();
         contentY = layout.contentY();
