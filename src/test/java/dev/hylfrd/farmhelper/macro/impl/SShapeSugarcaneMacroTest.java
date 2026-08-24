@@ -266,7 +266,7 @@ class SShapeSugarcaneMacroTest {
                 STILL, grounded(), Map.of(
                         new BlockPosition(1, 1, 0), Observation.unknown()));
         assertEquals(SShapeSugarcaneMacro.State.S, rearUnknown.state());
-        assertEquals("sugarcane-rear-unknown", rearDecision.status());
+        assertEquals("body-or-support-unknown", rearDecision.status());
         assertTrue(rearDecision.inputs().isEmpty());
 
         SShapeSugarcaneMacro sideUnknown = readyMacro(new QueueRandom(), new QueueRandom());
@@ -279,7 +279,7 @@ class SShapeSugarcaneMacroTest {
                         new BlockPosition(0, 1, -1), Observation.present(full()),
                         new BlockPosition(-1, 1, 0), Observation.unknown()));
         assertEquals(SShapeSugarcaneMacro.State.S, sideUnknown.state());
-        assertEquals("sugarcane-side-scan-unknown", sideDecision.status());
+        assertEquals("body-or-support-unknown", sideDecision.status());
         assertTrue(sideDecision.inputs().isEmpty());
     }
 
@@ -334,7 +334,7 @@ class SShapeSugarcaneMacroTest {
                         new BlockPosition(1, 1, 0), Observation.present(full()),
                         new BlockPosition(0, 1, -1), Observation.present(full()),
                         new BlockPosition(-1, 1, 0), Observation.unknown()));
-        assertEquals("sugarcane-side-scan-unknown", sideUnknown.status());
+        assertEquals("body-or-support-unknown", sideUnknown.status());
         assertEquals(SShapeSugarcaneMacro.State.S, scanUnknown.state());
         assertTrue(sideUnknown.inputs().isEmpty());
     }

@@ -393,7 +393,7 @@ class SShapeCocoaBeanMacroTest {
         unknownLine.put(new BlockPosition(1, 1, 1), Observation.unknown());
         MacroDecision line = step(macro, 5L, START, 0.0F, -70.0F,
                 STILL, grounded(), unknownLine);
-        assertEquals("line-change-unknown", line.status());
+        assertEquals("walkability-unknown", line.status());
         assertTrue(line.inputs().isEmpty());
     }
 

@@ -5,6 +5,135 @@
   "baseline_tree": "1c5dbf9596803ec50067b6b70e9403e0a0f198d7",
   "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
   "paths_sha256": "379f6b661028369d44c40c5778bf3fe4433bca18ade48691bc7c78442442d0c3",
+  "composition": {
+    "a006_checkpoint": {
+      "sha": "dcf7925a9e0719621677285d78d264e10d97d30c",
+      "tree": "84d3208eb1dd2b118c1802c5b91ab5c9b8595756",
+      "branch": "codex/audit-006-macro-leaves"
+    },
+    "a003_candidate": {
+      "sha": "bd1d1f1275e77775a9db822bf9f14cf109e88830",
+      "tree": "80c2b0a4a0631323391fe6fcbe0f7aadf21f632b",
+      "branch": "codex/audit-003-runtime-foundations"
+    },
+    "merge_commit": {
+      "sha": "80c63a1d7d79f45ec7a39d843e85761ea0fc67d6",
+      "tree": "f92524da18021e2ed01e413e8189ea65cd354846",
+      "parents": [
+        "dcf7925a9e0719621677285d78d264e10d97d30c",
+        "bd1d1f1275e77775a9db822bf9f14cf109e88830"
+      ]
+    },
+    "exact_dependency": "AUDIT-003-F001 spatial collision-origin query contract and AUDIT-003-F002 normalized monotonic clock contract are composed unchanged; A006 retains ownership of the 16-path leaf capture/test slice."
+  },
+  "capture_contract_verification": {
+    "classification": "CAPTURE_CONTRACT_VERIFIED",
+    "collision_origin_bounds": "X/Z [-1,2], Y [-1,2.5] from CollisionShapeSnapshot",
+    "support_probe_depth": "1/1024 block",
+    "macro_paths": [
+      "src/main/java/dev/hylfrd/farmhelper/macro/impl/CircularCropMacro.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeCocoaBeanMacro.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMelonPumpkinDefaultMacro.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMushroomMacro.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMushroomRotateMacro.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMushroomSDSMacro.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeSugarcaneMacro.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeVerticalCropMacro.java"
+    ],
+    "anchors": [
+      "All eight spatialRequest planners contain the audited horizontal and vertical collision-origin bounds.",
+      "Vertical long-side capture covers distances 1..179 and both body/support queries; capture request limits remain enforced.",
+      "A003 SpatialQueries clearance/support derives the same origin grid and retains UNKNOWN for absent evidence."
+    ]
+  },
+  "residual_dispositions": [
+    {
+      "test": "SShapeCocoaBeanMacroTest.unknownWalkabilityWallAndLineEvidenceFailClosed",
+      "classification": "ASSERTION_OBSOLETE_STATUS_PRECEDENCE",
+      "prior_expected_status": "line-change-unknown",
+      "observed_status": "walkability-unknown",
+      "final_status": "walkability-unknown",
+      "disposition": "UPDATED_ASSERTION",
+      "reason": "The injected unknown at (1,1,1) is a required collision origin for the front walkability body/support query. Fixed upstream updateState order evaluates walkability before hasLineChanged, so the earlier conservative status is correct.",
+      "anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeCocoaBeanMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeCocoaBeanMacro.java#hasLineChanged",
+        "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeCocoaBeanMacro.java#tickFarming",
+        "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/SpatialQueries.java#walkability"
+      ],
+      "fail_closed_evidence": "The test retains the unknown capture and asserts empty inputs; the pre-remediation failure was expected line-change-unknown but observed walkability-unknown, and the focused residual command now passes."
+    },
+    {
+      "test": "SShapeSugarcaneMacroTest.unknownRearOrSideFailsClosedBeforeWatchdogMovement",
+      "classification": "ASSERTION_OBSOLETE_STATUS_PRECEDENCE",
+      "prior_expected_status": "sugarcane-rear-unknown and sugarcane-side-scan-unknown",
+      "observed_status": "body-or-support-unknown",
+      "final_status": "body-or-support-unknown",
+      "disposition": "UPDATED_ASSERTION",
+      "reason": "The unknown rear/side wall origins (1,1,0) and (-1,1,0) are within the modern collision-origin halo for the current player footing query. Sugarcane tick checks body/support before transitionFromS, so it must fail closed earlier.",
+      "anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeSugarcaneMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeSugarcaneMacro.java#getNearestSideWall",
+        "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeSugarcaneMacro.java#tick",
+        "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeSugarcaneMacro.java#transitionFromS"
+      ],
+      "fail_closed_evidence": "Both unknown injections remain, state remains S, and both decisions retain empty inputs; only the obsolete later-status expectations changed."
+    },
+    {
+      "test": "SShapeSugarcaneMacroTest.unknownWaterWallsAndSideScanFailClosedWithoutFalseTransitionOrDraw",
+      "classification": "ASSERTION_OBSOLETE_STATUS_PRECEDENCE",
+      "prior_expected_status": "sugarcane-side-scan-unknown",
+      "observed_status": "body-or-support-unknown",
+      "final_status": "body-or-support-unknown",
+      "disposition": "UPDATED_ASSERTION",
+      "reason": "The water unknown still reaches sugarcane-water-unknown without random draws. In the second scenario, the side-scan unknown (-1,1,0) is also a current-footing collision origin, so body/support precedence is the truthful fail-closed result before sideOpen.",
+      "anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeSugarcaneMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeSugarcaneMacro.java#getNearestSideWall",
+        "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeSugarcaneMacro.java#tick",
+        "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeSugarcaneMacro.java#sideOpen"
+      ],
+      "fail_closed_evidence": "The test still asserts NONE before direction selection, zero leaf/entropy draws for water, S state for side scan, and empty inputs; the exact residual command passes."
+    },
+    {
+      "test": "SShapeVerticalCropMacroTest.unknownAtAnyScanBoundaryNeverBecomesExhausted",
+      "classification": "ASSERTION_OBSOLETE_STATUS_PRECEDENCE",
+      "prior_expected_status": "row-obstacle-scan-pending at every injected boundary",
+      "observed_status": "row-direction-unknown at distance 2; row-obstacle-scan-pending at distances 178 and 179",
+      "final_status": "row-direction-unknown at distance 2; row-obstacle-scan-unknown after later reconciliation",
+      "disposition": "UPDATED_ASSERTION",
+      "reason": "The distance-2 unknown origin (-3,1,0) is observed by the earlier adjacent row-direction path under the modern collision-origin halo. The farther coordinate and scan-end boundaries remain phased scan evidence, and UNKNOWN never becomes EXHAUSTED.",
+      "anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeVerticalCropMacro.java#updateState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/impl/SShapeVerticalCropMacro.java#calculateDirection",
+        "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeVerticalCropMacro.java#consumeSpatialScan",
+        "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeVerticalCropMacro.java#chooseDirection"
+      ],
+      "fail_closed_evidence": "Distance 2/178/179 and both final boundary unknowns retain empty inputs and ALIGNING state; the full 667-test run is green."
+    }
+  ],
+  "automated_evidence": [
+    "Initial exact composition residual command on merge head 80c63a1d7d79f45ec7a39d843e85761ea0fc67d6 exited 1 with exactly 4 named tests failed; observed statuses were walkability-unknown, body-or-support-unknown, body-or-support-unknown, and row-direction-unknown, with no input movement before assertions.",
+    "Gradle command .\\gradlew.bat --no-daemon --console=plain --stacktrace test --tests <four exact residual tests> exited 0 with BUILD SUCCESSFUL on Java 25.0.3, Gradle 9.5.1, and Fabric Loom 1.17.17.",
+    "Eight macro-family focused suites exited 0 with BUILD SUCCESSFUL: CircularCropMacroTest, SShapeCocoaBeanMacroTest, SShapeMelonPumpkinDefaultMacroTest, SShapeMushroomMacroTest, SShapeMushroomRotateMacroTest, SShapeMushroomSDSMacroTest, SShapeSugarcaneMacroTest, and SShapeVerticalCropMacroTest.",
+    "A003 spatial/time/runtime suites exited 0 with BUILD SUCCESSFUL, including runtime.spatial.*, runtime.time.*, ClientTickPipelineTest, FarmHelperRuntimeTest, interaction.*, lifecycle.*, and snapshot.*.",
+    "Full command .\\gradlew.bat --no-daemon --console=plain --stacktrace test exited 0 with BUILD SUCCESSFUL: 667 tests, 0 failures/errors, 0 skipped.",
+    "The isolated cache was C:\\Users\\Apostrophe\\.codex\\worktrees\\3414\\farm-helper\\.gradle-a006-home; Java 25.0.3 and Gradle 9.5.1 were used with --no-daemon. No OOM, lock, disk, or repeated resource failure occurred.",
+    "Static source verification found all eight A006 macro request planners include audited horizontal/vertical collision-origin bounds and support-probe capture logic; the 16-path scope digest remains unchanged."
+  ],
+  "candidate_metadata": {
+    "branch": "codex/audit-006-macro-leaves",
+    "pull_request": 5,
+    "pull_request_url": "https://github.com/Hylfrd/FarmHelper/pull/5",
+    "composed_review_head": {
+      "sha": "80c63a1d7d79f45ec7a39d843e85761ea0fc67d6",
+      "tree": "f92524da18021e2ed01e413e8189ea65cd354846"
+    },
+    "scope_paths": 16,
+    "scope_paths_sha256": "379f6b661028369d44c40c5778bf3fe4433bca18ade48691bc7c78442442d0c3",
+    "production_macro_changes_for_residuals": false,
+    "readiness": "READY_FOR_FRESH_INDEPENDENT_REVIEW_AFTER_EXACT_HEAD_CI"
+  },
   "entries": [
     {
       "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/CircularCropMacro.java",
@@ -35,7 +164,7 @@
         "AUDIT-006-002",
         "AUDIT-006-009"
       ],
-      "disposition": "BLOCKED_BY_AUDIT_003"
+      "disposition": "RESOLVED"
     },
     {
       "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeMelonPumpkinDefaultMacro.java",
@@ -114,7 +243,7 @@
         "AUDIT-006-007",
         "AUDIT-006-010"
       ],
-      "disposition": "BLOCKED_BY_AUDIT_003"
+      "disposition": "RESOLVED"
     },
     {
       "path": "src/main/java/dev/hylfrd/farmhelper/macro/impl/SShapeVerticalCropMacro.java",
@@ -335,8 +464,8 @@
       "upstream_behavior": "Fixed upstream SShapeCocoaBeanMacro#onEnable has no arbitrary-origin monotonic timestamp parameter or nonnegative-origin assumption.",
       "incompatibility": "At baseline SShapeCocoaBeanMacro.java:113 guards nowNanos as nonnegative, while MacroLifecycle#start passes SystemMonotonicClock.nowNanos and SystemMonotonicClock returns raw System.nanoTime, whose origin is arbitrary and whose value is permitted to be negative.",
       "replacement": "AUDIT-003 owns the central SystemMonotonicClock contract repair. No duplicate leaf workaround or out-of-scope clock edit is included here.",
-      "automated_evidence": "Read-only trace anchors MacroLifecycle.java#start -> clock.nowNanos(), SystemMonotonicClock.java#nowNanos -> System.nanoTime(), and baseline SShapeCocoaBeanMacro.java:113; repair evidence remains owned by AUDIT-003.",
-      "status": "BLOCKED_BY_AUDIT_003"
+      "automated_evidence": "Exact A003 candidate bd1d1f1275e77775a9db822bf9f14cf109e88830 is composed unchanged at merge head 80c63a1d7d79f45ec7a39d843e85761ea0fc67d6; AUDIT-003-F002 focused and full runtime/time evidence passes with the normalized SystemMonotonicClock contract. No duplicate leaf workaround was added.",
+      "status": "RESOLVED"
     },
     {
       "id": "AUDIT-006-010",
@@ -346,8 +475,8 @@
       "upstream_behavior": "Fixed upstream SShapeSugarcaneMacro#onEnable has no arbitrary-origin monotonic timestamp parameter or nonnegative-origin assumption.",
       "incompatibility": "At baseline SShapeSugarcaneMacro.java:111 guards nowNanos as nonnegative, while MacroLifecycle#start passes SystemMonotonicClock.nowNanos and SystemMonotonicClock returns raw System.nanoTime, whose origin is arbitrary and whose value is permitted to be negative.",
       "replacement": "AUDIT-003 owns the central SystemMonotonicClock contract repair. No duplicate leaf workaround or out-of-scope clock edit is included here.",
-      "automated_evidence": "Read-only trace anchors MacroLifecycle.java#start -> clock.nowNanos(), SystemMonotonicClock.java#nowNanos -> System.nanoTime(), and baseline SShapeSugarcaneMacro.java:111; repair evidence remains owned by AUDIT-003.",
-      "status": "BLOCKED_BY_AUDIT_003"
+      "automated_evidence": "Exact A003 candidate bd1d1f1275e77775a9db822bf9f14cf109e88830 is composed unchanged at merge head 80c63a1d7d79f45ec7a39d843e85761ea0fc67d6; AUDIT-003-F002 focused and full runtime/time evidence passes with the normalized SystemMonotonicClock contract. No duplicate leaf workaround was added.",
+      "status": "RESOLVED"
     }
   ]
 }

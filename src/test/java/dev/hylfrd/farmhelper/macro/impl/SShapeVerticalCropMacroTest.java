@@ -884,7 +884,8 @@ class SShapeVerticalCropMacroTest {
             SpatialCaptureRequest right = macro.spatialRequest(player, EPOCH).orElseThrow();
             SpatialSnapshot unknown = withBlock(captured(right, scanPosition, null),
                     new BlockPosition(-distance - 1, 1, 0), Observation.unknown());
-            assertEquals("row-obstacle-scan-pending", macro.tick(context(
+            assertEquals(distance == 2 ? "row-direction-unknown" : "row-obstacle-scan-pending",
+                    macro.tick(context(
                     0L, scanPosition, 0.0D, 2.8F, unknown)).status(), "distance=" + distance);
             SpatialCaptureRequest left = macro.spatialRequest(player, EPOCH).orElseThrow();
             MacroDecision reconciled = macro.tick(context(
