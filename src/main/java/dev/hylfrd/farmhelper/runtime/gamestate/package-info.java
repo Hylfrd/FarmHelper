@@ -2,8 +2,10 @@
  * Minecraft-free parsing of SkyBlock and Garden text snapshots.
  *
  * <p>The core state semantics were migrated from
- * {@code src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java}. Identity-free chat
- * signals also preserve local recognition behavior from
+ * {@code src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java}, with scoreboard
+ * input shape from {@code src/main/java/com/jelly/farmhelperv2/util/ScoreboardUtils.java} and
+ * crop names from {@code src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java}.
+ * Identity-free chat signals also preserve local recognition behavior from
  * {@code src/main/java/com/jelly/farmhelperv2/failsafe/impl/GuestVisitFailsafe.java},
  * {@code src/main/java/com/jelly/farmhelperv2/feature/impl/PestFarmer.java},
  * {@code src/main/java/com/jelly/farmhelperv2/feature/impl/AutoRepellent.java}, and

@@ -186,6 +186,8 @@
       "classification": "DERIVED_WITH_ATTRIBUTION",
       "upstream_anchors": [
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/ScoreboardUtils.java:26-99",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java:2925-2949",
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/impl/GuestVisitFailsafe.java:95-111",
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/feature/impl/PestFarmer.java:194-204",
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/feature/impl/AutoRepellent.java:407-424",
@@ -357,10 +359,10 @@
       "summary": "Package provenance named only GameStateHandler although chat signatures came from four additional upstream classes.",
       "upstream_behavior": "The pinned guest, pest-spawn, repellent, and evacuation vocabulary is anchored in GuestVisitFailsafe, PestFarmer, AutoRepellent, and FailsafeManager respectively.",
       "incompatibility": "The previous package comment attributed all parsing semantics only to GameStateHandler, leaving the source of identity-free chat conversion behavior undisclosed even though the repository NOTICE provided project-level attribution.",
-      "replacement": "Name the full upstream paths for all five source classes and bind them to the fixed commit while retaining the documented Fabric snapshot rewrite differences.",
+      "replacement": "Name the full upstream paths for all five chat source classes and the two fixed-upstream input-shape sources, bind them to the fixed commit, and retain the documented Fabric snapshot rewrite differences.",
       "automated_evidence": [
         "git grep -n at eacb323fbde3eff94d4f2ee7baacb059d84b8e3a locates each preserved chat signature in the newly named source path.",
-        "A static package-info check verifies the fixed commit and all five source paths are present."
+        "A static package-info check verifies the fixed commit and all seven fixed-upstream source paths used by this package are present."
       ],
       "status": "RESOLVED"
     }
