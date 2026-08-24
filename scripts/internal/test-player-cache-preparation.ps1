@@ -49,6 +49,40 @@ function Get-Sha1 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA1).Hash.ToLowerInvariant()
 }
 
+function Get-StableUtcTimestamp {
+    param(
+        [Parameter(Mandatory = $true)]
+        [DateTime] $Value
+    )
+
+    $utcValue = [DateTime]::SpecifyKind($Value, [DateTimeKind]::Utc)
+    return $utcValue.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Set-LastWriteTimeUtcAndVerify {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [DateTime] $Expected
+    )
+
+    $expectedUtc = [DateTime]::SpecifyKind($Expected, [DateTimeKind]::Utc)
+    $targetItem = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if ($targetItem.PSIsContainer) {
+        [IO.Directory]::SetLastWriteTimeUtc($Path, $expectedUtc)
+    } else {
+        [IO.File]::SetLastWriteTimeUtc($Path, $expectedUtc)
+    }
+    $storedItem = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    $storedUtc = [DateTime]::SpecifyKind([DateTime] $storedItem.LastWriteTimeUtc, [DateTimeKind]::Utc)
+    Assert-True `
+        -Condition ($storedUtc.Ticks -eq $expectedUtc.Ticks) `
+        -Message "Filesystem did not preserve explicit LastWriteTimeUtc for $Path."
+    return $storedUtc
+}
+
 function New-AssetFixture {
     param(
         [Parameter(Mandatory = $true)]
@@ -158,6 +192,7 @@ function Get-SourceSnapshot {
             type = if ($rootIsReparse) { 'reparse' } else { 'directory' }
             attributes = [int64] $rootAttributes
             reparse = [bool] $rootIsReparse
+            lastWriteTimeUtc = Get-StableUtcTimestamp -Value $rootItem.LastWriteTimeUtc
             size = $null
             sha1 = $null
         })
@@ -179,6 +214,7 @@ function Get-SourceSnapshot {
                 type = if ($isReparse) { 'reparse' } elseif ($isDirectory) { 'directory' } else { 'file' }
                 attributes = [int64] $attributes
                 reparse = [bool] $isReparse
+                lastWriteTimeUtc = Get-StableUtcTimestamp -Value $entry.LastWriteTimeUtc
                 size = $null
                 sha1 = $null
             }
@@ -199,13 +235,86 @@ function Get-SourceSnapshot {
     return ($snapshot | ConvertTo-Json -Compress -Depth 5)
 }
 
+function Get-SnapshotEntry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Snapshot,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+
+    $parsed = ConvertFrom-SnapshotJson -Snapshot $Snapshot
+    $matches = @($parsed.entries | Where-Object { [string] $_.path -eq $Path })
+    Assert-True `
+        -Condition ($matches.Count -eq 1) `
+        -Message "Snapshot did not contain exactly one entry for $Path."
+    return $matches[0]
+}
+
+function ConvertFrom-SnapshotJson {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Snapshot
+    )
+
+    $convertFromJson = Get-Command ConvertFrom-Json
+    if ($convertFromJson.Parameters.ContainsKey('DateKind')) {
+        return $Snapshot | ConvertFrom-Json -DateKind String
+    }
+    return $Snapshot | ConvertFrom-Json
+}
+
+function Get-SnapshotLastWriteTimeText {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object] $Entry
+    )
+
+    $property = $Entry.PSObject.Properties['lastWriteTimeUtc']
+    if ($null -eq $property -or $null -eq $property.Value) {
+        return $null
+    }
+    if ($property.Value -is [DateTime]) {
+        return Get-StableUtcTimestamp -Value ([DateTime] $property.Value)
+    }
+    return [string] $property.Value
+}
+
+function Assert-SnapshotEntryChangedOnlyByLastWrite {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object] $Before,
+
+        [Parameter(Mandatory = $true)]
+        [object] $After,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+
+    foreach ($property in @('path', 'type', 'attributes', 'reparse', 'size', 'sha1')) {
+        Assert-True `
+            -Condition ([string] $Before.$property -eq [string] $After.$property) `
+            -Message "LastWriteTimeUtc probe changed $property for $Path."
+    }
+    $beforeLastWrite = Get-SnapshotLastWriteTimeText -Entry $Before
+    $afterLastWrite = Get-SnapshotLastWriteTimeText -Entry $After
+    Assert-True `
+        -Condition (-not [string]::IsNullOrEmpty($beforeLastWrite) -and -not [string]::IsNullOrEmpty($afterLastWrite)) `
+        -Message "Snapshot omitted the LastWriteTimeUtc value for $Path."
+    Assert-True `
+        -Condition ($beforeLastWrite -ne $afterLastWrite) `
+        -Message "Tree snapshot did not detect the LastWriteTimeUtc change for $Path."
+}
+
 function Get-SnapshotReparseEntries {
     param(
         [Parameter(Mandatory = $true)]
         [string] $Snapshot
     )
 
-    $parsed = $Snapshot | ConvertFrom-Json
+    $parsed = ConvertFrom-SnapshotJson -Snapshot $Snapshot
     return ,@($parsed.entries | Where-Object { [bool] $_.reparse })
 }
 
@@ -438,6 +547,16 @@ try {
 
     $sourceFixture = New-AssetFixture -Root (Join-Path $fixtureRoot 'baseline-source')
     New-Item -ItemType Directory -Path (Join-Path $sourceFixture.root 'empty-source-directory') -Force | Out-Null
+    $sourceDirectoryTimestamp = [DateTime]::new(2000, 1, 2, 3, 4, 5, 0, [DateTimeKind]::Utc)
+    $sourceDirectoryItems = @(
+        Get-Item -LiteralPath $sourceFixture.root -Force
+        Get-ChildItem -LiteralPath $sourceFixture.root -Directory -Force -Recurse
+    )
+    foreach ($sourceDirectory in ($sourceDirectoryItems | Sort-Object @{ Expression = { $_.FullName.Length }; Descending = $true })) {
+        $null = Set-LastWriteTimeUtcAndVerify `
+            -Path $sourceDirectory.FullName `
+            -Expected $sourceDirectoryTimestamp
+    }
     $sourceSnapshotBefore = Get-SourceSnapshot -Root $sourceFixture.root
     $destinationRoot = Join-Path $destinationTestRoot 'baseline\caches\fabric-loom'
     New-Item -ItemType Directory -Path $destinationRoot -Force | Out-Null
@@ -467,7 +586,7 @@ try {
     $destinationSnapshotAfterFirst = Get-SourceSnapshot -Root $destinationRoot
     Assert-True -Condition ((Get-SnapshotReparseEntries -Snapshot $sourceSnapshotBefore).Count -eq 0 -and (Get-SnapshotReparseEntries -Snapshot $sourceSnapshotAfter).Count -eq 0) -Message 'Baseline source snapshot contained a reparse entry.'
     Assert-True -Condition ((Get-SnapshotReparseEntries -Snapshot $destinationSnapshotAfterFirst).Count -eq 0) -Message 'Baseline destination snapshot contained a reparse entry.'
-    $destinationSnapshotAfterFirstData = $destinationSnapshotAfterFirst | ConvertFrom-Json
+    $destinationSnapshotAfterFirstData = ConvertFrom-SnapshotJson -Snapshot $destinationSnapshotAfterFirst
     $destinationEntriesAfterFirst = @($destinationSnapshotAfterFirstData.entries)
     Assert-True -Condition (@($destinationEntriesAfterFirst | Where-Object { $_.path -eq 'empty-destination-directory' -and $_.type -eq 'directory' }).Count -eq 1) -Message 'Complete destination snapshot omitted the empty directory.'
     Assert-True -Condition ($sourceSnapshotBefore -eq $sourceSnapshotAfter) -Message 'Source tree changed during successful preparation.'
@@ -499,6 +618,68 @@ try {
     Assert-True -Condition ((Get-SnapshotReparseEntries -Snapshot $snapshotWithReparseProbe).Count -eq 1) -Message 'Tree snapshot did not record the reparse entry.'
     Remove-Item -LiteralPath $snapshotReparseProbe -Force -ErrorAction Stop
     Write-Output 'TEST_OK tree snapshot detects empty directories, attributes, and reparse entries'
+    $script:passCount++
+
+    $timestampFilePath = Join-Path $destinationRoot 'bin\loom.bin'
+    $timestampDirectoryPath = Join-Path $destinationRoot 'nested\deep'
+    $snapshotBeforeLastWriteProbe = Get-SourceSnapshot -Root $destinationRoot
+    $fileBeforeLastWriteProbe = Get-SnapshotEntry `
+        -Snapshot $snapshotBeforeLastWriteProbe `
+        -Path 'bin\loom.bin'
+    $directoryBeforeLastWriteProbe = Get-SnapshotEntry `
+        -Snapshot $snapshotBeforeLastWriteProbe `
+        -Path 'nested\deep'
+    $fileProbeTimestamp = [DateTime]::new(2001, 2, 3, 4, 5, 6, 0, [DateTimeKind]::Utc)
+    $storedFileProbeTimestamp = Set-LastWriteTimeUtcAndVerify `
+        -Path $timestampFilePath `
+        -Expected $fileProbeTimestamp
+    $snapshotAfterFileLastWriteProbe = Get-SourceSnapshot -Root $destinationRoot
+    $fileAfterLastWriteProbe = Get-SnapshotEntry `
+        -Snapshot $snapshotAfterFileLastWriteProbe `
+        -Path 'bin\loom.bin'
+    Assert-SnapshotEntryChangedOnlyByLastWrite `
+        -Before $fileBeforeLastWriteProbe `
+        -After $fileAfterLastWriteProbe `
+        -Path 'bin\loom.bin'
+    Assert-True `
+        -Condition ((Get-SnapshotLastWriteTimeText -Entry $fileAfterLastWriteProbe) -eq (Get-StableUtcTimestamp -Value $storedFileProbeTimestamp)) `
+        -Message 'File snapshot did not serialize the verified UTC LastWriteTime value.'
+
+    $directoryProbeTimestamp = [DateTime]::new(2002, 3, 4, 5, 6, 7, 0, [DateTimeKind]::Utc)
+    $storedDirectoryProbeTimestamp = Set-LastWriteTimeUtcAndVerify `
+        -Path $timestampDirectoryPath `
+        -Expected $directoryProbeTimestamp
+    $snapshotAfterDirectoryLastWriteProbe = Get-SourceSnapshot -Root $destinationRoot
+    $directoryAfterLastWriteProbe = Get-SnapshotEntry `
+        -Snapshot $snapshotAfterDirectoryLastWriteProbe `
+        -Path 'nested\deep'
+    Assert-SnapshotEntryChangedOnlyByLastWrite `
+        -Before $directoryBeforeLastWriteProbe `
+        -After $directoryAfterLastWriteProbe `
+        -Path 'nested\deep'
+    Assert-True `
+        -Condition ((Get-SnapshotLastWriteTimeText -Entry $directoryAfterLastWriteProbe) -eq (Get-StableUtcTimestamp -Value $storedDirectoryProbeTimestamp)) `
+        -Message 'Directory snapshot did not serialize the verified UTC LastWriteTime value.'
+
+    $lastWriteTimestampPattern = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{7}Z$'
+    $lastWriteSnapshotData = ConvertFrom-SnapshotJson -Snapshot $snapshotAfterDirectoryLastWriteProbe
+    $entriesMissingLastWrite = @($lastWriteSnapshotData.entries | Where-Object {
+        [string]::IsNullOrEmpty((Get-SnapshotLastWriteTimeText -Entry $_))
+    })
+    Assert-True `
+        -Condition ($entriesMissingLastWrite.Count -eq 0) `
+        -Message 'Complete-tree snapshot omitted a deterministic LastWriteTimeUtc value.'
+    Assert-True `
+        -Condition (@($lastWriteSnapshotData.entries | Where-Object {
+                (Get-SnapshotLastWriteTimeText -Entry $_) -notmatch $lastWriteTimestampPattern
+            }).Count -eq 0) `
+        -Message 'Complete-tree snapshot LastWriteTimeUtc values were not stable UTC strings.'
+    Assert-True `
+        -Condition (@($lastWriteSnapshotData.entries | Where-Object {
+                $_.PSObject.Properties.Name -contains 'lastAccessTimeUtc'
+            }).Count -eq 0) `
+        -Message 'Complete-tree snapshot included excluded LastAccessTimeUtc state.'
+    Write-Output 'TEST_OK tree snapshot detects file and directory LastWriteTimeUtc changes without content mutation and excludes LastAccessTimeUtc'
     $script:passCount++
 
     $destinationSnapshotBeforeRerun = Get-SourceSnapshot -Root $destinationRoot

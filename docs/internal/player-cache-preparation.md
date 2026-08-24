@@ -112,8 +112,13 @@ objects, or copy files. Receipt output contains no timestamps or process IDs,
 so equivalent runs produce deterministic JSON. The synthetic no-mutation audit
 compares a deterministic snapshot of the complete destination tree, including
 ordinary files, directories, empty directories, entry types, numeric file
-attributes, and SHA-1/size fingerprints. Reparse entries are recorded by the
-audit and must remain zero; the preparation tool rejects them before use.
+attributes, SHA-1/size fingerprints, and every entry's `LastWriteTimeUtc` as an
+invariant `yyyy-MM-ddTHH:mm:ss.fffffffZ` string. `LastAccessTimeUtc` is
+intentionally excluded. Reparse entries are recorded by the audit and must
+remain zero; the preparation tool rejects them before use.
+The focused suite mutates only explicit UTC write times on one file and one
+directory, verifies the stored values, and requires the snapshots to differ
+without changes to path, type, attributes, size, or SHA-1.
 
 This tool deliberately does not invoke Loom's `downloadAssets` task. With Loom
 1.17.17, `DownloadAssetsTask.getAssetIndex` calls `downloadString` even when a
