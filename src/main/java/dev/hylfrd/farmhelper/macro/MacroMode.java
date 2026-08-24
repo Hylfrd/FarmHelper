@@ -40,8 +40,11 @@ public enum MacroMode {
     }
 
     public static Optional<MacroMode> fromCode(int code) {
-        return code < 0 || code >= values().length
-                ? Optional.empty()
-                : Optional.of(values()[code]);
+        for (MacroMode mode : values()) {
+            if (mode.code == code) {
+                return Optional.of(mode);
+            }
+        }
+        return Optional.empty();
     }
 }
