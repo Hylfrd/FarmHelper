@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "slice_id": "AUDIT-009",
+  "baseline_sha": "40823c3a6182a3aadcee28720def91fd2a2eafed",
+  "baseline_tree": "da51fb8aec6c8e05791781d1013af4ae644c9862",
+  "checkpoint_sha": "737516a42c63d6ce57b8e585c55ebe5b9afad8bf",
+  "checkpoint_tree": "e6af173e588c78b4cfc916281fc0fb1463212ef1",
+  "composition_base_sha": "97a7d5ce2d177ff909b881f8049c519157e8171b",
+  "composition_base_tree": "ed0f61ddb73c6191ebfb7877ad564b41ba0d5cf5",
+  "reviewed_base_sha": "6bdd056fda18ae4a53ddf5d51a2edc50fe8576ff",
+  "reviewed_base_tree": "b4b21301532f439f26d145ca4b85102acb16312f",
+  "reviewed_base_parent": "4c4ff5975833c5f09b9d4be07eb06a192fcdd993",
+  "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
+  "paths_sha256": "b28db57ee0a85f4ec06c98f3b5aaa1872af3387081f94ffc231a0d70711cf7bd",
+  "fixed_upstream": {
+    "commit": "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+    "tree": "dfbaaf9ce75f9adc625352396acaa9138a8b97f8",
+    "boundary": "The packaged-client verifier and its harness are downstream internal workflow files and are absent from the fixed upstream tree."
+  },
+  "entries": [
+    {
+      "path": "scripts/internal/verify-packaged-client.ps1",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [
+        "AUDIT-009-001",
+        "AUDIT-009-002"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "scripts/internal/test-packaged-client-harness.ps1",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [
+        "AUDIT-009-001",
+        "AUDIT-009-002"
+      ],
+      "disposition": "RESOLVED"
+    }
+  ],
+  "findings": [
+    {
+      "id": "AUDIT-009-001",
+      "path": "scripts/internal/verify-packaged-client.ps1",
+      "severity": "MEDIUM",
+      "summary": "Offline asset verification rescanned deep ancestors for every indexed object, making the first visible packaged-client scan unnecessarily slow.",
+      "upstream_behavior": "The fixed upstream commit predates these downstream packaged-client workflow scripts; no upstream verifier behavior is imported or changed by this remediation.",
+      "incompatibility": "The baseline verifier performed repeated Assert-PathUnder and Assert-NoReparsePathComponents walks inside the object loop. The canonical Player scan verified 4,750 assets, 453,637,622 bytes, and zero mismatches in about 594 seconds, with about 49 Get-Item guard calls per asset and about 232,750 total.",
+      "replacement": "Validate the derived objects root once, cache each existing or missing prefix directory once, probe each content-addressed leaf at most once, and stream the SHA-1 through .NET for the complete current run. Keep lexical root containment for index and object paths, direct reparse checks, missing/mismatch reporting, index and metadata identity, and logical indexed-object counts unchanged. No receipt is persisted across runs.",
+      "automated_evidence": [
+        "The exact reviewed base 6bdd056fda18ae4a53ddf5d51a2edc50fe8576ff (tree b4b21301532f439f26d145ca4b85102acb16312f) was preserved; the implementation commit is e710757d88ecc5353be09907946ed3579ee28120 (tree 0b62ae9e0995f90ddd5d98b7e7a68f1d83a9adbf).",
+        "PowerShell AST parsing completed successfully for both executable in-scope scripts, and git diff --check completed successfully after the source and audit updates.",
+        "The verifier preserves full SHA-1 verification for every indexed object, lexical root containment, direct and ancestor reparse-point rejection, missing and mismatch reporting, metadata/index identity, path safety, exact logical object counts, exit propagation, and no persistent receipt cache.",
+        "Two complete performance-enabled harness runs passed with positive assets=4750, prefixGuards=256, leafGuards=4750, sha1Objects=4750, all 19 packaged-client negative cases including 13 asset-index-ID cases, and both Gradle hash-boundary negatives.",
+        "The isolated Gradle home was provisioned with Gradle 9.5.1 and Java 25.0.3. The wrapper distribution was copied from the existing user cache without changing that cache; the isolated cache contains no active daemon or wrapper lock/part remnants.",
+        "Online isolated downloadAssets completed in 136 seconds; both subsequent offline downloadAssets receipts passed UP-TO-DATE with no transfer output.",
+        "Offline Gradle check passed with verifyDependencyProvenance, offline clean jar passed, and audit-packaged-jar.ps1 passed deterministic archive equality with 498 entries, the expected client metadata, and the candidate SHA-256 recorded below.",
+        "The exact-base escape comparison and both final complete harness runs exited with the expected statuses; no current Player task, GUI, input, relaunch, or process inspection was performed."
+      ],
+      "measurements": {
+        "before": {
+          "source": "Published canonical Player full-scan observation",
+          "object_count": 4750,
+          "bytes": 453637622,
+          "mismatches": 0,
+          "wall_seconds": 594,
+          "get_item_guard_calls_per_object_approx": 49,
+          "get_item_guard_calls_total_approx": 232750
+        },
+        "after": {
+          "source": "AUDIT-009 opt-in disposable fixture, executed twice after isolated Gradle downloadAssets provisioning; indexed_bytes is the real 26.1.2 assetIndex.totalSize",
+          "object_count": 4750,
+          "indexed_bytes": 455226335,
+          "mismatches": 0,
+          "logical_guard_calls": {
+            "objectsRoot": 1,
+            "prefixDirectories": 256,
+            "leaves": 4750,
+            "total": 5007
+          },
+          "sha1_objects": 4750,
+          "wall_seconds": [
+            12.019,
+            7.394
+          ],
+          "scan_seconds": [
+            8.517,
+            5.924
+          ],
+          "harness_wall_seconds": [
+            120.9,
+            75.8
+          ],
+          "status": "VERIFIED_HEAVY",
+          "repeat_observation": "The second complete fixture run retained the exact object and logical-guard counts; its lower wall time was recorded rather than omitted as a warm-cache-only claim."
+        }
+      },
+      "forbidden_boundaries": [
+        "No current Player task, GUI, input, relaunch, or process inspection was performed.",
+        "No user-owned Gradle cache was mutated.",
+        "No receipt cache was added.",
+        "No test.md, control, product-source, build, CI, or unrelated path was edited."
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-009-002",
+      "path": "scripts/internal/verify-packaged-client.ps1",
+      "severity": "HIGH",
+      "summary": "Untrusted assetIndex.id could escape the canonical assets\\indexes root through lexical parent traversal before the index was read.",
+      "upstream_behavior": "The fixed upstream commit predates these downstream packaged-client workflow scripts; no upstream verifier behavior is imported or changed by this remediation.",
+      "incompatibility": "At the exact reviewed base, an assetIndex.id containing three parent components derived an index path at assets\\outside-parent.json. A valid-looking JSON object at that outside path was accepted with exit 0; Assert-NoReparsePathComponents rejected links but did not prevent lexical parent traversal.",
+      "replacement": "Treat assetIndex.id as an untrusted JSON string and require a non-empty, non-dot, single filename component with no separators, rooted/drive/UNC/device syntax, invalid filename characters, reserved device name, trailing dot/space, or excessive length. Canonicalize the existing assets\\indexes root, assert the derived index path is lexically under that root before Test-Path, reparse, SHA-1, or JSON read, and retain root/index reparse checks.",
+      "automated_evidence": [
+        "The exact reviewed base accepted the valid-looking outside-index JSON: BASE_ESCAPE_PASS exit=0; the derived path was assets\\outside-parent.json, outside assets\\indexes.",
+        "The candidate rejected the unchanged fixture before index existence/read: CANDIDATE_ESCAPE_REJECTED exit!=0 before index existence/read.",
+        "The candidate harness rejected deterministic backslash, forward-slash, and mixed-separator parent escapes, plus drive-rooted, UNC-rooted, device-rooted, empty, dot, dot-dot, reserved-device, trailing-dot, trailing-space, and invalid-character IDs.",
+        "A valid Minecraft-style ID 26.1.2-30 passed a positive preflight, while the three escape fixtures contained valid JSON outside assets\\indexes and were rejected without being accepted as index input.",
+        "The two complete performance-enabled harness runs passed all 13 asset-index-ID negatives and both Gradle hash-boundary negatives with exit 0."
+      ],
+      "measurements": {
+        "before": {
+          "source": "Exact reviewed base 6bdd056fda18ae4a53ddf5d51a2edc50fe8576ff",
+          "escape_id": "..\\..\\..\\outside-parent",
+          "derived_path": "assets\\outside-parent.json",
+          "outside_indexes": true,
+          "index_json_bytes": 14,
+          "exit_code": 0
+        },
+        "after": {
+          "escape_cases": 3,
+          "rejected_cases": 3,
+          "id_negative_cases": 13,
+          "exit_code": "nonzero",
+          "index_read_before_rejection": false,
+          "status": "VERIFIED_HEAVY"
+        }
+      },
+      "forbidden_boundaries": [
+        "No user-owned Gradle cache was mutated.",
+        "No receipt cache was added.",
+        "No test.md, control, product-source, build, CI, or unrelated path was edited."
+      ],
+      "status": "RESOLVED"
+    }
+  ],
+  "verification": {
+    "resource_profile": "HEAVY",
+    "pending_command": null,
+    "sha_model": "candidate_sha/candidate_tree and implementation_sha/implementation_tree identify the executable implementation commit; publication_sha/publication_tree identify the separate audit-record publication commit.",
+    "implementation_sha": "e710757d88ecc5353be09907946ed3579ee28120",
+    "implementation_tree": "0b62ae9e0995f90ddd5d98b7e7a68f1d83a9adbf",
+    "publication_sha": "7988ee342ff0e60b4012534c9a2a2a2dae9022a1",
+    "publication_tree": "0ed60b603a3de5d398a25f92c0ea920062f0314e",
+    "candidate_sha": "e710757d88ecc5353be09907946ed3579ee28120",
+    "candidate_tree": "0b62ae9e0995f90ddd5d98b7e7a68f1d83a9adbf",
+    "candidate_artifact_sha256": "44F118019D8A3A188D1F503A4BE1AF5E0D742E93C021EA5F115026E4A1D67008",
+    "candidate_artifact_size": 883421,
+    "branch": "codex/audit-009-asset-verifier-performance",
+    "commit": "e710757d88ecc5353be09907946ed3579ee28120",
+    "pull_request": "https://github.com/Hylfrd/FarmHelper/pull/8",
+    "commands": [
+      "Gradle 9.5.1 downloadAssets with isolated GRADLE_USER_HOME=.gradle/audit-009-user-home: passed in 136s",
+      ".\\gradlew.bat --offline --no-daemon --console=plain downloadAssets (isolated cache, receipt 1): passed, UP-TO-DATE",
+      ".\\gradlew.bat --offline --no-daemon --console=plain downloadAssets (isolated cache, receipt 2): passed, UP-TO-DATE",
+      ".\\scripts\\internal\\test-packaged-client-harness.ps1 -RunAssetPerformanceFixture (isolated GRADLE_USER_HOME): passed twice, exit 0; 4,750 objects, 256 prefixes, 5,007 guards",
+      ".\\gradlew.bat --offline --no-daemon --console=plain check (isolated GRADLE_USER_HOME): passed, including verifyDependencyProvenance",
+      ".\\gradlew.bat --offline --no-daemon --console=plain clean jar (isolated GRADLE_USER_HOME): passed twice for deterministic comparison",
+      ".\\scripts\\internal\\audit-packaged-jar.ps1 -FirstArtifact <temporary first JAR>: passed, deterministic archive equality, 498 entries",
+      "Exact reviewed-base escape fixture: base exit 0, candidate exit nonzero before index existence/read",
+      "PowerShell AST parse for both executable paths: passed",
+      "git diff --check and exact three-path scope check: passed"
+    ],
+    "resource_observations": {
+      "gradle_user_home": ".gradle/audit-009-user-home",
+      "java": "BellSoft Liberica 25.0.3",
+      "gradle": "9.5.1",
+      "daemon_mode": "All Gradle commands used --no-daemon; Gradle reported and stopped its required single-use daemon.",
+      "initial_wrapper_bootstrap": "The first isolated wrapper download timed out at the configured 10 seconds; an existing extracted Gradle 9.5.1 distribution was copied into the isolated wrapper cache and the generated .lck/.part remnants were removed.",
+      "asset_provisioning": "The isolated Loom metadata/index/objects cache was provisioned by Gradle downloadAssets; the user cache was read for the immutable wrapper distribution and Fabric API source but was not mutated.",
+      "oom": false,
+      "disk_saturation": false,
+      "repeated_resource_failure": false,
+      "user_cache_mutated": false,
+      "live_locks_or_daemon_state_copied": false
+    },
+    "checks": [
+      "PowerShell AST parse: passed",
+      "git diff --check: passed",
+      "Exact reviewed-base escape: base accepted exit 0; candidate rejected before index existence/read",
+      "4,750-object fixture: passed twice; both runs verified 4,750 SHA-1 objects and 5,007 logical guards",
+      "Packaged-client positive, valid 26.1.2-30 ID, 19 negative cases including 13 ID cases, and two Gradle hash negatives: passed",
+      "Gradle check and deterministic 498-entry JAR audit: passed"
+    ]
+  }
+}

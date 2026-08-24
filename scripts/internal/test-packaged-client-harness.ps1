@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param()
+param(
+    [switch] $RunAssetPerformanceFixture
+)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -66,6 +68,203 @@ function Invoke-ExpectedFailure {
     Write-Output "NEGATIVE_OK $Name"
 }
 
+function Get-Sha1HexForBytes {
+    param(
+        [Parameter(Mandatory = $true)]
+        [byte[]] $Bytes
+    )
+
+    $algorithm = [Security.Cryptography.SHA1]::Create()
+    try {
+        return ([BitConverter]::ToString($algorithm.ComputeHash($Bytes))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $algorithm.Dispose()
+    }
+}
+
+function Write-AssetIndexFixture {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $GradleUserHome,
+
+        [Parameter(Mandatory = $true)]
+        [string] $AssetIndexId,
+
+        [Parameter(Mandatory = $true)]
+        [object] $Objects
+    )
+
+    $metadataDirectory = Join-Path $GradleUserHome 'caches\fabric-loom\26.1.2'
+    $indexesDirectory = Join-Path $GradleUserHome 'caches\fabric-loom\assets\indexes'
+    New-Item -ItemType Directory -Path $metadataDirectory -Force | Out-Null
+    New-Item -ItemType Directory -Path $indexesDirectory -Force | Out-Null
+
+    $index = [ordered]@{ objects = $Objects }
+    $indexPath = Join-Path $indexesDirectory "26.1.2-$AssetIndexId.json"
+    $indexText = $index | ConvertTo-Json -Compress -Depth 8
+    [IO.File]::WriteAllText($indexPath, $indexText, [Text.UTF8Encoding]::new($false))
+    $indexSha1 = (Get-FileHash -LiteralPath $indexPath -Algorithm SHA1).Hash.ToLowerInvariant()
+
+    $metadata = [ordered]@{
+        assetIndex = [ordered]@{
+            id = $AssetIndexId
+            sha1 = $indexSha1
+        }
+    }
+    $metadataPath = Join-Path $metadataDirectory 'mojang_minecraft_info.json'
+    $metadataText = $metadata | ConvertTo-Json -Compress -Depth 5
+    [IO.File]::WriteAllText($metadataPath, $metadataText, [Text.UTF8Encoding]::new($false))
+
+    return [pscustomobject]@{
+        assetsRoot = Join-Path $GradleUserHome 'caches\fabric-loom\assets'
+        objectsRoot = Join-Path $GradleUserHome 'caches\fabric-loom\assets\objects'
+        indexPath = $indexPath
+        metadataPath = $metadataPath
+    }
+}
+
+function Write-AssetIndexIdFixture {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $GradleUserHome,
+
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string] $AssetIndexId,
+
+        [string] $EscapedIndexRelativePath
+    )
+
+    $metadataDirectory = Join-Path $GradleUserHome 'caches\fabric-loom\26.1.2'
+    $indexesDirectory = Join-Path $GradleUserHome 'caches\fabric-loom\assets\indexes'
+    New-Item -ItemType Directory -Path $metadataDirectory -Force | Out-Null
+    New-Item -ItemType Directory -Path $indexesDirectory -Force | Out-Null
+
+    $index = [ordered]@{ objects = [ordered]@{} }
+    $indexText = $index | ConvertTo-Json -Compress -Depth 8
+    $indexPath = if ([string]::IsNullOrEmpty($EscapedIndexRelativePath)) {
+        Join-Path $indexesDirectory '26.1.2-invalid-id.json'
+    } else {
+        $expectedRelativePath = "26.1.2-$AssetIndexId.json"
+        if ($EscapedIndexRelativePath -ne $expectedRelativePath) {
+            throw "Asset-index escape fixture path does not match the baseline derivation: $AssetIndexId"
+        }
+        $candidatePath = [IO.Path]::GetFullPath((Join-Path $indexesDirectory $EscapedIndexRelativePath))
+        $normalizedIndexesRoot = [IO.Path]::GetFullPath($indexesDirectory).TrimEnd('\')
+        if ($candidatePath.StartsWith($normalizedIndexesRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Asset-index escape fixture did not escape indexes: $candidatePath"
+        }
+        New-Item -ItemType Directory -Path (Split-Path -Parent $candidatePath) -Force | Out-Null
+        $candidatePath
+    }
+    [IO.File]::WriteAllText($indexPath, $indexText, [Text.UTF8Encoding]::new($false))
+    $indexSha1 = (Get-FileHash -LiteralPath $indexPath -Algorithm SHA1).Hash.ToLowerInvariant()
+
+    $metadata = [ordered]@{
+        assetIndex = [ordered]@{
+            id = $AssetIndexId
+            sha1 = $indexSha1
+        }
+    }
+    $metadataPath = Join-Path $metadataDirectory 'mojang_minecraft_info.json'
+    [IO.File]::WriteAllText(
+        $metadataPath,
+        ($metadata | ConvertTo-Json -Compress -Depth 5),
+        [Text.UTF8Encoding]::new($false))
+
+    return [pscustomobject]@{
+        assetsRoot = Join-Path $GradleUserHome 'caches\fabric-loom\assets'
+        indexesRoot = $indexesDirectory
+        indexPath = $indexPath
+        metadataPath = $metadataPath
+    }
+}
+
+function Invoke-AssetIndexIdNegative {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Name,
+
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string] $AssetIndexId,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ExpectedMessage,
+
+        [string] $EscapedIndexRelativePath
+    )
+
+    $caseFixture = Join-Path $fixtureRoot ("asset index id - " + $Name)
+    $caseGradleHome = Join-Path $caseFixture 'gradle home'
+    $caseRunDirectory = Join-Path $caseFixture 'run'
+    $layout = Write-AssetIndexIdFixture `
+        -GradleUserHome $caseGradleHome `
+        -AssetIndexId $AssetIndexId `
+        -EscapedIndexRelativePath $EscapedIndexRelativePath
+    New-Item -ItemType Directory -Path (Join-Path $caseRunDirectory 'mods') -Force | Out-Null
+    Copy-FabricApiFixture -GradleUserHome $caseGradleHome -FixtureName $Name | Out-Null
+
+    Invoke-ExpectedFailure `
+        -Name "asset index id $Name" `
+        -ExpectedMessage $ExpectedMessage `
+        -FixtureDirectory $caseRunDirectory `
+        -Hash $sha256 `
+        -GradleUserHome $caseGradleHome
+
+    if (-not [string]::IsNullOrEmpty($EscapedIndexRelativePath)) {
+        $escapedIndex = Get-Content -LiteralPath $layout.indexPath -Raw | ConvertFrom-Json
+        if ($null -eq $escapedIndex.objects) {
+            throw "Asset-index escape fixture is not valid JSON: $($layout.indexPath)"
+        }
+        Write-Output "ASSET_INDEX_ESCAPE_REJECTED $Name path=$($layout.indexPath)"
+    }
+}
+
+function Copy-FabricApiFixture {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $GradleUserHome,
+
+        [string] $FixtureName = 'fixture'
+    )
+
+    $apiDirectory = Join-Path $GradleUserHome (
+        "caches\modules-2\files-2.1\net.fabricmc.fabric-api\fabric-api\$fabricApiVersion\$FixtureName")
+    New-Item -ItemType Directory -Path $apiDirectory -Force | Out-Null
+    $apiPath = Join-Path $apiDirectory $fabricApiArtifactName
+    Copy-Item -LiteralPath $fabricApiPath -Destination $apiPath
+    return $apiPath
+}
+
+function Invoke-PreflightProof {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $FixtureDirectory,
+
+        [Parameter(Mandatory = $true)]
+        [string] $GradleUserHome,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Hash
+    )
+
+    $output = @(
+        & $powershell -NoProfile -File $verificationScript `
+            -ExpectedSha256 $Hash `
+            -JarPath $candidatePath `
+            -RunDirectory $FixtureDirectory `
+            -GradleUserHome $GradleUserHome `
+            -PreflightOnly 2>&1
+    )
+    $exitCode = $LASTEXITCODE
+    $text = $output -join "`n"
+    if ($exitCode -ne 0) {
+        throw "preflight unexpectedly failed: $text"
+    }
+    return $text | ConvertFrom-Json
+}
+
 function Invoke-GradleExpectedFailure {
     param(
         [Parameter(Mandatory = $true)]
@@ -111,6 +310,100 @@ function Invoke-GradleExpectedFailure {
     Write-Output "GRADLE_NEGATIVE_OK $Name exit=$exitCode"
 }
 
+function Invoke-AssetPerformanceFixture {
+    $performanceFixture = Join-Path $fixtureRoot 'asset traversal performance'
+    $performanceGradleHome = Join-Path $performanceFixture 'gradle home'
+    $performanceRunDirectory = Join-Path $performanceFixture 'run'
+    $objectCount = 4750
+    $objects = [ordered]@{}
+    $hashes = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $prefixDirectories = @{}
+    $utf8 = [Text.UTF8Encoding]::new($false)
+    $assetOrdinal = 0
+
+    for ($prefixValue = 0; $prefixValue -lt 256; $prefixValue++) {
+        $expectedPrefix = '{0:x2}' -f $prefixValue
+        $attempt = 0
+        do {
+            $bytes = $utf8.GetBytes("AUDIT-009 prefix $expectedPrefix attempt $attempt")
+            $hash = Get-Sha1HexForBytes -Bytes $bytes
+            $attempt++
+        } while ($hash.Substring(0, 2) -ne $expectedPrefix -or $hashes.Contains($hash))
+        if (-not $hashes.Add($hash)) {
+            throw "Could not create a unique performance fixture hash for prefix $expectedPrefix."
+        }
+
+        $prefixPath = Join-Path (Join-Path $performanceGradleHome (
+            'caches\fabric-loom\assets\objects')) $expectedPrefix
+        New-Item -ItemType Directory -Path $prefixPath -Force | Out-Null
+        [IO.File]::WriteAllBytes((Join-Path $prefixPath $hash), $bytes)
+        $prefixDirectories[$expectedPrefix] = $true
+        $objects["fixture/performance-$assetOrdinal.bin"] = [ordered]@{
+            hash = $hash
+            size = $bytes.Length
+        }
+        $assetOrdinal++
+    }
+
+    while ($assetOrdinal -lt $objectCount) {
+        $attempt = 0
+        do {
+            $bytes = $utf8.GetBytes("AUDIT-009 object $assetOrdinal attempt $attempt")
+            $hash = Get-Sha1HexForBytes -Bytes $bytes
+            $attempt++
+        } while ($hashes.Contains($hash))
+        if ($hashes.Add($hash)) {
+            $prefix = $hash.Substring(0, 2)
+            $prefixPath = Join-Path (Join-Path $performanceGradleHome (
+                'caches\fabric-loom\assets\objects')) $prefix
+            if (-not $prefixDirectories.ContainsKey($prefix)) {
+                New-Item -ItemType Directory -Path $prefixPath -Force | Out-Null
+                $prefixDirectories[$prefix] = $true
+            }
+            [IO.File]::WriteAllBytes((Join-Path $prefixPath $hash), $bytes)
+            $objects["fixture/performance-$assetOrdinal.bin"] = [ordered]@{
+                hash = $hash
+                size = $bytes.Length
+            }
+            $assetOrdinal++
+        }
+    }
+
+    if ($objects.Count -ne $objectCount -or $prefixDirectories.Count -ne 256) {
+        throw "Performance fixture shape is wrong: objects=$($objects.Count), prefixes=$($prefixDirectories.Count)."
+    }
+    Write-AssetIndexFixture `
+        -GradleUserHome $performanceGradleHome `
+        -AssetIndexId 'performance' `
+        -Objects $objects | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $performanceRunDirectory 'mods') -Force | Out-Null
+    Copy-FabricApiFixture `
+        -GradleUserHome $performanceGradleHome `
+        -FixtureName 'performance' | Out-Null
+
+    $wallStopwatch = [Diagnostics.Stopwatch]::StartNew()
+    $proof = Invoke-PreflightProof `
+        -FixtureDirectory $performanceRunDirectory `
+        -GradleUserHome $performanceGradleHome `
+        -Hash $sha256
+    $wallStopwatch.Stop()
+    $traversal = $proof.assets.traversal
+    $guardCalls = [int] $traversal.guardCalls.objectsRoot +
+        [int] $traversal.guardCalls.prefixDirectories +
+        [int] $traversal.guardCalls.leaves
+    if ([int] $proof.assets.objectCount -ne $objectCount -or
+        [int] $proof.assets.verifiedObjectCount -ne $objectCount -or
+        [int] $traversal.guardCalls.objectsRoot -ne 1 -or
+        [int] $traversal.guardCalls.prefixDirectories -ne $prefixDirectories.Count -or
+        [int] $traversal.guardCalls.leaves -ne $objectCount -or
+        [int] $traversal.sha1Objects -ne $objectCount) {
+        throw "Performance fixture returned incomplete traversal proof: $($proof | ConvertTo-Json -Depth 12 -Compress)"
+    }
+    Write-Output ("ASSET_TRAVERSAL_PERFORMANCE_OK objects=$objectCount " +
+        "prefixes=$($prefixDirectories.Count) wallMs=$($wallStopwatch.ElapsedMilliseconds) " +
+        "scanMs=$($traversal.scanMilliseconds) guardCalls=$guardCalls")
+}
+
 try {
     $positiveFixture = Join-Path $fixtureRoot 'positive-preflight'
     New-Item -ItemType Directory -Path (Join-Path $positiveFixture 'mods') -Force | Out-Null
@@ -126,14 +419,44 @@ try {
         throw "positive preflight unexpectedly failed: $($positiveOutput -join "`n")"
     }
     $positiveProof = ($positiveOutput -join "`n") | ConvertFrom-Json
+    $positiveTraversal = $positiveProof.assets.traversal
     if ([string] $positiveProof.status -ne 'preflight-passed' -or
         [string] $positiveProof.provenanceBoundary.gradleTask -ne 'verifyPackagedClientProvenanceGate' -or
         [bool] $positiveProof.provenanceBoundary.packagedTaskDependsOnProvenance -ne $true -or
         [int] $positiveProof.assets.verifiedObjectCount -ne [int] $positiveProof.assets.objectCount -or
-        [int] $positiveProof.assets.objectCount -le 0) {
+        [int] $positiveProof.assets.objectCount -le 0 -or
+        [int] $positiveTraversal.guardCalls.objectsRoot -ne 1 -or
+        [int] $positiveTraversal.guardCalls.prefixDirectories -lt 1 -or
+        [int] $positiveTraversal.guardCalls.prefixDirectories -gt 256 -or
+        [int] $positiveTraversal.guardCalls.leaves -ne [int] $positiveTraversal.sha1Objects -or
+        [int] $positiveTraversal.sha1Objects -lt 1 -or
+        [int] $positiveTraversal.sha1Objects -gt [int] $positiveProof.assets.verifiedObjectCount) {
         throw "positive preflight returned incomplete proof: $($positiveOutput -join "`n")"
     }
-    Write-Output "POSITIVE_OK preflight assets=$($positiveProof.assets.verifiedObjectCount)"
+    Write-Output ("POSITIVE_OK preflight assets=$($positiveProof.assets.verifiedObjectCount) " +
+        "prefixGuards=$($positiveTraversal.guardCalls.prefixDirectories) " +
+        "leafGuards=$($positiveTraversal.guardCalls.leaves) " +
+        "sha1Objects=$($positiveTraversal.sha1Objects) " +
+        "scanMs=$($positiveTraversal.scanMilliseconds)")
+
+    $validIndexIdFixture = Join-Path $fixtureRoot 'valid asset index id'
+    $validIndexIdGradleHome = Join-Path $validIndexIdFixture 'gradle home'
+    $validIndexIdRunDirectory = Join-Path $validIndexIdFixture 'run'
+    Write-AssetIndexFixture `
+        -GradleUserHome $validIndexIdGradleHome `
+        -AssetIndexId '26.1.2-30' `
+        -Objects ([ordered]@{}) | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $validIndexIdRunDirectory 'mods') -Force | Out-Null
+    Copy-FabricApiFixture -GradleUserHome $validIndexIdGradleHome -FixtureName 'valid-index-id' | Out-Null
+    $validIndexIdProof = Invoke-PreflightProof `
+        -FixtureDirectory $validIndexIdRunDirectory `
+        -GradleUserHome $validIndexIdGradleHome `
+        -Hash $sha256
+    if ([string] $validIndexIdProof.assets.index -ne '26.1.2-26.1.2-30' -or
+        [int] $validIndexIdProof.assets.objectCount -ne 0) {
+        throw "valid Minecraft asset-index id was not accepted: $($validIndexIdProof | ConvertTo-Json -Depth 12 -Compress)"
+    }
+    Write-Output 'POSITIVE_OK valid asset index id=26.1.2-30'
 
     $wrongHashFixture = Join-Path $fixtureRoot 'wrong-hash'
     New-Item -ItemType Directory -Path (Join-Path $wrongHashFixture 'mods') -Force | Out-Null
@@ -219,7 +542,128 @@ try {
         -Hash $sha256 `
         -GradleUserHome $assetGradleHome
 
-    Write-Output 'PACKAGED_CLIENT_NEGATIVE_TESTS_OK count=5'
+    $assetEscapeFixture = Join-Path $fixtureRoot 'asset object root junction'
+    $assetEscapeGradleHome = Join-Path $assetEscapeFixture 'gradle home'
+    $assetEscapeRunDirectory = Join-Path $assetEscapeFixture 'run'
+    $assetEscapeBytes = [Text.UTF8Encoding]::new($false).GetBytes('escaped asset')
+    $assetEscapeHash = Get-Sha1HexForBytes -Bytes $assetEscapeBytes
+    $assetEscapeObjects = [ordered]@{
+        'fixture/escaped-object.txt' = [ordered]@{
+            hash = $assetEscapeHash
+            size = $assetEscapeBytes.Length
+        }
+    }
+    $assetEscapeLayout = Write-AssetIndexFixture `
+        -GradleUserHome $assetEscapeGradleHome `
+        -AssetIndexId 'escape' `
+        -Objects $assetEscapeObjects
+    $assetEscapeOutside = Join-Path $assetEscapeFixture 'outside objects'
+    $assetEscapeOutsidePrefix = Join-Path $assetEscapeOutside $assetEscapeHash.Substring(0, 2)
+    New-Item -ItemType Directory -Path $assetEscapeOutsidePrefix -Force | Out-Null
+    [IO.File]::WriteAllBytes(
+        (Join-Path $assetEscapeOutsidePrefix $assetEscapeHash),
+        $assetEscapeBytes)
+    New-Item -ItemType Junction `
+        -Path $assetEscapeLayout.objectsRoot `
+        -Target $assetEscapeOutside `
+        -ErrorAction Stop | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $assetEscapeRunDirectory 'mods') -Force | Out-Null
+    Copy-FabricApiFixture -GradleUserHome $assetEscapeGradleHome -FixtureName 'escape' | Out-Null
+    Invoke-ExpectedFailure `
+        -Name 'asset object root junction escape' `
+        -ExpectedMessage 'reparse-point component' `
+        -FixtureDirectory $assetEscapeRunDirectory `
+        -Hash $sha256 `
+        -GradleUserHome $assetEscapeGradleHome
+
+    $assetIndexIdCases = @(
+        [pscustomobject]@{
+            Name = 'parent-traversal'
+            AssetIndexId = '..\..\..\outside-parent'
+            ExpectedMessage = 'must not contain path separators'
+            EscapedIndexRelativePath = '26.1.2-..\..\..\outside-parent.json'
+        },
+        [pscustomobject]@{
+            Name = 'forward-parent-traversal'
+            AssetIndexId = '../../../outside-forward'
+            ExpectedMessage = 'must not contain path separators'
+            EscapedIndexRelativePath = '26.1.2-../../../outside-forward.json'
+        },
+        [pscustomobject]@{
+            Name = 'mixed-separator-traversal'
+            AssetIndexId = '..\../..\outside-mixed'
+            ExpectedMessage = 'must not contain path separators'
+            EscapedIndexRelativePath = '26.1.2-..\../..\outside-mixed.json'
+        },
+        [pscustomobject]@{
+            Name = 'drive-rooted'
+            AssetIndexId = 'C:\outside-drive'
+            ExpectedMessage = 'must not be rooted or path-like'
+            EscapedIndexRelativePath = $null
+        },
+        [pscustomobject]@{
+            Name = 'unc-rooted'
+            AssetIndexId = '\\server\share\outside-unc'
+            ExpectedMessage = 'must not be rooted or path-like'
+            EscapedIndexRelativePath = $null
+        },
+        [pscustomobject]@{
+            Name = 'device-rooted'
+            AssetIndexId = '\\?\C:\outside-device'
+            ExpectedMessage = 'must not be rooted or path-like'
+            EscapedIndexRelativePath = $null
+        },
+        [pscustomobject]@{
+            Name = 'empty'
+            AssetIndexId = ''
+            ExpectedMessage = 'no usable asset index'
+            EscapedIndexRelativePath = $null
+        },
+        [pscustomobject]@{
+            Name = 'dot'
+            AssetIndexId = '.'
+            ExpectedMessage = "must not be '.' or '..'"
+            EscapedIndexRelativePath = $null
+        },
+        [pscustomobject]@{
+            Name = 'dot-dot'
+            AssetIndexId = '..'
+            ExpectedMessage = "must not be '.' or '..'"
+            EscapedIndexRelativePath = $null
+        },
+        [pscustomobject]@{
+            Name = 'reserved-device-name'
+            AssetIndexId = 'CON'
+            ExpectedMessage = 'uses a reserved filename'
+            EscapedIndexRelativePath = $null
+        },
+        [pscustomobject]@{
+            Name = 'trailing-dot'
+            AssetIndexId = 'fixture.'
+            ExpectedMessage = 'not a valid filename component'
+            EscapedIndexRelativePath = $null
+        },
+        [pscustomobject]@{
+            Name = 'trailing-space'
+            AssetIndexId = 'fixture '
+            ExpectedMessage = 'non-empty filename component'
+            EscapedIndexRelativePath = $null
+        },
+        [pscustomobject]@{
+            Name = 'invalid-character'
+            AssetIndexId = 'fixture?name'
+            ExpectedMessage = 'not a valid filename component'
+            EscapedIndexRelativePath = $null
+        }
+    )
+    foreach ($assetIndexIdCase in $assetIndexIdCases) {
+        Invoke-AssetIndexIdNegative `
+            -Name $assetIndexIdCase.Name `
+            -AssetIndexId $assetIndexIdCase.AssetIndexId `
+            -ExpectedMessage $assetIndexIdCase.ExpectedMessage `
+            -EscapedIndexRelativePath $assetIndexIdCase.EscapedIndexRelativePath
+    }
+    Write-Output "PACKAGED_CLIENT_NEGATIVE_TESTS_OK count=$(6 + $assetIndexIdCases.Count) assetIndexIdCases=$($assetIndexIdCases.Count)"
 
     $validLaunchFixture = Join-Path $fixtureRoot 'valid launch cache'
     $validGradleHome = Join-Path $validLaunchFixture 'gradle home'
@@ -348,6 +792,12 @@ exit /b %ERRORLEVEL%
         }
     }
 
+    if ($RunAssetPerformanceFixture) {
+        Invoke-AssetPerformanceFixture
+    } else {
+        Write-Output 'ASSET_TRAVERSAL_PERFORMANCE_SKIPPED opt-in=-RunAssetPerformanceFixture'
+    }
+
     $gradleBoundaryRunDirectory = Join-Path (Join-Path $repositoryRoot 'build\verification\packaged-client') (
         'gradle boundary ' + [Guid]::NewGuid().ToString('N'))
     Invoke-GradleExpectedFailure `
@@ -368,3 +818,5 @@ exit /b %ERRORLEVEL%
         Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
     }
 }
+
+exit 0
