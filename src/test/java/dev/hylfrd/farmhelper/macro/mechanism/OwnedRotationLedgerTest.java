@@ -9,12 +9,24 @@ import dev.hylfrd.farmhelper.runtime.snapshot.Observation;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayDeque;
+import java.util.Optional;
 import java.util.Queue;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OwnedRotationLedgerTest {
+    @Test
+    void idleLeaseRejectsTerminalReason() {
+        assertThrows(IllegalArgumentException.class, () -> new MacroRotationLeaseState(
+                0L,
+                MacroRotationLeaseState.Status.IDLE,
+                false,
+                Optional.of(RotationTerminalReason.COMPLETED),
+                1L));
+    }
+
     @Test
     void backTargetCrossingOvershootAndPauseStayBlockedUntilExplicitEndpoint() {
         OwnedRotationLedger ledger = new OwnedRotationLedger();

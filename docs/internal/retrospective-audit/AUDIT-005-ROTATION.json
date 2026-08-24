@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "slice_id": "AUDIT-005-ROTATION",
+  "baseline_sha": "10f11c36c1a16f0ee9e896f7696eccc6fbf4e412",
+  "baseline_tree": "1c5dbf9596803ec50067b6b70e9403e0a0f198d7",
+  "approved_base_sha": "354dd647ed81912d7e19e0eee996e65cafbb43ef",
+  "approved_base_tree": "f394db2f21c1a07878df4e235a8769298f9da09d",
+  "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
+  "paths_sha256": "301341cfe5fc86f4891d84245517fbc96bb2f8842799e7449791ef914d642b73",
+  "scope": {
+    "path_count": 11,
+    "approved_base_line_count": 424,
+    "candidate_line_count": 436,
+    "paths": [
+      "src/main/java/dev/hylfrd/farmhelper/macro/MacroAngles.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/MacroRandom.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/MacroRotationDisposition.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/MacroRotationLeaseState.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/MacroRotationRequest.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/MacroSpawnPose.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/mechanism/OwnedRotationLedger.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/mechanism/RotationEntropy.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/PlayerPosture.java",
+      "src/main/java/dev/hylfrd/farmhelper/macro/RowDirection.java",
+      "src/test/java/dev/hylfrd/farmhelper/macro/mechanism/OwnedRotationLedgerTest.java"
+    ]
+  },
+  "non_overlap": {
+    "a005a_worktree_paths": [
+      "src/main/java/dev/hylfrd/farmhelper/macro/MacroMode.java",
+      "src/test/java/dev/hylfrd/farmhelper/macro/MacroModeTest.java"
+    ],
+    "a005a_paths_sha256": "b3937a43ec38d87d2a2a20830f036d2bbba87d56c17e16ccbaac2ec9316829c2",
+    "intersection": []
+  },
+  "source_evidence": {
+    "fixed_upstream": {
+      "sha": "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+      "tree": "dfbaaf9ce75f9adc625352396acaa9138a8b97f8",
+      "rotation_contracts": [
+        "RotationHandler#easeTo",
+        "RotationHandler#reset",
+        "RotationHandler#getTime",
+        "AngleUtils#getClosest(float)",
+        "AngleUtils#getClosestDiagonal(float)",
+        "AngleUtils#normalizeYaw(float)",
+        "RotationConfiguration",
+        "MacroHandler#triggerWarpGarden",
+        "AbstractMacro#onTick"
+      ],
+      "observable_fidelity": "The slice retains upstream angle quantization, shortest-yaw selection, rotation duration bands, explicit target/profile requests, spawn pose validation, posture and row-direction semantics, and macro-owned rotation completion/cancellation behavior while replacing mutable handler state with typed request/lease contracts."
+    },
+    "checkpoint": {
+      "sha": "41b11c990c3696ef57e491d38f78d2f4ac4f49de",
+      "tree": "77622c95ff676d374442aa59bf4f2139ec8d97ca",
+      "parent": "10f11c36c1a16f0ee9e896f7696eccc6fbf4e412",
+      "isolated_hunks": [
+        "MacroRotationLeaseState IDLE invariant",
+        "OwnedRotationLedgerTest.idleLeaseRejectsTerminalReason"
+      ],
+      "whole_checkpoint_cherry_pick": false
+    }
+  },
+  "approved_base_blobs": {
+    "src/main/java/dev/hylfrd/farmhelper/macro/MacroAngles.java": "5eaa53dfa361900fcbbf0a88c436f68843c6b16a",
+    "src/main/java/dev/hylfrd/farmhelper/macro/MacroRandom.java": "642f9b61be164214f2023463579b3342f0d29a21",
+    "src/main/java/dev/hylfrd/farmhelper/macro/MacroRotationDisposition.java": "8dde9386552f451bdfe5a9e44a2a62279e6286ec",
+    "src/main/java/dev/hylfrd/farmhelper/macro/MacroRotationLeaseState.java": "34c51024a720ee81ef14666fff80d91f72c49029",
+    "src/main/java/dev/hylfrd/farmhelper/macro/MacroRotationRequest.java": "1757851f3ca8c40fed2ca35e8ccbc74f1c7d235a",
+    "src/main/java/dev/hylfrd/farmhelper/macro/MacroSpawnPose.java": "59698e22a0990dd8f8bac700cf799eaa80282dc4",
+    "src/main/java/dev/hylfrd/farmhelper/macro/mechanism/OwnedRotationLedger.java": "206ca161fca0c465788fdddead429b0e51add1c4",
+    "src/main/java/dev/hylfrd/farmhelper/macro/mechanism/RotationEntropy.java": "bd5ef792211f0c272c1f27174252c5fda09b8e85",
+    "src/main/java/dev/hylfrd/farmhelper/macro/PlayerPosture.java": "d31252598018c3a9a7654ef82c3990431058a2c7",
+    "src/main/java/dev/hylfrd/farmhelper/macro/RowDirection.java": "6fabb607648661d23e59bde0e2a7aef7d7f2f7a2",
+    "src/test/java/dev/hylfrd/farmhelper/macro/mechanism/OwnedRotationLedgerTest.java": "36f27c734f24b26b6199a35fecceb8d7f3207949"
+  },
+  "entries": [
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroAngles.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/AngleUtils.java#getClosest(float)",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/AngleUtils.java#getClosestDiagonal(float)",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/AngleUtils.java#normalizeYaw(float)"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroRandom.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroRotationDisposition.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroRotationLeaseState.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/RotationHandler.java#easeTo",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/RotationHandler.java#reset"
+      ],
+      "finding_ids": [
+        "AUDIT-005-F002"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroRotationRequest.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/helper/RotationConfiguration.java",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/RotationHandler.java#easeTo"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroSpawnPose.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#spawnPosX",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#spawnYaw",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#spawnPlot"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/mechanism/OwnedRotationLedger.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/RotationHandler.java#easeTo",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/RotationHandler.java#getTime"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/mechanism/RotationEntropy.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/RotationHandler.java#easeTo"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/PlayerPosture.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#checkForTeleport",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onTick"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/RowDirection.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#State"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/mechanism/OwnedRotationLedgerTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/RotationHandler.java#easeTo"
+      ],
+      "finding_ids": [
+        "AUDIT-005-F002"
+      ],
+      "disposition": "RESOLVED"
+    }
+  ],
+  "findings": [
+    {
+      "id": "AUDIT-005-F002",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroRotationLeaseState.java",
+      "severity": "LOW",
+      "summary": "The typed rotation lease admitted an IDLE state carrying a terminal reason.",
+      "upstream_behavior": "The fixed upstream RotationHandler exposes mutable rotating/reset completion state and has no typed acknowledgement that can represent an idle terminal reason.",
+      "incompatibility": "The modern lease is the exact acknowledgement contract consumed by OwnedRotationLedger. Accepting IDLE with a terminal reason creates a contradictory state that the ledger cannot treat as an active or terminal acknowledgement.",
+      "replacement": "Require IDLE to have token zero and no terminal reason, while retaining the existing ACTIVE and TERMINAL invariants; add a focused constructor rejection test.",
+      "automated_evidence": [
+        "Parent-fail run on approved-base production code with the new regression test: OwnedRotationLedgerTest completed 3 tests and failed idleLeaseRejectsTerminalReason at line 22 because the old IDLE constructor accepted Optional.of(COMPLETED).",
+        "Target-pass run after the invariant repair: .\\gradlew.bat --no-daemon --console=plain test --tests dev.hylfrd.farmhelper.macro.mechanism.OwnedRotationLedgerTest completed 3 tests with BUILD SUCCESSFUL.",
+        "The existing target-crossing, overshoot, pause, completion, owner-cancellation retry, replacement cancellation, and pending-ledger cleanup assertions remain green in the same focused suite.",
+        "RotationEntropy remains a deterministic [0,1) boundary seam; the existing queue-backed ledger tests prove both draws are consumed exactly once and cancellation retry does not redraw handler entropy."
+      ],
+      "status": "RESOLVED"
+    }
+  ],
+  "audit_controls": {
+    "legacy_assumptions": [
+      "Angle quantization and shortest-yaw normalization remain explicit and deterministic.",
+      "Rotation duration scaling preserves the upstream angle-band behavior through MacroTiming and the owned request contract; the timing helper is not modified by this slice.",
+      "Rotation ownership is represented by one request token and explicit ACTIVE/TERMINAL acknowledgement state; stale acknowledgements cannot advance the ledger.",
+      "No thread, sleep, executor, client, GUI, input, reflection, unsafe, or access-widener infrastructure is present in the 11 owned paths."
+    ],
+    "attribution": "Each derived path carries fixed-upstream method or type anchors; independent records and seams are identified as independent reimplementations. No A005A path or report is owned by this slice.",
+    "forbidden_infrastructure_scan": {
+      "status": "CLEAR",
+      "patterns": [
+        "System.currentTimeMillis",
+        "System.nanoTime",
+        "Thread",
+        "Executor",
+        "CompletableFuture",
+        "MinecraftClient",
+        "GUI",
+        "input",
+        "accessWidener",
+        "reflection",
+        "unsafe"
+      ]
+    }
+  },
+  "preservation": {
+    "approved_composition": "A003 clock/spatial contracts and A006 leaf implementation are inherited from approved base 354dd647ed81912d7e19e0eee996e65cafbb43ef.",
+    "a003_reviewed_path_count": 72,
+    "a003_diff_from_approved_base": 0,
+    "a006_reviewed_path_count": 16,
+    "a006_diff_from_approved_base": 0,
+    "rotation_change_paths": [
+      "src/main/java/dev/hylfrd/farmhelper/macro/MacroRotationLeaseState.java",
+      "src/test/java/dev/hylfrd/farmhelper/macro/mechanism/OwnedRotationLedgerTest.java"
+    ],
+    "whole_checkpoint_cherry_pick": false
+  },
+  "automated_evidence": [
+    "Approved base identity verified before edits: commit 354dd647ed81912d7e19e0eee996e65cafbb43ef, tree f394db2f21c1a07878df4e235a8769298f9da09d.",
+    "The sorted 11-path scope has 424 approved-base lines and digest 301341cfe5fc86f4891d84245517fbc96bb2f8842799e7449791ef914d642b73; the candidate scope has 436 lines after the regression and invariant repair.",
+    "A005A split worktree contains only MacroMode.java and MacroModeTest.java, digest b3937a43ec38d87d2a2a20830f036d2bbba87d56c17e16ccbaac2ec9316829c2; the intersection with this slice is empty.",
+    "Gradle 9.5.1 and Java 25.0.3 were run with --no-daemon and GRADLE_USER_HOME under this worktree; the local wrapper distribution is verified at .gradle-audit-005b-home.",
+    "Full test/check/build/provenance/access-widener gate passed: 668 tests, 0 failures, 0 errors, 0 skipped; validateAccessWidener was NO-SOURCE and verifyDependencyProvenance reported 3 runtime dependencies, 1 platform dependency, Loom 1.17.17.",
+    "A003 preservation check covered 72 reviewed paths with zero diff; A006 preservation check covered 16 reviewed paths with zero diff."
+  ],
+  "candidate_metadata": {
+    "branch": "codex/audit-005b-mechanism-ledgers",
+    "base_sha": "354dd647ed81912d7e19e0eee996e65cafbb43ef",
+    "scope_paths": 11,
+    "scope_paths_sha256": "301341cfe5fc86f4891d84245517fbc96bb2f8842799e7449791ef914d642b73",
+    "readiness": "READY_FOR_FRESH_INDEPENDENT_REVIEW_AFTER_EXACT_HEAD_CI"
+  }
+}
