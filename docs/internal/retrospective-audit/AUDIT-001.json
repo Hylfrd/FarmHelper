@@ -25,7 +25,7 @@
         "AUDIT-001-F002",
         "AUDIT-001-F003"
       ],
-      "disposition": "REPAIR_PENDING_HEAVY_VERIFICATION"
+      "disposition": "RESOLVED"
     },
     {
       "path": "dependency-provenance.json",
@@ -45,7 +45,7 @@
       "finding_ids": [
         "AUDIT-001-F003"
       ],
-      "disposition": "REPAIR_PENDING_HEAVY_VERIFICATION"
+      "disposition": "RESOLVED"
     },
     {
       "path": "gradle/wrapper/gradle-wrapper.jar",
@@ -134,7 +134,7 @@
       "finding_ids": [
         "AUDIT-001-F003"
       ],
-      "disposition": "REPAIR_PENDING_HEAVY_VERIFICATION"
+      "disposition": "RESOLVED"
     },
     {
       "path": "scripts/internal/verify-dependency-provenance.ps1",
@@ -155,7 +155,7 @@
       "finding_ids": [
         "AUDIT-001-F003"
       ],
-      "disposition": "REPAIR_PENDING_HEAVY_VERIFICATION"
+      "disposition": "RESOLVED"
     },
     {
       "path": "settings.gradle",
@@ -228,9 +228,9 @@
       "upstream_behavior": "Vanilla ServerboundHelloPacket login encoding accepts a player username of at most 16 characters. The offline packaged-client launch must pass a stable protocol-valid name while retaining its explicit offline UUID and access-token arguments.",
       "incompatibility": "The failed packaged client passed FarmHelperVerification (22 characters) through --username. After Create New World started the integrated server, vanilla login codec validation rejected that value and the client reported a codec exception instead of completing the login.",
       "replacement": "Declare packaged_client_verification_username=FarmHelperTest (14 characters) as the single verification setting. Validate absence, blank values, length, allowed username characters, and the effective --username argument before launch; preserve UUID 00000000-0000-0000-0000-000000000000, accessToken offline-verification-token, the candidate JAR identity checks, and dependency provenance checks.",
-      "automated_evidence": "The focused packaged-client harness now checks the configured valid name, absent/blank/over-limit/malformed negative cases, and Gradle rejection of invalid overrides. The verifier records the configured username in preflight proof and requires the owned KnotClient command line to contain the exact --username value. Gradle/Java execution, the broad build, and PR CI remain pending the post-Player HEAVY checkpoint.",
-      "disposition": "REPAIR_PENDING_HEAVY_VERIFICATION",
-      "status": "REPAIRED_PENDING_HEAVY_VERIFICATION"
+      "automated_evidence": "The independently provisioned isolated home recorded successful online asset provisioning before relocation; the target .gradle/audit-001-user-home then passed two offline downloadAssets receipts, with the second UP-TO-DATE and zero transfer/fetch lines. The 26.1.2-30 asset index SHA-256 is D43F145337DDF8B1258F92D5E8CD8EF4E5E2B37D220FEF2D013987B2EF0EBC90 and all 4,750 indexed objects passed SHA-1 verification and path-safety checks. The verified Loom common-deobf artifact retains the pinned SHA-256 2692634287E54AABD918F6E68E1877C9BB8E36D81C7B9FE10460FA3B24DA04CD; the exact collision audit passes 51 JARs, 19,046 states, 43,820 boxes, zero errors, and all four moving-shape oracles. With BellSoft JDK 25.0.3 and Gradle 9.5.1, two clean offline builds, focused test, dependency provenance, packaged provenance, deterministic archive, license/resource, and PowerShell gates pass. The exact packaged-client harness exits 0 with four username invariants, five verifier negatives, spaced-argument launcher coverage, two Gradle hash-boundary negatives, and three Gradle username negatives; the configured offline username is FarmHelperTest and no Minecraft or Player case executes.",
+      "disposition": "RESOLVED",
+      "status": "RESOLVED"
     }
   ]
 }

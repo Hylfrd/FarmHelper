@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param()
+param(
+    [string] $GradleUserHome
+)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -13,8 +15,20 @@ $librariesDirectory = Join-Path $repositoryRoot 'build\libs'
 $candidatePath = Join-Path $librariesDirectory 'FarmHelper-26.1.2.jar'
 $fabricApiVersion = '0.153.0+26.1.2'
 $fabricApiArtifactName = "fabric-api-$fabricApiVersion.jar"
-$fabricApiCacheRoot = Join-Path $env:USERPROFILE (
-    ".gradle\caches\modules-2\files-2.1\net.fabricmc.fabric-api\fabric-api\$fabricApiVersion")
+$gradleUserHome = if (-not [string]::IsNullOrWhiteSpace($GradleUserHome)) {
+    [IO.Path]::GetFullPath($GradleUserHome)
+} elseif (-not [string]::IsNullOrWhiteSpace($env:GRADLE_USER_HOME)) {
+    [IO.Path]::GetFullPath($env:GRADLE_USER_HOME)
+} else {
+    throw 'The packaged-client harness requires an explicit -GradleUserHome or GRADLE_USER_HOME.'
+}
+$defaultUserGradleHome = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE '.gradle'))
+if ($gradleUserHome.Equals($defaultUserGradleHome, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "The packaged-client harness refuses the default user-level Gradle cache: $gradleUserHome"
+}
+$env:GRADLE_USER_HOME = $gradleUserHome
+$fabricApiCacheRoot = Join-Path $gradleUserHome (
+    "caches\modules-2\files-2.1\net.fabricmc.fabric-api\fabric-api\$fabricApiVersion")
 
 function Read-ConfiguredGradleProperty {
     param(
@@ -25,7 +39,7 @@ function Read-ConfiguredGradleProperty {
         [string] $Name
     )
 
-    $pattern = '(?m)^[\t ]*' + [Regex]::Escape($Name) + '[\t ]*=[\t ]*([^\r\n]*)$'
+    $pattern = '(?m)^[\t ]*' + [Regex]::Escape($Name) + '[\t ]*=[\t ]*([^\r\n]*)(?:\r?$)'
     $propertyMatches = [Regex]::Matches([IO.File]::ReadAllText($Path), $pattern)
     if ($propertyMatches.Count -ne 1) {
         throw "Expected exactly one $Name entry in $Path; found $($propertyMatches.Count)."
@@ -148,9 +162,12 @@ function Invoke-ExpectedFailure {
         '-RunDirectory', $FixtureDirectory,
         '-PreflightOnly'
     )
-    if (-not [string]::IsNullOrWhiteSpace($GradleUserHome)) {
-        $arguments += @('-GradleUserHome', $GradleUserHome)
+    $effectiveGradleUserHome = if (-not [string]::IsNullOrWhiteSpace($GradleUserHome)) {
+        $GradleUserHome
+    } else {
+        $gradleUserHome
     }
+    $arguments += @('-GradleUserHome', $effectiveGradleUserHome)
     $output = @(& $powershell -NoProfile -File $verificationScript @arguments 2>&1)
     $exitCode = $LASTEXITCODE
     $text = $output -join "`n"
@@ -221,6 +238,7 @@ try {
             -ExpectedSha256 $sha256 `
             -JarPath $candidatePath `
             -RunDirectory $positiveFixture `
+            -GradleUserHome $gradleUserHome `
             -PreflightOnly 2>&1
     )
     $positiveExitCode = $LASTEXITCODE
