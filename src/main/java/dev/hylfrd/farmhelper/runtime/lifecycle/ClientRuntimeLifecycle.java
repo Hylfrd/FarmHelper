@@ -62,6 +62,17 @@ public final class ClientRuntimeLifecycle {
     }
 
     public void observeScreen(Observation<ScreenSnapshot> screen) {
+        observeScreen(screen, false);
+    }
+
+    /**
+     * Observes one screen boundary. Non-chat present-screen transitions use the terminal
+     * SCREEN_OPEN boundary; all other transitions retain the ordinary SCREEN_CHANGED boundary.
+     */
+    public void observeScreen(
+            Observation<ScreenSnapshot> screen,
+            boolean nonChatScreenOpen
+    ) {
         Objects.requireNonNull(screen, "screen");
         ScreenIdentity identity = ScreenIdentity.from(screen);
         if (!screenObserved) {
@@ -71,7 +82,9 @@ public final class ClientRuntimeLifecycle {
         }
         if (!this.screen.equals(identity)) {
             this.screen = identity;
-            cancellation.accept(ClientCancellationReason.SCREEN_CHANGED);
+            cancellation.accept(nonChatScreenOpen && screen.isPresent()
+                    ? ClientCancellationReason.SCREEN_OPEN
+                    : ClientCancellationReason.SCREEN_CHANGED);
         }
     }
 

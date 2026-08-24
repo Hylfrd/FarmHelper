@@ -49,6 +49,20 @@ class ClientRuntimeLifecycleTest {
     }
 
     @Test
+    void terminalScreenOpenUsesTheDedicatedBoundaryReason() {
+        List<ClientCancellationReason> cancellations = new ArrayList<>();
+        ClientRuntimeLifecycle lifecycle = new ClientRuntimeLifecycle(cancellations::add);
+        Observation<ScreenSnapshot> screen = Observation.present(new ScreenSnapshot(
+                1L, Observation.present("inventory"), Observation.present("Container")));
+
+        lifecycle.observeScreen(Observation.absent());
+        lifecycle.observeScreen(screen, true);
+        lifecycle.observeScreen(screen, true);
+
+        assertEquals(List.of(ClientCancellationReason.SCREEN_OPEN), cancellations);
+    }
+
+    @Test
     void screenCancellationUsesOnlyObservationStateAndStableIdentity() {
         List<ClientCancellationReason> cancellations = new ArrayList<>();
         ClientRuntimeLifecycle lifecycle = new ClientRuntimeLifecycle(cancellations::add);

@@ -110,7 +110,8 @@ class ClientCommandScreenCloseTest {
         fixture.observePresent(replacementChat, true, 32L);
         assertEquals(1, fixture.execute("farmhelper toggle"));
         fixture.observePresent(new Object(), false, 33L);
-        assertTrue(fixture.runtime.core().macroManager().enabled());
+        assertFalse(fixture.runtime.core().macroManager().enabled());
+        assertEquals(MacroState.STOPPED, fixture.runtime.core().macroManager().state());
 
         fixture.disableMacro();
         Object unknownChat = new Object();
