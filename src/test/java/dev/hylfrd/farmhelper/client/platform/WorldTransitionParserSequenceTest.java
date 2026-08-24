@@ -74,7 +74,9 @@ class WorldTransitionParserSequenceTest {
                 raw(transitions.observe(loaded.world()), gameText.drain(), generation++));
 
         sequencer.observeLevel(loadedLevel, false);
-        gameText.acceptChat("chat", "You were spawned in Limbo.");
+        ClientTickAdapter.withSystemMessageScope(false, () ->
+            gameText.acceptChat(ClientTickAdapter.normalizeGameChannel(false),
+                    "You were spawned in Limbo."));
         assertLocation(SemanticLocation.LIMBO, parser, loaded,
                 raw(transitions.observe(loaded.world()), gameText.drain(), generation++));
 
