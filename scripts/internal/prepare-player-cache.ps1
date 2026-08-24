@@ -396,6 +396,20 @@ function Test-FingerprintMatches {
         ([string] $Actual.sha1).Equals($ExpectedSha1, [StringComparison]::OrdinalIgnoreCase)
 }
 
+function Assert-NoUriUserInfo {
+    param(
+        [Parameter(Mandatory = $true)]
+        [Uri] $Uri,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Description
+    )
+
+    if (-not [string]::IsNullOrEmpty($Uri.UserInfo)) {
+        throw "$Description may not contain URI credentials."
+    }
+}
+
 function Assert-OfficialUri {
     param(
         [Parameter(Mandatory = $true)]
@@ -414,31 +428,33 @@ function Assert-OfficialUri {
     try {
         $uri = [Uri]::new($Value, [UriKind]::Absolute)
     } catch {
-        throw "$Description is not an absolute URI: $Value"
+        throw "$Description is not an absolute URI."
     }
+
+    Assert-NoUriUserInfo -Uri $uri -Description $Description
 
     $hostName = $uri.DnsSafeHost.ToLowerInvariant()
     $loopback = $AllowLoopback -and
         ($hostName -eq 'localhost' -or $hostName -eq '127.0.0.1' -or $hostName -eq '::1')
     if ($loopback) {
         if ($uri.Scheme -ne 'http') {
-            throw "$Description loopback URI must use http: $Value"
+            throw "$Description loopback URI must use http."
         }
     } else {
         if ($uri.Scheme -ne 'https') {
-            throw "$Description must use https: $Value"
+            throw "$Description must use https."
         }
         if ($Kind -eq 'Index' -and $hostName -notin @('piston-meta.mojang.com', 'launchermeta.mojang.com')) {
-            throw "$Description is not an official Mojang metadata URI: $Value"
+            throw "$Description is not an official Mojang metadata URI."
         }
         if ($Kind -eq 'Object' -and $hostName -ne 'resources.download.minecraft.net') {
-            throw "$Description is not the official Minecraft object host: $Value"
+            throw "$Description is not the official Minecraft object host."
         }
     }
 
     if (-not [string]::IsNullOrWhiteSpace($uri.Query) -or
         -not [string]::IsNullOrWhiteSpace($uri.Fragment)) {
-        throw "$Description may not contain a query or fragment: $Value"
+        throw "$Description may not contain a query or fragment."
     }
     return $uri
 }
@@ -718,6 +734,7 @@ function Invoke-OwnedObjectDownload {
         [System.Collections.Generic.List[object]] $OwnedHelpers
     )
 
+    Assert-NoUriUserInfo -Uri $Uri -Description 'Downloader URI'
     Ensure-SafeParentDirectory -Path $OutputPath -Description 'Downloader staging file'
     Assert-NoReparsePathComponents -Path $OutputPath -Description 'Downloader staging file'
     Assert-NoReparsePathComponents -Path $ProgressPath -Description 'Downloader progress file'
@@ -841,6 +858,40 @@ function Remove-OwnedStagingFile {
     Remove-Item -LiteralPath $fullPath -Force -ErrorAction Stop
 }
 
+function Remove-OwnedStagingRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [string] $StagingRoot
+    )
+
+    $fullPath = Get-FullPathFromWorktree -Path $Path
+    $expectedRoot = Get-FullPathFromWorktree `
+        -Path (Join-Path $repositoryRoot 'build\verification\player-cache-preparation-staging')
+    $normalizedStagingRoot = Get-FullPathFromWorktree -Path $StagingRoot
+    if (-not $fullPath.Equals($expectedRoot, [StringComparison]::OrdinalIgnoreCase) -or
+        -not $fullPath.Equals($normalizedStagingRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to clean a path outside the exact owned staging root: $fullPath"
+    }
+
+    $item = Get-Item -LiteralPath $fullPath -Force -ErrorAction SilentlyContinue
+    if ($null -eq $item) {
+        return
+    }
+    Assert-NoReparsePathComponents -Path $fullPath -Description 'Owned staging root'
+    if (-not $item.PSIsContainer) {
+        throw "Refusing to remove the owned staging root because it is not a directory: $fullPath"
+    }
+
+    $entries = @(Get-ChildItem -LiteralPath $fullPath -Force -ErrorAction Stop)
+    if ($entries.Count -ne 0) {
+        throw "Refusing to remove the owned staging root because it is not empty: $fullPath"
+    }
+    Remove-Item -LiteralPath $fullPath -Force -ErrorAction Stop
+}
+
 function Invoke-DownloadHelper {
     Assert-NoReparsePathComponents -Path $DownloadOutputPath -Description 'Downloader output'
     Assert-NoReparsePathComponents -Path $DownloadProgressPath -Description 'Downloader progress'
@@ -850,8 +901,9 @@ function Invoke-DownloadHelper {
     try {
         $uri = [Uri]::new($DownloadUri, [UriKind]::Absolute)
     } catch {
-        throw "Downloader URI is not absolute: $DownloadUri"
+        throw 'Downloader URI is not absolute.'
     }
+    Assert-NoUriUserInfo -Uri $uri -Description 'Downloader URI'
     if ($uri.Scheme -notin @('http', 'https')) {
         throw "Downloader URI has unsupported scheme: $($uri.Scheme)"
     }
@@ -910,7 +962,7 @@ $requestedReceiptPath = $ReceiptPath
 $resolvedSourceRoot = $null
 $resolvedDestinationRoot = $null
 $resolvedReceiptPath = $null
-$stagingRoot = $null
+$stagingRoot = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'build\verification\player-cache-preparation-staging'))
 $stagingFiles = [System.Collections.Generic.List[string]]::new()
 $ownedHelpers = [System.Collections.Generic.List[object]]::new()
 $work = [ordered]@{
@@ -937,10 +989,10 @@ $receipt = [ordered]@{
     assetIndex = [ordered]@{
         id = $AssetIndexId
         relativePath = $null
-        url = $AssetIndexUrl
+        url = $null
         size = $AssetIndexSize
         sha1 = if ($AssetIndexSha1) { $AssetIndexSha1.ToLowerInvariant() } else { $null }
-        objectBaseUrl = $ObjectBaseUrl
+        objectBaseUrl = $null
         objectCount = 0
         verifiedObjectCount = 0
     }
@@ -1159,9 +1211,9 @@ try {
     }
     $work.regularFilesPlanned = $regularPlans.Count
 
-    $stagingRoot = Ensure-SafeDirectory `
-        -Path (Join-Path $repositoryRoot 'build\verification\player-cache-preparation-staging') `
-        -Description 'Owned downloader staging root'
+    Ensure-SafeDirectory `
+        -Path $stagingRoot `
+        -Description 'Owned downloader staging root' | Out-Null
     Assert-RootsDisjoint -Left $resolvedSourceRoot -Right $stagingRoot
     Assert-RootsDisjoint -Left $resolvedDestinationRoot -Right $stagingRoot
 
@@ -1258,6 +1310,15 @@ try {
                 $receipt.error = $failureMessage
                 $status = 'failed'
             }
+        }
+    }
+    try {
+        Remove-OwnedStagingRoot -Path $stagingRoot -StagingRoot $stagingRoot
+    } catch {
+        if ($null -eq $failureMessage) {
+            $failureMessage = $_.Exception.Message
+            $receipt.error = $failureMessage
+            $status = 'failed'
         }
     }
 

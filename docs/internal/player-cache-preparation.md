@@ -23,6 +23,13 @@ This keeps a pre-existing destination from producing a nested
 destination roots must be disjoint. Existing unrelated destination files and
 asset objects are never removed.
 
+Official-object downloads use the exact worktree-local staging root
+`build/verification/player-cache-preparation-staging`. The tool removes only
+the owned `.part` and `.progress` files it created, then removes that exact
+staging root only after verifying that it is an ordinary empty directory. An
+unexpected entry is preserved and causes the run to fail; cleanup never
+recursively broadens beyond the owned files and root.
+
 All existing components of a root, copied file, read file, and destination
 parent are checked for `ReparsePoint` before use. Source and destination
 directories, asset objects, indexes, and staging files must be ordinary files
@@ -47,6 +54,11 @@ The caller supplies all of these values explicitly:
   `launchermeta.mojang.com`.
 - `ObjectBaseUrl`: an HTTPS URL on `resources.download.minecraft.net`, normally
   `https://resources.download.minecraft.net/`.
+
+Both official URLs must have empty URI user information. Credentials are
+rejected before any helper process or network request starts. URL validation
+errors and failure receipts do not echo the supplied URI, and receipt URL
+fields remain empty until the URI has passed validation.
 
 The source index must match the pinned size and SHA-1 before any destination
 write. An existing destination index must match as well. Every object entry in
@@ -97,7 +109,11 @@ sections:
 
 Successful matching reruns do not create staging files, start helpers, fetch
 objects, or copy files. Receipt output contains no timestamps or process IDs,
-so equivalent runs produce deterministic JSON.
+so equivalent runs produce deterministic JSON. The synthetic no-mutation audit
+compares a deterministic snapshot of the complete destination tree, including
+ordinary files, directories, empty directories, entry types, numeric file
+attributes, and SHA-1/size fingerprints. Reparse entries are recorded by the
+audit and must remain zero; the preparation tool rejects them before use.
 
 This tool deliberately does not invoke Loom's `downloadAssets` task. With Loom
 1.17.17, `DownloadAssetsTask.getAssetIndex` calls `downloadString` even when a
@@ -111,7 +127,7 @@ Future Player readiness should continue in this order:
 
 1. Run this preparation step with the official pinned index and object identity.
 2. Run the full asset index/object size and SHA-1 audit, then repeat it as a
-   no-mutation audit with zero network and zero copy work.
+   complete-tree no-mutation audit with zero network and zero copy work.
 3. Use an isolated worktree-local Gradle home for offline `runClient` or the
    repository's offline configuration/readiness check. Do not substitute
    `downloadAssets --offline` for that readiness check.

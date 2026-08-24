@@ -148,14 +148,65 @@ function Get-SourceSnapshot {
         [string] $Root
     )
 
-    $rows = foreach ($file in @(Get-ChildItem -LiteralPath $Root -Force -Recurse -File | Sort-Object FullName)) {
-        [pscustomobject]@{
-            path = [IO.Path]::GetRelativePath($Root, $file.FullName).Replace('/', '\')
-            size = [int64] $file.Length
-            sha1 = Get-Sha1 -Path $file.FullName
+    $rootItem = Get-Item -LiteralPath $Root -Force -ErrorAction Stop
+    $rows = [System.Collections.Generic.List[object]]::new()
+    $directories = [System.Collections.Generic.Stack[object]]::new()
+    $rootAttributes = [IO.FileAttributes] $rootItem.Attributes
+    $rootIsReparse = ($rootAttributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+    $rows.Add([pscustomobject][ordered]@{
+            path = ''
+            type = if ($rootIsReparse) { 'reparse' } else { 'directory' }
+            attributes = [int64] $rootAttributes
+            reparse = [bool] $rootIsReparse
+            size = $null
+            sha1 = $null
+        })
+    $directories.Push($rootItem)
+
+    while ($directories.Count -gt 0) {
+        $directory = $directories.Pop()
+        $directoryAttributes = [IO.FileAttributes] $directory.Attributes
+        if (($directoryAttributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            continue
+        }
+
+        foreach ($entry in @(Get-ChildItem -LiteralPath $directory.FullName -Force -ErrorAction Stop | Sort-Object Name)) {
+            $attributes = [IO.FileAttributes] $entry.Attributes
+            $isReparse = ($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+            $isDirectory = [bool] $entry.PSIsContainer
+            $row = [ordered]@{
+                path = [IO.Path]::GetRelativePath($Root, $entry.FullName).Replace('/', '\')
+                type = if ($isReparse) { 'reparse' } elseif ($isDirectory) { 'directory' } else { 'file' }
+                attributes = [int64] $attributes
+                reparse = [bool] $isReparse
+                size = $null
+                sha1 = $null
+            }
+            if (-not $isDirectory -and -not $isReparse) {
+                $row.size = [int64] $entry.Length
+                $row.sha1 = Get-Sha1 -Path $entry.FullName
+            }
+            $rows.Add([pscustomobject] $row)
+            if ($isDirectory -and -not $isReparse) {
+                $directories.Push($entry)
+            }
         }
     }
-    return ($rows | ConvertTo-Json -Compress -Depth 5)
+
+    $snapshot = [ordered]@{
+        entries = @($rows | Sort-Object path)
+    }
+    return ($snapshot | ConvertTo-Json -Compress -Depth 5)
+}
+
+function Get-SnapshotReparseEntries {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Snapshot
+    )
+
+    $parsed = $Snapshot | ConvertFrom-Json
+    return ,@($parsed.entries | Where-Object { [bool] $_.reparse })
 }
 
 function Invoke-Preparation {
@@ -236,7 +287,9 @@ function Invoke-ExpectedFailure {
 
         [int] $MaxDownloadSeconds = 120,
 
-        [int] $CleanupTimeoutSeconds = 10
+        [int] $CleanupTimeoutSeconds = 10,
+
+        [switch] $ReturnOutput
     )
 
     $arguments = @(
@@ -267,8 +320,14 @@ function Invoke-ExpectedFailure {
     Assert-True `
         -Condition ($text -match [Regex]::Escape($ExpectedMessage)) `
         -Message "$Name failed for the wrong reason: $text"
-    Write-Output "TEST_OK $Name"
+    if ($ReturnOutput) {
+        return [pscustomobject]@{
+            text = $text
+            exitCode = $exitCode
+        }
+    }
     $script:passCount++
+    Write-Output "TEST_OK $Name"
 }
 
 function Add-ProcessArgument {
@@ -378,9 +437,11 @@ try {
     $script:passCount++
 
     $sourceFixture = New-AssetFixture -Root (Join-Path $fixtureRoot 'baseline-source')
+    New-Item -ItemType Directory -Path (Join-Path $sourceFixture.root 'empty-source-directory') -Force | Out-Null
     $sourceSnapshotBefore = Get-SourceSnapshot -Root $sourceFixture.root
     $destinationRoot = Join-Path $destinationTestRoot 'baseline\caches\fabric-loom'
     New-Item -ItemType Directory -Path $destinationRoot -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $destinationRoot 'empty-destination-directory') -Force | Out-Null
     $unrelatedDestinationPath = Join-Path $destinationRoot 'unrelated-extra.bin'
     Write-Bytes -Path $unrelatedDestinationPath -Bytes ([Text.Encoding]::UTF8.GetBytes('preserve me'))
     $extraDestinationObject = Join-Path $destinationRoot 'assets\objects\zz\unrelated-extra'
@@ -393,6 +454,7 @@ try {
         -ReceiptPath $baselineReceiptPath
     Assert-True -Condition ([int] $firstReceipt.work.networkRequests -eq 0) -Message 'Baseline preparation unexpectedly used network.'
     Assert-True -Condition ([int] $firstReceipt.work.copyOperations -gt 0) -Message 'Baseline preparation reported no copy work.'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $repositoryRoot 'build\verification\player-cache-preparation-staging'))) -Message 'Successful preparation left its owned staging root behind.'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $destinationRoot 'bin\loom.bin') -PathType Leaf) -Message 'Fabric Loom content did not land at the exact destination root.'
     Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $destinationRoot 'fabric-loom'))) -Message 'Observed nested fabric-loom destination bug reproduced.'
     $destinationSiblingEntries = @(Get-ChildItem -LiteralPath (Split-Path -Parent $destinationRoot) -Force | Where-Object Name -like 'fabric-loom*')
@@ -402,8 +464,41 @@ try {
     Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $destinationRoot 'cache.lock'))) -Message 'Live lock state was copied.'
     Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $destinationRoot 'daemon'))) -Message 'Daemon state was copied.'
     $sourceSnapshotAfter = Get-SourceSnapshot -Root $sourceFixture.root
+    $destinationSnapshotAfterFirst = Get-SourceSnapshot -Root $destinationRoot
+    Assert-True -Condition ((Get-SnapshotReparseEntries -Snapshot $sourceSnapshotBefore).Count -eq 0 -and (Get-SnapshotReparseEntries -Snapshot $sourceSnapshotAfter).Count -eq 0) -Message 'Baseline source snapshot contained a reparse entry.'
+    Assert-True -Condition ((Get-SnapshotReparseEntries -Snapshot $destinationSnapshotAfterFirst).Count -eq 0) -Message 'Baseline destination snapshot contained a reparse entry.'
+    $destinationSnapshotAfterFirstData = $destinationSnapshotAfterFirst | ConvertFrom-Json
+    $destinationEntriesAfterFirst = @($destinationSnapshotAfterFirstData.entries)
+    Assert-True -Condition (@($destinationEntriesAfterFirst | Where-Object { $_.path -eq 'empty-destination-directory' -and $_.type -eq 'directory' }).Count -eq 1) -Message 'Complete destination snapshot omitted the empty directory.'
     Assert-True -Condition ($sourceSnapshotBefore -eq $sourceSnapshotAfter) -Message 'Source tree changed during successful preparation.'
-    Write-Output 'TEST_OK exact relative base, no nested/suffix destination, preservation, live-state exclusion, no source delete'
+    Write-Output 'TEST_OK exact relative base, no nested/suffix destination, preservation, live-state exclusion, no source delete, empty-directory snapshot, staging residue cleanup'
+    $script:passCount++
+
+    $emptySnapshotProbe = Join-Path $destinationRoot 'snapshot-probe-empty'
+    $snapshotBeforeEmptyProbe = Get-SourceSnapshot -Root $destinationRoot
+    New-Item -ItemType Directory -Path $emptySnapshotProbe -Force | Out-Null
+    $snapshotAfterEmptyProbe = Get-SourceSnapshot -Root $destinationRoot
+    Assert-True -Condition ($snapshotBeforeEmptyProbe -ne $snapshotAfterEmptyProbe) -Message 'Tree snapshot did not detect an added empty directory.'
+    Remove-Item -LiteralPath $emptySnapshotProbe -Force -ErrorAction Stop
+
+    $attributeSnapshotProbe = Join-Path $destinationRoot 'snapshot-probe-attributes.txt'
+    Write-Bytes -Path $attributeSnapshotProbe -Bytes ([Text.Encoding]::UTF8.GetBytes('attribute probe'))
+    $snapshotBeforeAttributeProbe = Get-SourceSnapshot -Root $destinationRoot
+    $originalAttributeProbeAttributes = [IO.File]::GetAttributes($attributeSnapshotProbe)
+    [IO.File]::SetAttributes($attributeSnapshotProbe, $originalAttributeProbeAttributes -bor [IO.FileAttributes]::Hidden)
+    $snapshotAfterAttributeProbe = Get-SourceSnapshot -Root $destinationRoot
+    Assert-True -Condition ($snapshotBeforeAttributeProbe -ne $snapshotAfterAttributeProbe) -Message 'Tree snapshot did not detect an attribute change.'
+    [IO.File]::SetAttributes($attributeSnapshotProbe, $originalAttributeProbeAttributes)
+    Remove-Item -LiteralPath $attributeSnapshotProbe -Force -ErrorAction Stop
+
+    $snapshotReparseTarget = Join-Path $fixtureRoot 'snapshot-reparse-target'
+    New-Item -ItemType Directory -Path $snapshotReparseTarget -Force | Out-Null
+    $snapshotReparseProbe = Join-Path $destinationRoot 'snapshot-probe-reparse'
+    New-Item -ItemType Junction -Path $snapshotReparseProbe -Target $snapshotReparseTarget -ErrorAction Stop | Out-Null
+    $snapshotWithReparseProbe = Get-SourceSnapshot -Root $destinationRoot
+    Assert-True -Condition ((Get-SnapshotReparseEntries -Snapshot $snapshotWithReparseProbe).Count -eq 1) -Message 'Tree snapshot did not record the reparse entry.'
+    Remove-Item -LiteralPath $snapshotReparseProbe -Force -ErrorAction Stop
+    Write-Output 'TEST_OK tree snapshot detects empty directories, attributes, and reparse entries'
     $script:passCount++
 
     $destinationSnapshotBeforeRerun = Get-SourceSnapshot -Root $destinationRoot
@@ -424,7 +519,9 @@ try {
     Assert-True -Condition ($secondReceiptText -eq $thirdReceiptText) -Message 'Identical zero-work receipts were not deterministic.'
     Assert-True -Condition ([bool] $secondReceipt.idempotence.zeroNetworkAndCopyOnMatchingRerun) -Message 'Zero-work idempotence receipt flag was false.'
     Assert-True -Condition ($destinationSnapshotBeforeRerun -eq $destinationSnapshotAfterRerun) -Message 'Repeat no-mutation audit found destination changes.'
-    Write-Output 'TEST_OK deterministic zero-network zero-copy idempotent rerun and repeat no-mutation audit'
+    Assert-True -Condition ((Get-SnapshotReparseEntries -Snapshot $destinationSnapshotAfterRerun).Count -eq 0) -Message 'Repeat destination snapshot contained a reparse entry.'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $repositoryRoot 'build\verification\player-cache-preparation-staging'))) -Message 'Matching rerun left its owned staging root behind.'
+    Write-Output 'TEST_OK deterministic zero-network zero-copy idempotent rerun, complete tree identity, and residue-free repeat'
     $script:passCount++
 
     $mismatchedIndexFixture = New-AssetFixture -Root (Join-Path $fixtureRoot 'mismatched-index')
@@ -505,6 +602,33 @@ try {
         -DestinationRoot (Join-Path $destinationTestRoot 'ordinary-file-ancestor\caches\fabric-loom') `
         -ReceiptPath (Join-Path $destinationTestRoot 'ordinary-file-ancestor-receipt.json')
     Write-Output 'TEST_OK source/destination reparse and ordinary-file-only enforcement'
+    $script:passCount++
+
+    $userInfoFixture = New-AssetFixture -Root (Join-Path $fixtureRoot 'userinfo-uri')
+    $userInfoDestinationRoot = Join-Path $destinationTestRoot 'userinfo-uri\caches\fabric-loom'
+    New-Item -ItemType Directory -Path $userInfoDestinationRoot -Force | Out-Null
+    $userInfoReceiptPath = Join-Path $destinationTestRoot 'userinfo-uri-receipt.json'
+    $userInfoDestinationBefore = Get-SourceSnapshot -Root $userInfoDestinationRoot
+    $userInfoSecret = 'userinfo-secret-for-test'
+    $userInfoResult = Invoke-ExpectedFailure `
+        -Name 'userinfo URI rejection' `
+        -ExpectedMessage 'may not contain URI credentials' `
+        -Fixture $userInfoFixture `
+        -DestinationRoot $userInfoDestinationRoot `
+        -ReceiptPath $userInfoReceiptPath `
+        -ObjectBaseUrl "https://audit-user:$userInfoSecret@resources.download.minecraft.net/" `
+        -ReturnOutput
+    $userInfoOutput = [string] $userInfoResult.text
+    $userInfoReceiptText = Get-Content -LiteralPath $userInfoReceiptPath -Raw
+    $userInfoReceipt = $userInfoReceiptText | ConvertFrom-Json
+    Assert-True -Condition ($userInfoOutput -notmatch [Regex]::Escape($userInfoSecret)) -Message 'Userinfo secret appeared in process/error output.'
+    Assert-True -Condition ($userInfoReceiptText -notmatch [Regex]::Escape($userInfoSecret)) -Message 'Userinfo secret appeared in the failure receipt.'
+    Assert-True -Condition ($null -eq $userInfoReceipt.assetIndex.url -and $null -eq $userInfoReceipt.assetIndex.objectBaseUrl) -Message 'Credential-bearing URI values were serialized into the failure receipt.'
+    Assert-True -Condition ([int] $userInfoReceipt.work.networkRequests -eq 0 -and [int] $userInfoReceipt.cleanup.ownedHelperProcessesStarted -eq 0) -Message 'Userinfo rejection started network or helper work.'
+    Assert-True -Condition ($userInfoDestinationBefore -eq (Get-SourceSnapshot -Root $userInfoDestinationRoot)) -Message 'Userinfo rejection mutated the destination tree.'
+    Assert-True -Condition (@(Get-ChildItem -LiteralPath $userInfoDestinationRoot -Force -Recurse -File).Count -eq 0) -Message 'Userinfo rejection created a destination file.'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $repositoryRoot 'build\verification\player-cache-preparation-staging'))) -Message 'Userinfo rejection left owned staging residue.'
+    Write-Output 'TEST_OK userinfo URI rejection before process start with credential-safe output and receipt'
     $script:passCount++
 
     $fetchFixture = New-AssetFixture `
@@ -634,6 +758,7 @@ try {
     Assert-True -Condition ([int] $stallReceipt.cleanup.ownedHelperProcessesTerminated -eq 1) -Message 'Stall receipt did not record bounded owned-helper cleanup.'
     Assert-True -Condition ([int] $stallReceipt.cleanup.ownedHelperProcessesSurvived -eq 0 -and [bool] $stallReceipt.cleanup.cleanupBounded -eq $true) -Message 'Stall cleanup was not bounded.'
     Assert-True -Condition ([bool] $stallReceipt.cleanup.unrelatedProcessesTouched -eq $false) -Message 'Stall cleanup receipt claimed unrelated process control.'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $repositoryRoot 'build\verification\player-cache-preparation-staging'))) -Message 'Failed preparation left its owned staging root behind.'
     Stop-ObjectServer -Server $stallServer
     $stallServer = $null
     Write-Output 'TEST_OK bounded stall timeout and owned-only helper cleanup receipt'
