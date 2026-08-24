@@ -1,0 +1,344 @@
+{
+  "schema_version": 1,
+  "slice_id": "AUDIT-005-LIFECYCLE",
+  "baseline_sha": "10f11c36c1a16f0ee9e896f7696eccc6fbf4e412",
+  "baseline_tree": "1c5dbf9596803ec50067b6b70e9403e0a0f198d7",
+  "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
+  "fixed_upstream_sha": "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+  "approved_composition": {
+    "sha": "354dd647ed81912d7e19e0eee996e65cafbb43ef",
+    "tree": "f394db2f21c1a07878df4e235a8769298f9da09d",
+    "branch": "codex/audit-006-macro-leaves",
+    "dependency_note": "A003 and A006 behavior is carried unchanged; this lifecycle slice does not edit their paths."
+  },
+  "scope": {
+    "paths": 18,
+    "paths_sha256": "702f5097cc83741554b6007c67e6d54d1a4b0456262c2daaaa60f788c80e7dca",
+    "path_digest_encoding": "sorted UTF-8 paths joined by LF with no trailing LF",
+    "path_resolution": "All 18 paths resolve exactly in the existing macro main/test packages before and after the repair.",
+    "forbidden_domains_excluded": [
+      "Player",
+      "GUI",
+      "input",
+      "progress",
+      "MODE",
+      "ROTATION",
+      "TIME"
+    ]
+  },
+  "line_count_method": "LF-delimited physical lines; a trailing empty split segment is not counted.",
+  "baseline_line_count": 1436,
+  "candidate_line_count": 1527,
+  "baseline_files": [
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/FeatureSuspension.java", "blob": "d4392622aed80ff4e096f2c0eac1a760596ccf62", "lines": 31},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/LaneChangeDirection.java", "blob": "667f1cf6455e904feb754d16631bfe6778730559", "lines": 20},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/Macro.java", "blob": "fdd512521e356fadc799a0ccc74b30ee8b4a07f9", "lines": 57},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroControlOwner.java", "blob": "e107acf7a5dd082358073013542da0f78b7761a6", "lines": 14},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroDecision.java", "blob": "1bb1b3e47d7023fa03f6254da6f3322bdf14ccf5", "lines": 76},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroLifecycle.java", "blob": "cc73ad5e14afd7647f1bd1b180167195c4ca8e9c", "lines": 185},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroLifecycleParticipant.java", "blob": "286c1265f74fa2c1ce8fc73fd611117006999e2f", "lines": 18},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroLifecycleTarget.java", "blob": "b06e4e2199195a3d20b487805df71d8aba4f64ac", "lines": 14},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroManager.java", "blob": "ccc0cc26b0796fd22c963986d3fa836a3837b603", "lines": 348},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroPauseCause.java", "blob": "163bbda84dba88585bf5ab7f6227888bb8d2f853", "lines": 9},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroRecoveryReason.java", "blob": "ef0cf49ea643d5df7378fb88137abbd22d1facc6", "lines": 8},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroRecoveryRequest.java", "blob": "60ed97a46b1ea2762d7f59e60301dcad3c06f3c4", "lines": 10},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroRegistry.java", "blob": "2ff0c0edfbb7af916864eae98402ccde71f2572c", "lines": 32},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroState.java", "blob": "a7f56b35a5c405c9354967b814b3883e32fa2347", "lines": 7},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroTerminalReason.java", "blob": "322607f27e8f81f73e55af1b28a205fa3e03a437", "lines": 11},
+    {"path": "src/main/java/dev/hylfrd/farmhelper/macro/package-info.java", "blob": "71b64985bc09370a7ec01a5984df94a2c9beb61d", "lines": 2},
+    {"path": "src/test/java/dev/hylfrd/farmhelper/macro/MacroLifecycleTest.java", "blob": "9b0bf758cee9e6afe7f7a29250f7da05067229a6", "lines": 186},
+    {"path": "src/test/java/dev/hylfrd/farmhelper/macro/MacroManagerTest.java", "blob": "91ac07811971677ce6d48b46818d1d0562915ff9", "lines": 408}
+  ],
+  "automated_evidence": [
+    "Before editing, exact path resolution produced 18 paths and the independently computed sorted LF/no-trailing-LF digest 702f5097cc83741554b6007c67e6d54d1a4b0456262c2daaaa60f788c80e7dca.",
+    "The parent reproduction on exact base 354dd647ed81912d7e19e0eee996e65cafbb43ef failed exactly the two lifecycle regression tests: MacroLifecycleTest.failedTargetStartIsTerminallyCleanedAndInvalidatesGeneration and MacroManagerTest.failedLifecycleParticipantStartCleansMacroAndReportsExceptionStatus.",
+    "The target focused Gradle run passed MacroLifecycleTest and MacroManagerTest after the repair on Java 25 and Gradle 9.5.1.",
+    "The directly affected integration run passed DesyncCheckerTest, FarmHelperClientRuntimeTest, FarmHelperClientRuntimeDesyncTest, ClientTickAdapterTest, ClientLifecycleSequencerTest, ClientRuntimeLifecycleTest, and ClientCancellationFanoutTest.",
+    "The full rerun .\\gradlew.bat --no-daemon --console=plain --stacktrace test --rerun-tasks exited 0 with 669 tests, 0 failures, 0 errors, and 0 skipped.",
+    "The full check rerun exited 0; validateAccessWidener was NO-SOURCE and verifyDependencyProvenance verified 3 runtime dependencies, 1 platform dependency, and Loom 1.17.17.",
+    "The full build rerun exited 0 with BUILD SUCCESSFUL and the same provenance/access-widener gates.",
+    "Two offline clean jar builds followed by scripts/internal/audit-packaged-jar.ps1 exited 0 with DETERMINISTIC_JAR_OK, size 889119, SHA-256 78F40F33975192C115B355A0CE20529FCC483027B60DBDDDB084BE14E7728931, and 498 entries.",
+    "All Gradle verification used the isolated worktree-local GRADLE_USER_HOME .gradle-audit-005-lifecycle with Java 25.0.3, Gradle 9.5.1, and --no-daemon; no user Gradle cache or daemon was used for these gates.",
+    "Static review found no second concrete finding in state transitions, nested suspension leases, generation fencing, control-owner identity, participant/target ordering, recovery handoff validation, registry factories, or terminal reason handling."
+  ],
+  "candidate_metadata": {
+    "branch": "codex/audit-005-lifecycle",
+    "pull_request": null,
+    "candidate_head": null,
+    "candidate_tree": null,
+    "scope_paths": 18,
+    "scope_paths_sha256": "702f5097cc83741554b6007c67e6d54d1a4b0456262c2daaaa60f788c80e7dca",
+    "production_changes": true,
+    "readiness": "READY_FOR_FRESH_INDEPENDENT_REVIEW_AFTER_EXACT_HEAD_CI"
+  },
+  "entries": [
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/FeatureSuspension.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#pauseMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#resumeMacro"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "d4392622aed80ff4e096f2c0eac1a760596ccf62",
+      "baseline_lines": 31,
+      "candidate_blob": "d4392622aed80ff4e096f2c0eac1a760596ccf62",
+      "candidate_lines": 31
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/LaneChangeDirection.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "667f1cf6455e904feb754d16631bfe6778730559",
+      "baseline_lines": 20,
+      "candidate_blob": "667f1cf6455e904feb754d16631bfe6778730559",
+      "candidate_lines": 20
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/Macro.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onEnable",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onDisable",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#onTick"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "fdd512521e356fadc799a0ccc74b30ee8b4a07f9",
+      "baseline_lines": 57,
+      "candidate_blob": "fdd512521e356fadc799a0ccc74b30ee8b4a07f9",
+      "candidate_lines": 57
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroControlOwner.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "e107acf7a5dd082358073013542da0f78b7761a6",
+      "baseline_lines": 14,
+      "candidate_blob": "e107acf7a5dd082358073013542da0f78b7761a6",
+      "candidate_lines": 14
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroDecision.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "1bb1b3e47d7023fa03f6254da6f3322bdf14ccf5",
+      "baseline_lines": 76,
+      "candidate_blob": "1bb1b3e47d7023fa03f6254da6f3322bdf14ccf5",
+      "candidate_lines": 76
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroLifecycle.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#enableMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#disableMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#pauseMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#resumeMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onWorldChange"
+      ],
+      "finding_ids": ["AUDIT-005-LIFECYCLE-001"],
+      "disposition": "RESOLVED",
+      "baseline_blob": "cc73ad5e14afd7647f1bd1b180167195c4ca8e9c",
+      "baseline_lines": 185,
+      "candidate_blob": "0f00cc6eb21fba2acc107664c39908409cf9f9ab",
+      "candidate_lines": 203
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroLifecycleParticipant.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "286c1265f74fa2c1ce8fc73fd611117006999e2f",
+      "baseline_lines": 18,
+      "candidate_blob": "286c1265f74fa2c1ce8fc73fd611117006999e2f",
+      "candidate_lines": 18
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroLifecycleTarget.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "b06e4e2199195a3d20b487805df71d8aba4f64ac",
+      "baseline_lines": 14,
+      "candidate_blob": "b06e4e2199195a3d20b487805df71d8aba4f64ac",
+      "candidate_lines": 14
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroManager.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#getMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#enableMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#disableMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#pauseMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#resumeMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onWorldChange"
+      ],
+      "finding_ids": ["AUDIT-005-LIFECYCLE-001"],
+      "disposition": "RESOLVED",
+      "baseline_blob": "ccc0cc26b0796fd22c963986d3fa836a3837b603",
+      "baseline_lines": 348,
+      "candidate_blob": "ccc0cc26b0796fd22c963986d3fa836a3837b603",
+      "candidate_lines": 348
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroPauseCause.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#pauseMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#resumeMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "163bbda84dba88585bf5ab7f6227888bb8d2f853",
+      "baseline_lines": 9,
+      "candidate_blob": "163bbda84dba88585bf5ab7f6227888bb8d2f853",
+      "candidate_lines": 9
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroRecoveryReason.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "ef0cf49ea643d5df7378fb88137abbd22d1facc6",
+      "baseline_lines": 8,
+      "candidate_blob": "ef0cf49ea643d5df7378fb88137abbd22d1facc6",
+      "candidate_lines": 8
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroRecoveryRequest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "60ed97a46b1ea2762d7f59e60301dcad3c06f3c4",
+      "baseline_lines": 10,
+      "candidate_blob": "60ed97a46b1ea2762d7f59e60301dcad3c06f3c4",
+      "candidate_lines": 10
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroRegistry.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "2ff0c0edfbb7af916864eae98402ccde71f2572c",
+      "baseline_lines": 32,
+      "candidate_blob": "2ff0c0edfbb7af916864eae98402ccde71f2572c",
+      "candidate_lines": 32
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroState.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#isCurrentMacroEnabled",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#isCurrentMacroPaused",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#isEnabledAndNoFeature",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/macro/AbstractMacro.java#isPaused"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "a7f56b35a5c405c9354967b814b3883e32fa2347",
+      "baseline_lines": 7,
+      "candidate_blob": "a7f56b35a5c405c9354967b814b3883e32fa2347",
+      "candidate_lines": 7
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroTerminalReason.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#disableMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onWorldChange"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "322607f27e8f81f73e55af1b28a205fa3e03a437",
+      "baseline_lines": 11,
+      "candidate_blob": "322607f27e8f81f73e55af1b28a205fa3e03a437",
+      "candidate_lines": 11
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/package-info.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING",
+      "baseline_blob": "71b64985bc09370a7ec01a5984df94a2c9beb61d",
+      "baseline_lines": 2,
+      "candidate_blob": "71b64985bc09370a7ec01a5984df94a2c9beb61d",
+      "candidate_lines": 2
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/MacroLifecycleTest.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#enableMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#disableMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#pauseMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#resumeMacro"
+      ],
+      "finding_ids": ["AUDIT-005-LIFECYCLE-001"],
+      "disposition": "RESOLVED",
+      "baseline_blob": "9b0bf758cee9e6afe7f7a29250f7da05067229a6",
+      "baseline_lines": 186,
+      "candidate_blob": "30db0fbb30fa321ca148c8554e7218fd16f5043a",
+      "candidate_lines": 225
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/macro/MacroManagerTest.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#getMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#enableMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#disableMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#pauseMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#resumeMacro"
+      ],
+      "finding_ids": ["AUDIT-005-LIFECYCLE-001"],
+      "disposition": "RESOLVED",
+      "baseline_blob": "91ac07811971677ce6d48b46818d1d0562915ff9",
+      "baseline_lines": 408,
+      "candidate_blob": "ea529e1f7c15c972ee38a208fe1c4adcd853c900",
+      "candidate_lines": 442
+    }
+  ],
+  "findings": [
+    {
+      "id": "AUDIT-005-LIFECYCLE-001",
+      "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroLifecycle.java",
+      "severity": "HIGH",
+      "summary": "A target or lifecycle participant exception during start left a partially started run without terminal target cleanup.",
+      "upstream_behavior": "Fixed upstream MacroHandler enables a selected macro and its disable path tears down the current macro and feature state; the modern target boundary must provide the same cleanup when startup fails after state becomes active.",
+      "incompatibility": "The baseline start catch changed state to STOPPED and advanced generation but never called target.stop. MacroManager therefore skipped activeMacro.onStop and participant.stopped, left lastStatus as starting, and did not provide a terminal cleanup callback for a partially started run.",
+      "replacement": "Capture the failed generation, clear all pause and feature state, invalidate the generation without overflowing Long.MAX_VALUE, call target.stop with EXCEPTION, suppress cleanup failures onto the original startup failure, and rethrow the original failure.",
+      "resolution_scope": "LIFECYCLE_START_CLEANUP",
+      "parent_failure_evidence": [
+        "On exact base 354dd647ed81912d7e19e0eee996e65cafbb43ef, failedTargetStartIsTerminallyCleanedAndInvalidatesGeneration observed no target stop callback and failed its cleanup assertion.",
+        "On exact base 354dd647ed81912d7e19e0eee996e65cafbb43ef, failedLifecycleParticipantStartCleansMacroAndReportsExceptionStatus observed no macro cleanup and retained the starting status; the two-test reproduction exited 1."
+      ],
+      "target_evidence": [
+        "MacroLifecycleTest.failedTargetStartIsTerminallyCleanedAndInvalidatesGeneration passes with STOPPED state, a rejected old generation, one EXCEPTION stop callback, and original exception preservation.",
+        "MacroManagerTest.failedLifecycleParticipantStartCleansMacroAndReportsExceptionStatus passes with one macro stop, EXCEPTION terminal reason, stopped:exception status, zero running ticks, and the original participant exception."
+      ],
+      "cross_item_dependencies": [
+        "A003 and A006 are preserved at the approved composition base; no central clock, spatial, leaf, mode, rotation, time, player, GUI, input, progress, or control path is changed by this finding."
+      ],
+      "closure_note": "Resolved in the lifecycle target boundary. The report does not claim unrelated feature or client cleanup beyond the in-scope participant callback reached by MacroManager.stop.",
+      "status": "RESOLVED"
+    }
+  ]
+}

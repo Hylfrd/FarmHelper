@@ -172,6 +172,40 @@ class MacroManagerTest {
     }
 
     @Test
+    void failedLifecycleParticipantStartCleansMacroAndReportsExceptionStatus() {
+        AtomicInteger starts = new AtomicInteger();
+        AtomicInteger stops = new AtomicInteger();
+        Macro macro = new Macro() {
+            @Override public String id() { return "participant-start-failure"; }
+            @Override public void onStart() { starts.incrementAndGet(); }
+            @Override public void onStop() { stops.incrementAndGet(); }
+        };
+        MacroManager manager = new MacroManager(macro, () -> { });
+        manager.installLifecycleParticipant(new MacroLifecycleParticipant() {
+            @Override public void started(long generation, long nowNanos) {
+                throw new IllegalStateException("participant failed");
+            }
+            @Override public void paused(
+                    long generation, long nowNanos, Set<MacroPauseCause> causes) {
+            }
+            @Override public void resumed(long generation, long nowNanos) {
+            }
+            @Override public void stopped(long generation, MacroTerminalReason reason) {
+            }
+        });
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class, manager::start);
+
+        assertEquals("participant failed", failure.getMessage());
+        assertEquals(1, starts.get());
+        assertEquals(1, stops.get());
+        assertEquals(MacroState.STOPPED, manager.state());
+        assertEquals(MacroTerminalReason.EXCEPTION, manager.lastTerminalReason().orElseThrow());
+        assertEquals("stopped:exception", manager.lastStatus());
+        assertEquals(0L, manager.runningTicks());
+    }
+
+    @Test
     void developmentGardenTruthIsMacroOnlyAndStatusIsLabeled() {
         MacroManager development = new MacroManager();
         development.start();
