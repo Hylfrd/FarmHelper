@@ -110,7 +110,7 @@
     "candidate_artifact_size": 883421,
     "branch": "codex/audit-009-asset-verifier-performance",
     "commit": "5f80be8f60675deb4d9cb3c0982aac5e7af848e9",
-    "pull_request": null,
+    "pull_request": "https://github.com/Hylfrd/FarmHelper/pull/8",
     "commands": [
       ".\\gradlew.bat --no-daemon --console=plain downloadAssets (isolated GRADLE_USER_HOME=.gradle/audit-009-user-home): passed in 185.7s",
       ".\\gradlew.bat --offline --no-daemon --console=plain downloadAssets (isolated cache, receipt 1): passed, no transfer output",
