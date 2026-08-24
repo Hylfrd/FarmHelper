@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "slice_id": "AUDIT-012",
+  "baseline_sha": "06d291c1f92ce59c96454fcedf6d2a6250e150c4",
+  "baseline_tree": "b6a7219c3a673788b21d9463499a5d26b828f230",
+  "audit_baseline_sha": "10f11c36c1a16f0ee9e896f7696eccc6fbf4e412",
+  "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
+  "scope_paths_sha256": "0f7af7080735013878cce7b182f9e98f54e1cd21c26bc3c2fc7bc256bbe418e5",
+  "scope_paths_digest_algorithm": "SHA-256 of UTF-8 sorted repository-relative paths joined by LF with a final LF",
+  "fixed_upstream": {
+    "commit": "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+    "tree": "dfbaaf9ce75f9adc625352396acaa9138a8b97f8",
+    "relevant_behavior": "The fixed upstream uses OneKeyBind openGuiKeybind with default Keyboard.KEY_F and a config.openGui callback; it does not contain the current Minecraft 26.1.2 Fabric KeyMapping client path."
+  },
+  "entries": [
+    {
+      "path": "src/client/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsController.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#openGuiKeybind",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#registerKeyBind",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/command/FarmHelperMainCommand.java#mainCommand"
+      ],
+      "finding_ids": ["AUDIT-012-001"],
+      "file_sha256": "0B0A09628AFD42CC062771FED4E8F7072E8D42E276DC147D3E1C466AE84AEC73",
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsControllerTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": ["AUDIT-012-001"],
+      "file_sha256": "A98AB739FFBEBD7CF513577DE4E309C64475885FA51C087600E92F77CE5ED8E9",
+      "disposition": "RESOLVED"
+    }
+  ],
+  "findings": [
+    {
+      "id": "AUDIT-012-001",
+      "path": "src/client/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsController.java",
+      "severity": "HIGH",
+      "summary": "The default Right Shift settings mapping did not open settings when the client delivered the physical key as a scancode event.",
+      "upstream_behavior": "In Minecraft 26.1.2, KeyboardHandler.keyPress calls InputConstants.getKey(KeyEvent), then KeyMapping.set and KeyMapping.click. InputConstants.getKey selects SCANCODE when KeyEvent.key() is -1. The fixed upstream only provides a legacy OneKeyBind callback and does not define this 26.1.2 boundary.",
+      "parent_reproduction": {
+        "minecraft": "26.1.2",
+        "fabric_loader": "0.19.3",
+        "fabric_api": "0.153.0+26.1.2",
+        "base_sha": "06d291c1f92ce59c96454fcedf6d2a6250e150c4",
+        "base_tree": "b6a7219c3a673788b21d9463499a5d26b828f230",
+        "default_mapping": "KEYSYM/344",
+        "right_left_identity": {
+          "KEY_LSHIFT": 340,
+          "KEY_RSHIFT": 344,
+          "right_shift_scancode": 54,
+          "left_shift_scancode": 42
+        },
+        "events": [
+          {
+            "event": "KeyEvent(344, 54, 0)",
+            "input_constants_key": "KEYSYM/344",
+            "mapping": "KEYSYM/344",
+            "consume_click": true,
+            "classification": "parent_control_pass"
+          },
+          {
+            "event": "KeyEvent(-1, 54, 0)",
+            "input_constants_key": "SCANCODE/54",
+            "mapping": "KEYSYM/344",
+            "consume_click": false,
+            "classification": "parent_product_fail"
+          }
+        ],
+        "impact": "The controller only drained openKey.consumeClick() at END_CLIENT_TICK, so the scancode event did not reach the settings opener. The same launch still passed /fh open and /farmhelper open, isolating the failure to default Right Shift input handling."
+      },
+      "incompatibility": "InputConstants.Key equality includes both type and value. SCANCODE/54 therefore does not address a KEYSYM/344 mapping, even though the native GLFW state for the configured Right Shift key is down.",
+      "replacement": "Keep the vanilla KeyMapping click queue as the first path, drain it fully, combine KeyMapping.isDown() with InputConstants.isKeyDown(client.getWindow(), configuredKey), and accept only a rising edge of that combined state. Use the existing null-screen guard for key opens, preserve the command request parent behavior, and reset the edge state when a remap is applied.",
+      "automated_evidence": [
+        "FarmHelperSettingsControllerTest.realClientBoundaryReproducesRightShiftScancodeMissAndFallbackOpensOnce proves the parent SCANCODE/54 -> KEYSYM/344 miss at the actual 26.1.2 KeyEvent/InputConstants/KeyMapping boundary, then proves one fallback opening and no held-key duplicate.",
+        "FarmHelperSettingsControllerTest.vanillaKeysymQueueAndPhysicalStateShareOneRisingEdgeAndScreenGuard proves KEYSYM/344 delivery, click-queue draining, held/repeat suppression, release/repress behavior, and the existing-screen guard.",
+        "FarmHelperSettingsControllerTest.unrelatedKeyDoesNotReachMappingOrPhysicalFallbackAndRemapStillUsesKeysym proves unrelated and left-Shift rejection plus standard remap to KEYSYM/65.",
+        "FarmHelperCommandTreeTest and ClientCommandScreenCloseTest preserve both farmhelper and fh command paths through the shared opener boundary.",
+        "The focused settings/screen/command Gradle suite passed, the full test suite passed, check passed with verifyDependencyProvenance, validateAccessWidener completed NO-SOURCE, and two clean build runs produced identical JAR SHA-256 93AFD5BECAB39D4CB2BED6B9774DC856F34048E6CE926AA6031B4B48FA15C9F9.",
+        "The resolved Minecraft client-only jar used for the boundary trace was .gradle-audit-012-repro/caches/fabric-loom/26.1.2/minecraft-client-only.jar with SHA-256 DD501F13C941D63DA332F45B334EA103252224084769EC92027D33AE54C0E579."
+      ],
+      "artifact": {
+        "path": "build/libs/FarmHelper-26.1.2.jar",
+        "sha256": "93AFD5BECAB39D4CB2BED6B9774DC856F34048E6CE926AA6031B4B48FA15C9F9",
+        "size_bytes": 891807
+      },
+      "privacy_boundary": [
+        "The Builder performed no GUI, Computer Use, input, relaunch, or Player rerun; the immutable R4 observation is recorded as supplied authority only.",
+        "Boundary tests use synthetic KeyEvent values and do not capture world, account, chat, screen, or user configuration data.",
+        "Gradle state was isolated under the worktree-local .gradle-audit-012-repro directory; the user-owned Gradle cache was not mutated.",
+        "No command behavior, macro behavior, or unrelated product source was changed."
+      ],
+      "status": "RESOLVED"
+    }
+  ],
+  "verification": {
+    "resource_profile": "STANDARD_CLIENT_BOUNDARY",
+    "java": "25.0.3",
+    "gradle": "9.5.1",
+    "gradle_user_home": ".gradle-audit-012-repro",
+    "daemon_mode": "All Gradle commands used --no-daemon; Gradle stopped each required single-use daemon.",
+    "commands": [
+      ".\\gradlew.bat --no-daemon --console=plain test --tests dev.hylfrd.farmhelper.client.ui.settings.FarmHelperSettingsControllerTest",
+      ".\\gradlew.bat --no-daemon --console=plain test --tests dev.hylfrd.farmhelper.client.ui.settings.FarmHelperSettingsControllerTest --tests dev.hylfrd.farmhelper.client.ui.settings.FarmHelperSettingsScreenTest --tests dev.hylfrd.farmhelper.ui.command.FarmHelperCommandTreeTest --tests dev.hylfrd.farmhelper.client.ui.command.ClientCommandScreenCloseTest",
+      ".\\gradlew.bat --no-daemon --console=plain test",
+      ".\\gradlew.bat --no-daemon --console=plain check validateAccessWidener",
+      ".\\gradlew.bat --no-daemon --console=plain clean build (run 1)",
+      ".\\gradlew.bat --no-daemon --console=plain clean build (run 2)"
+    ],
+    "status": "LOCAL_GATES_PASSED",
+    "ci": "Publication and exact-head CI are reported in the handoff after push; no CI result is pre-claimed here."
+  }
+}
