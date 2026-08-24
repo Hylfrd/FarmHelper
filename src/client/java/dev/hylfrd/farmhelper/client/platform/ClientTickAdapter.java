@@ -38,6 +38,8 @@ import java.util.Optional;
 
 /** One ordered client-thread adapter for every active P0 runtime consumer. */
 public final class ClientTickAdapter implements ClientTickPipeline.Actions {
+    private static final ThreadLocal<SystemMessageScope> SYSTEM_MESSAGE_SCOPE = new ThreadLocal<>();
+
     private final Minecraft client;
     private final FarmHelperClientRuntime runtime;
     private final ClientSnapshotCapture snapshots;
@@ -79,11 +81,76 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         ClientPlayConnectionEvents.DISCONNECT.register(
                 (handler, ignored) -> adapter.dispatch(adapter.clientLifecycle::disconnect));
         ClientReceiveMessageEvents.CHAT.register((message, signed, profile, parameters, time) ->
-                adapter.dispatch(() -> adapter.acceptChat("chat", message)));
-        ClientReceiveMessageEvents.GAME.register((message, overlay) ->
-                adapter.dispatch(() -> adapter.acceptChat(overlay ? "overlay" : "game", message)));
+                adapter.dispatch(() -> adapter.acceptChat(normalizeChatChannel(), message)));
+        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+            String channel = normalizeGameChannel(overlay);
+            adapter.dispatch(() -> adapter.acceptChat(channel, message));
+        });
         ClientLifecycleEvents.CLIENT_STOPPING.register(
                 ignored -> adapter.dispatch(adapter.clientLifecycle::clientStopping));
+    }
+
+    /** Runs the fixed vanilla system-packet boundary used by the GAME callback. */
+    public static void withSystemMessageScope(boolean overlay, Runnable action) {
+        Objects.requireNonNull(action, "action");
+        SystemMessageScope previous = SYSTEM_MESSAGE_SCOPE.get();
+        SystemMessageScope current = new SystemMessageScope(previous, !overlay && previous == null);
+        SYSTEM_MESSAGE_SCOPE.set(current);
+        try {
+            action.run();
+        } finally {
+            current.close();
+        }
+    }
+
+    static String normalizeChatChannel() {
+        return "chat";
+    }
+
+    static String normalizeGameChannel(boolean overlay) {
+        if (overlay) {
+            return "overlay";
+        }
+        return trustedSystemMessage(overlay) ? "system" : "game";
+    }
+
+    private static boolean trustedSystemMessage(boolean overlay) {
+        if (overlay) {
+            return false;
+        }
+        SystemMessageScope scope = SYSTEM_MESSAGE_SCOPE.get();
+        return scope != null && scope.claimTrust();
+    }
+
+    private static final class SystemMessageScope {
+        private final SystemMessageScope previous;
+        private final boolean trusted;
+        private boolean trustAvailable;
+
+        private SystemMessageScope(SystemMessageScope previous, boolean trusted) {
+            this.previous = previous;
+            this.trusted = trusted;
+            trustAvailable = trusted;
+        }
+
+        private boolean claimTrust() {
+            if (!trustAvailable) {
+                return false;
+            }
+            trustAvailable = false;
+            return trusted;
+        }
+
+        private void close() {
+            if (SYSTEM_MESSAGE_SCOPE.get() != this) {
+                throw new IllegalStateException("System message scopes must close in nesting order");
+            }
+            if (previous == null) {
+                SYSTEM_MESSAGE_SCOPE.remove();
+            } else {
+                SYSTEM_MESSAGE_SCOPE.set(previous);
+            }
+        }
     }
 
     private void dispatch(Runnable action) {
