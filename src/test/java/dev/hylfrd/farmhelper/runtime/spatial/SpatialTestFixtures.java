@@ -65,11 +65,28 @@ final class SpatialTestFixtures {
     }
 
     static Map<BlockPosition, Observation<BlockStateSnapshot>> walkableLane(int fromZ, int toZ) {
-        Map<BlockPosition, Observation<BlockStateSnapshot>> blocks = new LinkedHashMap<>();
+        Map<BlockPosition, Observation<BlockStateSnapshot>> blocks = knownEmptyCells(
+                new BoxSnapshot(-1, -1, fromZ - 1, 2, 4, toZ + 2));
         for (int z = fromZ; z <= toZ; z++) {
             blocks.put(new BlockPosition(0, 0, z), Observation.present(full()));
-            blocks.put(new BlockPosition(0, 1, z), Observation.present(empty()));
-            blocks.put(new BlockPosition(0, 2, z), Observation.present(empty()));
+        }
+        return blocks;
+    }
+
+    static Map<BlockPosition, Observation<BlockStateSnapshot>> knownEmptyCells(BoxSnapshot bounds) {
+        Map<BlockPosition, Observation<BlockStateSnapshot>> blocks = new LinkedHashMap<>();
+        int minX = (int) Math.floor(bounds.minX());
+        int minY = (int) Math.floor(bounds.minY());
+        int minZ = (int) Math.floor(bounds.minZ());
+        int maxX = (int) Math.ceil(bounds.maxX());
+        int maxY = (int) Math.ceil(bounds.maxY());
+        int maxZ = (int) Math.ceil(bounds.maxZ());
+        for (int x = minX; x < maxX; x++) {
+            for (int y = minY; y < maxY; y++) {
+                for (int z = minZ; z < maxZ; z++) {
+                    blocks.put(new BlockPosition(x, y, z), Observation.present(empty()));
+                }
+            }
         }
         return blocks;
     }

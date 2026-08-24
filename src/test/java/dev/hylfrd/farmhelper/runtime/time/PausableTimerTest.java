@@ -75,4 +75,17 @@ class PausableTimerTest {
         assertEquals(Long.MAX_VALUE, timer.elapsedNanos());
         assertEquals(0L, timer.remainingNanos());
     }
+
+    @Test
+    void systemClockUsesNonNegativeElapsedTimeFromItsArbitraryRawOrigin() {
+        assertEquals(0L, SystemMonotonicClock.elapsedSinceOrigin(-100L, -100L));
+        assertEquals(7L, SystemMonotonicClock.elapsedSinceOrigin(-100L, -93L));
+        assertEquals(5L, SystemMonotonicClock.elapsedSinceOrigin(
+                Long.MAX_VALUE - 2L, Long.MIN_VALUE + 2L));
+        assertEquals(0L, SystemMonotonicClock.elapsedSinceOrigin(10L, 9L));
+        long first = SystemMonotonicClock.INSTANCE.nowNanos();
+        long second = SystemMonotonicClock.INSTANCE.nowNanos();
+        assertTrue(first >= 0L);
+        assertTrue(second >= first);
+    }
 }

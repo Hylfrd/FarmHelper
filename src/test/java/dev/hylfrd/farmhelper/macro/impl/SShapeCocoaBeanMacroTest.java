@@ -353,6 +353,17 @@ class SShapeCocoaBeanMacroTest {
     }
 
     @Test
+    void walkabilityCaptureIncludesProtrudingCollisionOrigins() {
+        SShapeCocoaBeanMacro macro = alignedMacro(MacroMode.COCOA, START);
+        SpatialCaptureRequest request = macro.spatialRequest(
+                player(START, 0.0F, -70.0F, STILL), EPOCH).orElseThrow();
+
+        assertTrue(request.blocks().contains(new BlockPosition(-1, -1, 0)));
+        assertTrue(request.blocks().contains(new BlockPosition(1, 3, 2)));
+        assertTrue(request.blocks().size() <= SpatialCaptureRequest.MAX_BLOCKS);
+    }
+
+    @Test
     void unknownWalkabilityWallAndLineEvidenceFailClosed() {
         SShapeCocoaBeanMacro macro = alignedMacro(MacroMode.COCOA, START);
         MacroDecision unknownWalk = step(macro, 2L, START, 0.0F, -70.0F,
@@ -382,7 +393,7 @@ class SShapeCocoaBeanMacroTest {
         unknownLine.put(new BlockPosition(1, 1, 1), Observation.unknown());
         MacroDecision line = step(macro, 5L, START, 0.0F, -70.0F,
                 STILL, grounded(), unknownLine);
-        assertEquals("line-change-unknown", line.status());
+        assertEquals("walkability-unknown", line.status());
         assertTrue(line.inputs().isEmpty());
     }
 
@@ -631,6 +642,27 @@ class SShapeCocoaBeanMacroTest {
                 MacroRotationLeaseState.idle(3L));
         assertEquals("post-rewarp-rotation-missing", missing.status());
         assertTrue(missing.inputs().isEmpty());
+    }
+
+    @Test
+    void floatDerivedStandingAndShortPoseBoxesRemainCurrent() {
+        for (float height : List.of(1.8F, 1.5F)) {
+            SShapeCocoaBeanMacro macro = new SShapeCocoaBeanMacro(
+                    validSettings(MacroMode.COCOA), zeros(10));
+            macro.onStart();
+            PlayerSnapshot player = player(START, 0.0F, 0.0F, STILL);
+            SpatialCaptureRequest request = macro.spatialRequest(player, EPOCH).orElseThrow();
+            SpatialSnapshot captured = captured(request, START, Map.of());
+            SpatialSnapshot pose = new SpatialSnapshot(
+                    captured.worldEpoch(), captured.requestToken(), captured.bounds(),
+                    captured.minY(), captured.maxY(), playerBox(START, height), captured.chunks());
+
+            MacroDecision decision = macro.tick(context(
+                    0L, player, Observation.present(pose), grounded(),
+                    MacroRotationLeaseState.idle(0L), EPOCH));
+
+            assertEquals("startup-aligning", decision.status(), "height=" + height);
+        }
     }
 
     @Test
@@ -989,9 +1021,16 @@ class SShapeCocoaBeanMacroTest {
                 position, new ChunkSnapshot(position, true, values)));
         return new SpatialSnapshot(
                 request.worldEpoch(), request.requestToken(), request.bounds(), -64, 320,
-                new BoxSnapshot(player.x() - 0.3D, player.y(), player.z() - 0.3D,
-                        player.x() + 0.3D, player.y() + 1.8D, player.z() + 0.3D),
+                playerBox(player, 1.8F),
                 chunks);
+    }
+
+    private static BoxSnapshot playerBox(PositionSnapshot player, float height) {
+        double halfWidth = (double) (0.6F / 2.0F);
+        return new BoxSnapshot(
+                player.x() - halfWidth, player.y(), player.z() - halfWidth,
+                player.x() + halfWidth, player.y() + (double) height,
+                player.z() + halfWidth);
     }
 
     private static BlockStateSnapshot cocoa(int age) {

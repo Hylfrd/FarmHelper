@@ -806,15 +806,16 @@ class SShapeVerticalCropMacroTest {
                         player(position, yaw, 2.8F, 0.0D), EPOCH).orElseThrow();
                 RelativeFrame frame = RelativeFrame.cardinal(yaw);
                 for (int distance : List.of(1, 179)) {
-                    BoxSnapshot body = new BoxSnapshot(
-                            position.x() - 0.3D, position.y(), position.z() - 0.3D,
-                            position.x() + 0.3D, position.y() + 1.8D, position.z() + 0.3D)
-                            .move(frame.rightX() * (double) distance, 0.0D,
-                                    frame.rightZ() * (double) distance);
+                    BoxSnapshot body = playerBox(position, 1.8F).move(
+                            frame.rightX() * (double) distance, 0.0D,
+                            frame.rightZ() * (double) distance);
                     assertCaptured(request, body);
-                    assertCaptured(request, new BoxSnapshot(
+                    assertCollisionOriginCorners(request, body);
+                    BoxSnapshot support = new BoxSnapshot(
                             body.minX(), body.minY() - 0.01D, body.minZ(),
-                            body.maxX(), body.minY(), body.maxZ()));
+                            body.maxX(), body.minY(), body.maxZ());
+                    assertCaptured(request, support);
+                    assertCollisionOriginCorners(request, support);
                 }
                 assertTrue(request.blocks().size() <= SpatialCaptureRequest.MAX_BLOCKS);
                 assertTrue(request.bounds().width() <= SpatialCaptureRequest.MAX_AXIS_SPAN);
@@ -883,7 +884,8 @@ class SShapeVerticalCropMacroTest {
             SpatialCaptureRequest right = macro.spatialRequest(player, EPOCH).orElseThrow();
             SpatialSnapshot unknown = withBlock(captured(right, scanPosition, null),
                     new BlockPosition(-distance - 1, 1, 0), Observation.unknown());
-            assertEquals("row-obstacle-scan-pending", macro.tick(context(
+            assertEquals(distance == 2 ? "row-direction-unknown" : "row-obstacle-scan-pending",
+                    macro.tick(context(
                     0L, scanPosition, 0.0D, 2.8F, unknown)).status(), "distance=" + distance);
             SpatialCaptureRequest left = macro.spatialRequest(player, EPOCH).orElseThrow();
             MacroDecision reconciled = macro.tick(context(
@@ -990,12 +992,17 @@ class SShapeVerticalCropMacroTest {
         assertEquals("row-obstacle-scan-stale", wrongPlayerBoxMacro.tick(context(
                 0L, START, 0.0D, 2.8F, wrongPlayerBox)).status());
 
-        SShapeVerticalCropMacro productionShape = macro(VerticalCropMode.NORMAL);
-        SpatialCaptureRequest productionRequest = productionShape
-                .spatialRequest(player, EPOCH).orElseThrow();
-        assertEquals("row-obstacle-scan-pending", productionShape.tick(context(
-                0L, START, 0.0D, 2.8F,
-                captured(productionRequest, START, null))).status());
+        for (float height : List.of(1.8F, 1.5F)) {
+            SShapeVerticalCropMacro productionShape = macro(VerticalCropMode.NORMAL);
+            SpatialCaptureRequest productionRequest = productionShape
+                    .spatialRequest(player, EPOCH).orElseThrow();
+            SpatialSnapshot captured = captured(productionRequest, START, null);
+            SpatialSnapshot pose = new SpatialSnapshot(
+                    captured.worldEpoch(), captured.requestToken(), captured.bounds(),
+                    captured.minY(), captured.maxY(), playerBox(START, height), captured.chunks());
+            assertEquals("row-obstacle-scan-pending", productionShape.tick(context(
+                    0L, START, 0.0D, 2.8F, pose)).status(), "height=" + height);
+        }
     }
 
     @Test
@@ -1770,9 +1777,8 @@ class SShapeVerticalCropMacroTest {
         Map<ChunkPosition, ChunkSnapshot> chunks = new HashMap<>();
         grouped.forEach((position, values) -> chunks.put(position,
                 new ChunkSnapshot(position, true, values)));
-        return new SpatialSnapshot(EPOCH, bounds, -64, 320,
-                new BoxSnapshot(player.x() - 0.3D, player.y(), player.z() - 0.3D,
-                        player.x() + 0.3D, player.y() + 1.8D, player.z() + 0.3D), chunks);
+        return new SpatialSnapshot(
+                EPOCH, bounds, -64, 320, playerBox(player, 1.8F), chunks);
     }
 
     /** Mirrors the production capture shape by observing exactly the request's bounded block set. */
@@ -1796,9 +1802,16 @@ class SShapeVerticalCropMacroTest {
                 new ChunkSnapshot(position, true, values)));
         return new SpatialSnapshot(
                 request.worldEpoch(), request.requestToken(), request.bounds(), -64, 320,
-                new BoxSnapshot(player.x() - 0.3D, player.y(), player.z() - 0.3D,
-                        player.x() + 0.3D, player.y() + 1.8D, player.z() + 0.3D),
+                playerBox(player, 1.8F),
                 chunks);
+    }
+
+    private static BoxSnapshot playerBox(PositionSnapshot player, float height) {
+        double halfWidth = (double) (0.6F / 2.0F);
+        return new BoxSnapshot(
+                player.x() - halfWidth, player.y(), player.z() - halfWidth,
+                player.x() + halfWidth, player.y() + (double) height,
+                player.z() + halfWidth);
     }
 
     private static void assertCaptured(SpatialCaptureRequest request, BoxSnapshot box) {
@@ -1813,6 +1826,26 @@ class SShapeVerticalCropMacroTest {
                 }
             }
         }
+    }
+
+    private static void assertCollisionOriginCorners(
+            SpatialCaptureRequest request,
+            BoxSnapshot query
+    ) {
+        int minX = (int) Math.floor(
+                query.minX() - CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE) + 1;
+        int maxX = (int) Math.ceil(
+                query.maxX() - CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE) - 1;
+        int minY = (int) Math.floor(
+                query.minY() - CollisionShapeSnapshot.MAX_VERTICAL_LOCAL_COORDINATE) + 1;
+        int maxY = (int) Math.ceil(
+                query.maxY() - CollisionShapeSnapshot.MIN_VERTICAL_LOCAL_COORDINATE) - 1;
+        int minZ = (int) Math.floor(
+                query.minZ() - CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE) + 1;
+        int maxZ = (int) Math.ceil(
+                query.maxZ() - CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE) - 1;
+        assertTrue(request.blocks().contains(new BlockPosition(minX, minY, minZ)));
+        assertTrue(request.blocks().contains(new BlockPosition(maxX, maxY, maxZ)));
     }
 
     private static SpatialSnapshot withBlock(

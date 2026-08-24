@@ -32,6 +32,7 @@ import dev.hylfrd.farmhelper.runtime.snapshot.PositionSnapshot;
 import dev.hylfrd.farmhelper.runtime.snapshot.RotationSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.BlockPosition;
 import dev.hylfrd.farmhelper.runtime.spatial.BoxSnapshot;
+import dev.hylfrd.farmhelper.runtime.spatial.CollisionShapeSnapshot;
 import dev.hylfrd.farmhelper.runtime.spatial.CropBlockKind;
 import dev.hylfrd.farmhelper.runtime.spatial.CropObservation;
 import dev.hylfrd.farmhelper.runtime.spatial.RelativeFrame;
@@ -57,6 +58,9 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     static final long WARP_RETRY_NANOS = TimeUnit.SECONDS.toNanos(5L);
     static final long AFTER_WARP_NANOS = TimeUnit.MILLISECONDS.toNanos(1_500L);
     static final long POST_REWARP_NANOS = TimeUnit.MILLISECONDS.toNanos(600L);
+    private static final double PLAYER_HALF_WIDTH = (double) (0.6F / 2.0F);
+    private static final double PLAYER_STANDING_HEIGHT = (double) 1.8F;
+    private static final double PLAYER_BOX_EPSILON = 1.0E-6D;
     static final double MIN_PROGRESS = 0.05D;
     static final int MAX_NO_PROGRESS_WINDOWS = 3;
 
@@ -351,7 +355,7 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
             RowDirection resultWhenBlocked,
             ScanPhase next
     ) {
-        BoxSnapshot candidate = body(observed.position()).move(
+        BoxSnapshot candidate = observed.spatial().playerBox().move(
                 observed.cardinalFrame().rightX() * (double) scanned.sign() * scanDistance,
                 0.0D,
                 observed.cardinalFrame().rightZ() * (double) scanned.sign() * scanDistance);
@@ -745,7 +749,8 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
         CaptureAnchor current = new CaptureAnchor(block(position), body(position), rotation.yaw(), cardinalYaw);
         SpatialSnapshot spatial = context.spatial().get();
         CaptureKey key = captureKey(context.worldEpoch(), current);
-        if (!captures.accepts(key, spatial, current.body())) {
+        if (!captures.accepts(key, spatial)
+                || !matchesCapturedPlayerBox(position, spatial.playerBox())) {
             invalidateCapture();
             return null;
         }
@@ -779,12 +784,16 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
             case FARMING_LEFT, FARMING_RIGHT -> {
                 blocks.add(cardinal.blockAt(position.x(), position.y(), position.z(), -1, 0, 0));
                 blocks.add(cardinal.blockAt(position.x(), position.y(), position.z(), 1, 0, 0));
-                addWalkabilityBlocks(blocks, movedBody(position, cardinal, LaneChangeDirection.FORWARD));
-                addWalkabilityBlocks(blocks, movedBody(position, cardinal, LaneChangeDirection.BACKWARD));
+                BoxSnapshot playerBody = body(position);
+                addWalkabilityBlocks(blocks, movedBody(
+                        playerBody, cardinal, LaneChangeDirection.FORWARD));
+                addWalkabilityBlocks(blocks, movedBody(
+                        playerBody, cardinal, LaneChangeDirection.BACKWARD));
             }
             case SWITCHING_LANE -> {
                 if (laneDirection != null) {
-                    addWalkabilityBlocks(blocks, movedBody(position, cardinal, laneDirection));
+                    addWalkabilityBlocks(blocks, movedBody(
+                            body(position), cardinal, laneDirection));
                 }
             }
             case STARTUP, DROPPING, REWARP_DWELL, REWARPING, WARP_LANDING,
@@ -794,20 +803,45 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     }
 
     private static BoxSnapshot movedBody(
-            PositionSnapshot position,
+            BoxSnapshot body,
             RelativeFrame frame,
             LaneChangeDirection direction
     ) {
-        return body(position).move(
+        return body.move(
                 frame.forwardX() * (double) direction.sign(), 0.0D,
                 frame.forwardZ() * (double) direction.sign());
     }
 
     private static void addWalkabilityBlocks(Set<BlockPosition> blocks, BoxSnapshot body) {
-        addBoxBlocks(blocks, body);
-        addBoxBlocks(blocks, new BoxSnapshot(
+        addCollisionOriginBlocks(blocks, body);
+        addCollisionOriginBlocks(blocks, new BoxSnapshot(
                 body.minX(), body.minY() - 1.0D / 1024.0D, body.minZ(),
                 body.maxX(), body.minY(), body.maxZ()));
+    }
+
+    private static void addCollisionOriginBlocks(
+            Set<BlockPosition> blocks,
+            BoxSnapshot query
+    ) {
+        int minX = (int) Math.floor(
+                query.minX() - CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE) + 1;
+        int maxX = (int) Math.ceil(
+                query.maxX() - CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE) - 1;
+        int minY = (int) Math.floor(
+                query.minY() - CollisionShapeSnapshot.MAX_VERTICAL_LOCAL_COORDINATE) + 1;
+        int maxY = (int) Math.ceil(
+                query.maxY() - CollisionShapeSnapshot.MIN_VERTICAL_LOCAL_COORDINATE) - 1;
+        int minZ = (int) Math.floor(
+                query.minZ() - CollisionShapeSnapshot.MAX_HORIZONTAL_LOCAL_COORDINATE) + 1;
+        int maxZ = (int) Math.ceil(
+                query.maxZ() - CollisionShapeSnapshot.MIN_HORIZONTAL_LOCAL_COORDINATE) - 1;
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    blocks.add(new BlockPosition(x, y, z));
+                }
+            }
+        }
     }
 
     private static void addBoxBlocks(Set<BlockPosition> blocks, BoxSnapshot box) {
@@ -848,7 +882,8 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
     private static SpaceStatus walkability(Observed observed, LaneChangeDirection direction) {
         return SpatialQueries.walkability(
                 observed.spatial(), observed.worldEpoch(),
-                movedBody(observed.position(), observed.cardinalFrame(), direction));
+                movedBody(observed.spatial().playerBox(),
+                        observed.cardinalFrame(), direction));
     }
 
     private static RelativeFrame currentFrame(Observed observed) {
@@ -913,8 +948,33 @@ public final class SShapeMelonPumpkinDefaultMacro implements Macro {
 
     private static BoxSnapshot body(PositionSnapshot position) {
         return new BoxSnapshot(
-                position.x() - 0.3D, position.y(), position.z() - 0.3D,
-                position.x() + 0.3D, position.y() + 1.8D, position.z() + 0.3D);
+                position.x() - PLAYER_HALF_WIDTH, position.y(),
+                position.z() - PLAYER_HALF_WIDTH,
+                position.x() + PLAYER_HALF_WIDTH,
+                position.y() + PLAYER_STANDING_HEIGHT,
+                position.z() + PLAYER_HALF_WIDTH);
+    }
+
+    private static boolean matchesCapturedPlayerBox(
+            PositionSnapshot position,
+            BoxSnapshot playerBox
+    ) {
+        if (!playerBox.hasPositiveVolume()) {
+            return false;
+        }
+        BoxSnapshot envelope = new BoxSnapshot(
+                position.x() - PLAYER_HALF_WIDTH - PLAYER_BOX_EPSILON,
+                position.y() - PLAYER_BOX_EPSILON,
+                position.z() - PLAYER_HALF_WIDTH - PLAYER_BOX_EPSILON,
+                position.x() + PLAYER_HALF_WIDTH + PLAYER_BOX_EPSILON,
+                position.y() + PLAYER_STANDING_HEIGHT + PLAYER_BOX_EPSILON,
+                position.z() + PLAYER_HALF_WIDTH + PLAYER_BOX_EPSILON);
+        return envelope.contains(playerBox)
+                && Math.abs((playerBox.minX() + playerBox.maxX()) * 0.5D
+                - position.x()) <= PLAYER_BOX_EPSILON
+                && Math.abs(playerBox.minY() - position.y()) <= PLAYER_BOX_EPSILON
+                && Math.abs((playerBox.minZ() + playerBox.maxZ()) * 0.5D
+                - position.z()) <= PLAYER_BOX_EPSILON;
     }
 
     private static BlockPosition block(PositionSnapshot position) {

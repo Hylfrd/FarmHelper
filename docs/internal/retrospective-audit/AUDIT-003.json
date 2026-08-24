@@ -1,0 +1,689 @@
+{
+  "schema_version": 1,
+  "slice_id": "AUDIT-003",
+  "baseline_sha": "10f11c36c1a16f0ee9e896f7696eccc6fbf4e412",
+  "baseline_tree": "1c5dbf9596803ec50067b6b70e9403e0a0f198d7",
+  "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
+  "paths_sha256": "351df7bd357fdeb198e5587d1653635662672274fe7087a4dc89a307aa702309",
+  "entries": [
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/ClientTickPipeline.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java#onTick",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/RotationHandler.java"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/FarmHelperRuntime.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/FarmHelper.java#init",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/interaction/BlockInteractionFace.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/event/ClickedBlockEvent.java",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/event/PlayerDestroyBlockEvent.java"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/interaction/BlockInteractionSignal.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/event/ClickedBlockEvent.java",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/event/PlayerDestroyBlockEvent.java"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/interaction/BlockInteractionSignalBridge.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/mixin/client/MixinPlayerControllerMP.java#clickBlock",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/mixin/client/MixinPlayerControllerMP.java#onPlayerDestroyBlock"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/interaction/BlockInteractionSignalType.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/event/ClickedBlockEvent.java",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/event/PlayerDestroyBlockEvent.java"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientCancellationFanout.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#disableMacro"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientCancellationReason.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientOwnershipFence.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientRuntimeLifecycle.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java#onWorldChange",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onWorldChange"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/lifecycle/package-info.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/package-info.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/ClientSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/ConnectionSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/ItemSummary.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/PlayerUtils.java#getTool"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/MotionSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/impl/TeleportFailsafe.java"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/Observation.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/package-info.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/PlayerSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/impl/BadEffectsFailsafe.java#hasNegativeEffect"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/PositionSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#getRelativeBlockPos"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/ResourceIdentifier.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/RotationSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/impl/RotationFailsafe.java"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/ScreenSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/StatusEffectSummary.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/impl/BadEffectsFailsafe.java#hasNegativeEffect"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/snapshot/WorldSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onWorldChange"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/BlockPosition.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#getRelativeBlockPos"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/BlockStateSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#getBlockState",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#blockHasCollision"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/BoxSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#getBlocksInBB"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/ChunkPosition.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/PlotUtils.java#getChunks"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/ChunkSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/CollisionShapeSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#blockHasCollision"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/CropBlockKind.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/CropUtils.java#isCrop"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/CropObservation.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/CropUtils.java#isCropReady"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/GardenPlotMap.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/PlotUtils.java#init",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/PlotUtils.java#getPlotNumberBasedOnLocation"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/package-info.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/CropUtils.java",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/PlotUtils.java",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/struct/Rewarp.java"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/RelativeFrame.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#getRelativeBlockPos",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#getRelativeBlockPos45Deg"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/RewarpPosition.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/struct/Rewarp.java"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/SpaceStatus.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/SpatialCaptureRequest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/SpatialQueries.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#canWalkThrough",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#blockHasCollision"
+      ],
+      "finding_ids": [
+        "AUDIT-003-F001"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/SpatialScanResult.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/SpatialSnapshot.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/SpatialSnapshotCapturePort.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/UpstreamCurrentYawFrame.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#getUnitX(float)",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#getUnitZ(float)"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/time/Cancellation.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/time/ClientTaskQueue.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/helper/TickTask.java#schedule",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/helper/TickTask.java#onTick"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/time/MonotonicClock.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/time/package-info.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/time/PausableTimer.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/helper/Clock.java",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/helper/Timer.java"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/time/RandomDelaySource.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#getRandomTimeBetweenChangingRows",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/FailsafeManager.java#scheduleRandomDelay"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/time/SystemMonotonicClock.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/helper/Clock.java",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/helper/Timer.java"
+      ],
+      "finding_ids": [
+        "AUDIT-003-F002"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/time/TaskHandle.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/time/TaskOwner.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/ClientTickPipelineTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/FarmHelperRuntimeTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/interaction/BlockInteractionSignalBridgeTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/mixin/client/MixinPlayerControllerMP.java"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientCancellationFanoutTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientOwnershipFenceTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientRuntimeLifecycleTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/GameStateHandler.java#onWorldChange",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onWorldChange"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/snapshot/ObservationTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/snapshot/SnapshotTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/spatial/CropObservationTest.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/CropUtils.java#isCropReady"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/spatial/GardenPlotMapTest.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/PlotUtils.java#init",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/struct/Rewarp.java#getDistance"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/spatial/RelativeFrameTest.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#getRelativeBlockPos",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#getRelativeBlockPos45Deg"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/spatial/SpatialModelTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/spatial/SpatialQueriesTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#canWalkThrough",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#blockHasCollision"
+      ],
+      "finding_ids": [
+        "AUDIT-003-F001"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/spatial/SpatialTestFixtures.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [
+        "AUDIT-003-F001"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/spatial/UpstreamCurrentYawFrameTest.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#getUnitX(float)",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/BlockUtils.java#getUnitZ(float)"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/time/ClientTaskQueueTest.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/helper/TickTask.java"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/time/ManualClock.java",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/time/PausableTimerTest.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/helper/Clock.java",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/util/helper/Timer.java"
+      ],
+      "finding_ids": [
+        "AUDIT-003-F002"
+      ],
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/time/RandomDelaySourceTest.java",
+      "classification": "DERIVED_WITH_ATTRIBUTION",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#getRandomTimeBetweenChangingRows",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/failsafe/FailsafeManager.java#scheduleRandomDelay"
+      ],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    }
+  ],
+  "findings": [
+    {
+      "id": "AUDIT-003-F001",
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/spatial/SpatialQueries.java",
+      "severity": "HIGH",
+      "summary": "Macro-facing clearance and support scans can miss collision shapes protruding from neighboring block origins.",
+      "upstream_behavior": "Fixed upstream BlockUtils.canWalkThrough and BlockUtils.blockHasCollision ask Minecraft 1.8.9 passability and collision APIs about the target block cells. That implementation has no modern moving-piston collision-origin halo.",
+      "incompatibility": "Minecraft 26.1.2 VoxelShape collision boxes captured by this slice are explicitly allowed to extend from their owning block to X/Z [-1,2] and Y [-1,2.5]. The baseline SpatialQueries enumerated only blocks whose unit cells overlapped the body or support probe, so it could return PASSABLE without inspecting an adjacent origin whose shape intersects the query. Expanded central enumeration also depends on the separately owned AUDIT-006 leaf capture halos; absent origin evidence must remain UNKNOWN rather than fabricated air.",
+      "replacement": "SpatialQueries now derives the complete collision-origin grid from the audited local minima and maxima for both clearance and support, applies fluid policy only when an origin's unit cell overlaps the query, and retains the 8,192-origin pre-iteration bound. In-scope regression fixtures provide explicit known-empty halos and prove a neighboring protruding shape blocks clearance and supplies support. Main accepted the durable AUDIT-006 leaf capture-halo evidence as the capture-side prerequisite.",
+      "resolution_scope": "SPATIAL_QUERY_CONTRACT",
+      "cross_item_dependencies": [
+        "AUDIT-006: leaf macros must capture every collision origin required by the expanded clearance/support halo and update fixtures whose injected unknown origin is now consulted by an earlier body or side query. Under exact composition, 75 of 79 A003-only macro failures disappear; four residual status-precedence failures remain in SShapeCocoaBeanMacroTest, SShapeSugarcaneMacroTest, and SShapeVerticalCropMacroTest."
+      ],
+      "closure_note": "AUDIT-003-F001 is resolved for the runtime query and capture contract in this PR. The product-wide macro suite is not claimed green until AUDIT-006 resolves its capture/fixture dependency; UNKNOWN remains fail-closed.",
+      "automated_evidence": [
+        "PowerShell baseline geometry oracle result: query X [1.25,1.75] positively intersects origin-0 local shape X [1.5,2.0]; baseline boundedGrid origins are [1], audited collision origins are [0,1,2], and MissesCollidingOrigin=true.",
+        "Static source check after repair finds SpatialQueries collisionOrigins(query/probe) using CollisionShapeSnapshot audited bounds and fluid checks gated by positive unit-cell/query intersection.",
+        "PowerShell boundary oracle confirms a 30x13x14 integer-aligned query expands to 32x16x16 collision origins, exactly the 8,192-cell limit.",
+        "Focused SpatialQueriesTest and SpatialTestFixtures regression coverage was added for protruding clearance/support, known halos, boundary contact, scan budgets, walkability, drops, and end-row scans.",
+        "Gradle command .\\gradlew.bat --no-daemon --stacktrace test --tests \"dev.hylfrd.farmhelper.runtime.spatial.*\" --tests \"dev.hylfrd.farmhelper.runtime.time.*\" exited 0 with BUILD SUCCESSFUL on Java 25.0.3, Gradle 9.5.1, and Fabric Loom 1.17.17.",
+        "Gradle command .\\gradlew.bat --no-daemon --stacktrace test --tests \"dev.hylfrd.farmhelper.runtime.ClientTickPipelineTest\" --tests \"dev.hylfrd.farmhelper.runtime.FarmHelperRuntimeTest\" --tests \"dev.hylfrd.farmhelper.runtime.interaction.*\" --tests \"dev.hylfrd.farmhelper.runtime.lifecycle.*\" --tests \"dev.hylfrd.farmhelper.runtime.snapshot.*\" exited 0 with BUILD SUCCESSFUL.",
+        "A003-only composition broad test .\\gradlew.bat --no-daemon --stacktrace test exited 1 with 656 tests completed and 79 failed; failures are concentrated in macro leaves that require AUDIT-006 capture contracts.",
+        "Gradle .\\gradlew.bat --no-daemon --stacktrace build -x test exited 0 with BUILD SUCCESSFUL, validateAccessWidener NO-SOURCE, and dependency provenance verified; full build exited 1 only because the same 79 macro tests fail.",
+        "Temporary exact composition with AUDIT-006 commit dcf7925a9e0719621677285d78d264e10d97d30c reduced the same broad result from 79 failures to 4. The residuals are SShapeCocoaBeanMacroTest.unknownWalkabilityWallAndLineEvidenceFailClosed, SShapeSugarcaneMacroTest.unknownRearOrSideFailsClosedBeforeWatchdogMovement, SShapeSugarcaneMacroTest.unknownWaterWallsAndSideScanFailClosedWithoutFalseTransitionOrDraw, and SShapeVerticalCropMacroTest.unknownAtAnyScanBoundaryNeverBecomesExhausted; each remains fail-closed with an earlier body/side query status.",
+        "Upstream comparison at eacb323fbde3eff94d4f2ee7baacb059d84b8e3a confirms BlockUtils.canWalkThrough and blockHasCollision inspect target 1.8.9 block cells only; the modern collision-origin halo is a necessary replacement, not copied upstream behavior."
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "AUDIT-003-F002",
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/time/SystemMonotonicClock.java",
+      "severity": "HIGH",
+      "summary": "The production monotonic clock exposed System.nanoTime's arbitrary signed origin to consumers that reject negative timestamps.",
+      "upstream_behavior": "Fixed upstream Clock and Timer use non-negative wall-clock milliseconds from System.currentTimeMillis for deadlines and elapsed intervals.",
+      "incompatibility": "The modern replacement correctly selected System.nanoTime for elapsed-time measurement, but returned its raw value. The Java contract gives nanoTime an arbitrary origin and permits negative values, while ServerTimeTracker, row-progress, rewarp, and related runtime consumers require non-negative nowNanos values.",
+      "replacement": "Sample one System.nanoTime origin when the production clock is initialized and expose only wrap-safe elapsed nanoseconds from that origin. This preserves monotonic differences, does not reinterpret nanoTime as an epoch, and retains the SystemMonotonicClock.INSTANCE API.",
+      "resolution_scope": "RUNTIME_CLOCK_CONTRACT",
+      "closure_note": "AUDIT-003-F002 is resolved for production monotonic timestamps, elapsed monotonicity, and pause/timer consumers in this PR.",
+      "automated_evidence": [
+        "Focused PausableTimerTest coverage was added for a negative raw origin, non-negative elapsed output, signed long wrap, backward-sample clamping, and the production singleton contract.",
+        "Gradle command .\\gradlew.bat --no-daemon --stacktrace test --tests \"dev.hylfrd.farmhelper.runtime.spatial.*\" --tests \"dev.hylfrd.farmhelper.runtime.time.*\" exited 0 with BUILD SUCCESSFUL; successive production singleton readings were nonnegative and ordered.",
+        "Upstream comparison at eacb323fbde3eff94d4f2ee7baacb059d84b8e3a confirms Clock and Timer use System.currentTimeMillis for nonnegative wall-clock deadlines and elapsed intervals; SystemMonotonicClock intentionally replaces that source with an origin-normalized System.nanoTime elapsed contract.",
+        "The clock implementation retains wrap-safe elapsed differences and clamps backward samples through the existing PausableTimer elapsed contract; no pause or timer semantics were weakened."
+      ],
+      "status": "RESOLVED"
+    }
+  ]
+}

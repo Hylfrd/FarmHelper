@@ -162,6 +162,22 @@ class SShapeMushroomRotateMacroTest {
     }
 
     @Test
+    void directionCaptureIncludesProtrudingCollisionOrigins() {
+        SShapeMushroomRotateMacro macro = macro(
+                validSettings(false), zeros(20), zeros(20));
+        finishStartupWithTargets(macro, 0.0F, Map.of());
+        assertEquals(SShapeMushroomRotateMacro.ScanPhase.RIGHT_OBSTACLE,
+                macro.scanPhase());
+
+        SpatialCaptureRequest request = macro.spatialRequest(
+                player(START, 0.0F, 0.0F, STILL), EPOCH).orElseThrow();
+
+        assertTrue(request.blocks().contains(new BlockPosition(-2, -1, -1)));
+        assertTrue(request.blocks().contains(new BlockPosition(0, 3, 1)));
+        assertTrue(request.blocks().size() <= SpatialCaptureRequest.MAX_BLOCKS);
+    }
+
+    @Test
     void directionScanIsRightFirstFromOneThroughOneSeventyNine() {
         SShapeMushroomRotateMacro rightBlocked = scanningMacro();
         MacroDecision left = step(rightBlocked, 2L, START, 30.0F, -1.0F,
@@ -493,6 +509,26 @@ class SShapeMushroomRotateMacroTest {
                     "only upstream pitch refresh is allowed; no yaw or duration draw");
             assertEquals(2, entropy.draws(), "only startup rotation consumes entropy");
             assertEquals(SShapeMushroomRotateMacro.State.NONE, macro.state());
+        }
+    }
+
+    @Test
+    void floatDerivedStandingAndShortPoseBoxesRemainCurrent() {
+        for (float height : List.of(1.8F, 1.5F)) {
+            SShapeMushroomRotateMacro macro = new SShapeMushroomRotateMacro(
+                    validSettings(false), zeros(20), zeros(20));
+            macro.onStart();
+            PlayerSnapshot player = player(START, 0.0F, 0.0F, STILL);
+            SpatialCaptureRequest request = macro.spatialRequest(player, EPOCH).orElseThrow();
+            SpatialSnapshot captured = captured(request, START, Map.of());
+            SpatialSnapshot pose = new SpatialSnapshot(
+                    captured.worldEpoch(), captured.requestToken(), captured.bounds(),
+                    captured.minY(), captured.maxY(), playerBox(START, height), captured.chunks());
+
+            MacroDecision decision = macro.tick(context(
+                    0L, player, pose, grounded(), MacroRotationLeaseState.idle(0L)));
+
+            assertEquals("startup-aligning", decision.status(), "height=" + height);
         }
     }
 
@@ -837,9 +873,15 @@ class SShapeMushroomRotateMacroTest {
     }
 
     private static BoxSnapshot body(PositionSnapshot player) {
+        return playerBox(player, 1.8F);
+    }
+
+    private static BoxSnapshot playerBox(PositionSnapshot player, float height) {
+        double halfWidth = (double) (0.6F / 2.0F);
         return new BoxSnapshot(
-                player.x() - 0.3D, player.y(), player.z() - 0.3D,
-                player.x() + 0.3D, player.y() + 1.8D, player.z() + 0.3D);
+                player.x() - halfWidth, player.y(), player.z() - halfWidth,
+                player.x() + halfWidth, player.y() + (double) height,
+                player.z() + halfWidth);
     }
 
     private static BlockPosition target(float cardinal, boolean right, int up) {
