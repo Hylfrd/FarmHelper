@@ -18,7 +18,7 @@
     {"path":"src/client/java/dev/hylfrd/farmhelper/client/ui/command/SettingsScreenOpener.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"},
     {"path":"src/client/java/dev/hylfrd/farmhelper/client/ui/package-info.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"},
     {"path":"src/client/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsController.java","classification":"DERIVED_WITH_ATTRIBUTION","upstream_anchors":["eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#openGuiKeybind"],"finding_ids":[],"disposition":"NO_FINDING"},
-    {"path":"src/client/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreen.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"},
+    {"path":"src/client/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreen.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":["AUDIT-004-002"],"disposition":"RESOLVED"},
     {"path":"src/client/java/dev/hylfrd/farmhelper/client/ui/settings/NativeSettingControlFactory.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"},
     {"path":"src/main/java/dev/hylfrd/farmhelper/config/ConfigLoadResult.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"},
     {"path":"src/main/java/dev/hylfrd/farmhelper/config/ConfigLoadStatus.java","classification":"INDEPENDENT_REIMPLEMENTATION","upstream_anchors":[],"finding_ids":[],"disposition":"NO_FINDING"},
@@ -138,6 +138,30 @@
         "FarmHelperConfigStoreTest.explicitNullRequiredLocationCoordinatesAreBackedUpAndNeverPublished covers macro.spawn x/y/z and macro.rewarps x/y/z explicit nulls, exact corrupt-primary backup preservation, RECOVERED_DEFAULTS then LOADED recovery, and empty runtime macro spawn/rewarp settings.",
         "FarmHelperConfigStoreTest.requiredLocationCoordinatesAcceptZeroAndOptionalNullsKeepDefaults proves numeric zero coordinates remain valid and optional JSON nulls retain typed defaults.",
         "The exact broad command .\\gradlew.bat test build exited 0 with BUILD SUCCESSFUL; 76 test suites executed 653 tests with 0 failures, 0 errors, and 0 skipped, verifyDependencyProvenance passed, and FarmHelper-26.1.2.jar was produced."
+      ]
+    },
+    {
+      "id": "AUDIT-004-002",
+      "path": "src/client/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreen.java",
+      "severity": "MEDIUM",
+      "summary": "Settings Reset restored valid draft values but left stale invalidSettings markers, so Save still refused the reset draft.",
+      "source_anchor": "src/client/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreen.java:109-115 (category Reset), :230-249 (reset marker cleanup), and :262-268 (save gate)",
+      "test_anchors": [
+        "src/test/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreenTest.java:31-51",
+        "src/test/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreenTest.java:54-76",
+        "src/test/java/dev/hylfrd/farmhelper/client/ui/settings/FarmHelperSettingsScreenTest.java:78-101"
+      ],
+      "upstream_behavior": "At fixed upstream commit eacb323fbde3eff94d4f2ee7baacb059d84b8e3a, FarmHelperConfig.java:_resetSpawnPos (lines 258-267) writes reset values and immediately calls save(); reset actions therefore complete with persisted defaults rather than leaving a separate stale validation gate.",
+      "incompatibility": "The native screen called SettingsSession.resetCategory() and rebuilt controls from the valid reset draft, but invalidSettings was not updated. save() rejected any non-empty invalidSettings before invoking SettingsSession.save(), so an invalid edit followed by Reset displayed valid defaults while still refusing Save. The rotation.reset action had the same stale-marker behavior for yaw and pitch.",
+      "replacement": "Clear invalidSettings only for the non-action definitions reset by the selected category, and clear only targetYaw/targetPitch for the rotation.reset action. Leave markers for untouched fields in place, then use the existing draft/session validation, active-config isolation, and atomic runtime save path unchanged.",
+      "status": "RESOLVED",
+      "disposition": "RESOLVED",
+      "automated_evidence": [
+        "The focused Gradle 9.5.1 command with --no-daemon --console=plain test and the six settings/config/runtime test selectors exited 0 with BUILD SUCCESSFUL; 56 tests executed with 0 failures, 0 errors, and 0 skipped.",
+        "FarmHelperSettingsScreenTest.categoryResetClearsItsValidationMarkerAndAllowsTheResetDraftToSave covers the invalid-marker-to-category-Reset-to-valid-default-to-save flow and verifies the persisted candidate contains the reset yaw.",
+        "FarmHelperSettingsScreenTest.resetMarkersDoNotClearUnrelatedCategoryErrorsOrActionFields verifies category cleanup preserves unrelated category/action markers and rotationResetAction cleanup removes only yaw/pitch markers.",
+        "FarmHelperSettingsScreenTest.rotationResetActionClearsItsMarkersAndAllowsTheResetDraftToSave covers the rotation.reset action path and verifies both reset values are accepted by the existing session save boundary.",
+        "The full Gradle 9.5.1 command with --no-daemon --console=plain test check build exited 0 with BUILD SUCCESSFUL; 76 suites executed 656 tests with 0 failures, 0 errors, and 0 skipped, validateAccessWidener was NO-SOURCE, verifyDependencyProvenance passed, and build/libs/FarmHelper-26.1.2.jar was produced."
       ]
     }
   ]

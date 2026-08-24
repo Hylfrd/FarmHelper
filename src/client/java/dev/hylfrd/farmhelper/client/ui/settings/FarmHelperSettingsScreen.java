@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import dev.hylfrd.farmhelper.client.runtime.FarmHelperClientRuntime;
 import dev.hylfrd.farmhelper.ui.settings.SettingCategory;
 import dev.hylfrd.farmhelper.ui.settings.SettingDefinition;
+import dev.hylfrd.farmhelper.ui.settings.SettingKind;
 import dev.hylfrd.farmhelper.ui.settings.SettingsCatalog;
 import dev.hylfrd.farmhelper.ui.settings.SettingsSession;
 import dev.hylfrd.farmhelper.ui.settings.SettingsViewport;
@@ -23,9 +24,12 @@ import java.util.Set;
 /** Functional, project-owned settings screen built only from Minecraft Screen API widgets. */
 public final class FarmHelperSettingsScreen extends Screen {
     private static final int ROW_HEIGHT = 42;
+    private static final Set<String> ROTATION_ACTION_RESET_SETTING_IDS = Set.of(
+            SettingsCatalog.TARGET_YAW.id(), SettingsCatalog.TARGET_PITCH.id());
     private final Screen parent;
     private final FarmHelperClientRuntime runtime;
     private final KeyMapping openKey;
+    private final SettingsCatalog catalog;
     private final SettingsSession session;
     private final SettingsViewport viewport = new SettingsViewport();
     private EditBox search;
@@ -46,7 +50,8 @@ public final class FarmHelperSettingsScreen extends Screen {
         this.parent = parent;
         this.runtime = runtime;
         this.openKey = openKey;
-        session = new SettingsSession(SettingsCatalog.standard(), runtime.configSnapshot());
+        catalog = SettingsCatalog.standard();
+        session = new SettingsSession(catalog, runtime.configSnapshot());
     }
 
     @Override
@@ -94,7 +99,7 @@ public final class FarmHelperSettingsScreen extends Screen {
             int rowY = contentY + (index - viewport.firstRow()) * ROW_HEIGHT;
             AbstractWidget widget = NativeSettingControlFactory.create(
                     definition, session.draft(), font, controlX, rowY + rowControlOffset, controlWidth,
-                    () -> onDraftChanged(definition.id()), this::rebuildWidgets,
+                    () -> onDraftChanged(definition.id()), () -> onSettingAction(definition),
                     message -> showInvalid(definition.id(), message), this::startRecording);
             addRenderableWidget(widget);
         }
@@ -102,7 +107,9 @@ public final class FarmHelperSettingsScreen extends Screen {
         int bottomY = Math.max(4, height - 26);
         int buttonWidth = Math.max(1, Math.min(90, (contentWidth - 8) / 3));
         addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {
+            SettingCategory category = session.category();
             session.resetCategory();
+            clearInvalidSettingsForCategory(invalidSettings, catalog, category);
             transientFeedback = "";
             rebuildWidgets();
         }).bounds(contentX, bottomY, buttonWidth, 20).build());
@@ -218,6 +225,27 @@ public final class FarmHelperSettingsScreen extends Screen {
     private void onDraftChanged(String settingId) {
         invalidSettings.remove(settingId);
         transientFeedback = session.draft().dirty() ? "Unsaved draft changes." : "";
+    }
+
+    private void onSettingAction(SettingDefinition<?> definition) {
+        onDraftChanged(definition.id());
+        clearInvalidSettingsForAction(invalidSettings, definition);
+        rebuildWidgets();
+    }
+
+    static void clearInvalidSettingsForCategory(
+            Set<String> invalidSettings, SettingsCatalog catalog, SettingCategory category
+    ) {
+        invalidSettings.removeIf(settingId -> catalog.definitions().stream()
+                .filter(definition -> definition.category() == category)
+                .filter(definition -> definition.kind() != SettingKind.ACTION)
+                .anyMatch(definition -> definition.id().equals(settingId)));
+    }
+
+    static void clearInvalidSettingsForAction(Set<String> invalidSettings, SettingDefinition<?> definition) {
+        if (definition == SettingsCatalog.RESET_ROTATION) {
+            invalidSettings.removeAll(ROTATION_ACTION_RESET_SETTING_IDS);
+        }
     }
 
     private void showInvalid(String settingId, String message) {
