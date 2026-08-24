@@ -5,9 +5,63 @@
   "baseline_tree": "1c5dbf9596803ec50067b6b70e9403e0a0f198d7",
   "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
   "paths_sha256": "c60c2015ed18fe60c33d2596f9d7c6e25c79e0b1b62da3669627741d35967bef",
+  "line_count_total": 518,
+  "line_count_method": {
+    "source": "Exact bytes of the eight candidate Git blobs at 560eba96ce901c3488777d851ce323790d0f7fc2",
+    "unit": "Non-empty LF-delimited records",
+    "definition": "For each path, read the exact blob with git cat-file blob, split the raw bytes on byte 0x0A (LF), count records containing at least one byte, and sum the eight counts.",
+    "final_newline": "The final LF terminates the final record; the trailing zero-byte record after it is not counted.",
+    "empty_lines": "Zero-byte records between LF delimiters are not counted. Non-empty records, including whitespace-only records, are counted.",
+    "command_lines": [
+      "$candidate = '560eba96ce901c3488777d851ce323790d0f7fc2'",
+      "$paths = @(",
+      "  'src/main/java/dev/hylfrd/farmhelper/macro/CropCompatibility.java',",
+      "  'src/main/java/dev/hylfrd/farmhelper/macro/MacroCrop.java',",
+      "  'src/main/java/dev/hylfrd/farmhelper/macro/MacroFamily.java',",
+      "  'src/main/java/dev/hylfrd/farmhelper/macro/MacroMode.java',",
+      "  'src/main/java/dev/hylfrd/farmhelper/macro/MacroSettings.java',",
+      "  'src/main/java/dev/hylfrd/farmhelper/macro/VerticalCropMode.java',",
+      "  'src/test/java/dev/hylfrd/farmhelper/macro/MacroModeTest.java',",
+      "  'src/test/java/dev/hylfrd/farmhelper/macro/MacroSettingsTest.java'",
+      ")",
+      "$total = 0",
+      "foreach ($path in $paths) {",
+      "  $psi = [Diagnostics.ProcessStartInfo]::new()",
+      "  $psi.FileName = 'git'",
+      "  $psi.UseShellExecute = $false",
+      "  $psi.RedirectStandardOutput = $true",
+      "  [void] $psi.ArgumentList.Add('cat-file')",
+      "  [void] $psi.ArgumentList.Add('blob')",
+      "  [void] $psi.ArgumentList.Add(\"${candidate}:$path\")",
+      "  $process = [Diagnostics.Process]::new()",
+      "  $process.StartInfo = $psi",
+      "  [void] $process.Start()",
+      "  $stream = [IO.MemoryStream]::new()",
+      "  $process.StandardOutput.BaseStream.CopyTo($stream)",
+      "  $process.WaitForExit()",
+      "  if ($process.ExitCode -ne 0) { throw \"git cat-file failed for $path\" }",
+      "  $bytes = $stream.ToArray()",
+      "  $count = 0",
+      "  $recordLength = 0",
+      "  foreach ($byte in $bytes) {",
+      "    if ($byte -eq 10) {",
+      "      if ($recordLength -gt 0) { $count++ }",
+      "      $recordLength = 0",
+      "    } else {",
+      "      $recordLength++",
+      "    }",
+      "  }",
+      "  if ($recordLength -gt 0) { $count++ }",
+      "  $total += $count",
+      "  Write-Output (\"{0}`t{1}\" -f $path, $count)",
+      "}",
+      "Write-Output (\"TOTAL`t{0}\" -f $total)"
+    ]
+  },
   "entries": [
     {
       "path": "src/main/java/dev/hylfrd/farmhelper/macro/CropCompatibility.java",
+      "line_count": 6,
       "classification": "INDEPENDENT_REIMPLEMENTATION",
       "upstream_anchors": [],
       "finding_ids": [],
@@ -15,6 +69,7 @@
     },
     {
       "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroCrop.java",
+      "line_count": 33,
       "classification": "DERIVED_WITH_ATTRIBUTION",
       "upstream_anchors": [
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#CropEnum",
@@ -25,6 +80,7 @@
     },
     {
       "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroFamily.java",
+      "line_count": 12,
       "classification": "DERIVED_WITH_ATTRIBUTION",
       "upstream_anchors": [
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#getMacro",
@@ -35,6 +91,7 @@
     },
     {
       "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroMode.java",
+      "line_count": 42,
       "classification": "MECHANICAL_PORT_REQUIRES_REWORK",
       "upstream_anchors": [
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#getMacro",
@@ -48,6 +105,7 @@
     },
     {
       "path": "src/main/java/dev/hylfrd/farmhelper/macro/MacroSettings.java",
+      "line_count": 238,
       "classification": "DERIVED_WITH_ATTRIBUTION",
       "upstream_anchors": [
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#macroType",
@@ -60,6 +118,7 @@
     },
     {
       "path": "src/main/java/dev/hylfrd/farmhelper/macro/VerticalCropMode.java",
+      "line_count": 66,
       "classification": "DERIVED_WITH_ATTRIBUTION",
       "upstream_anchors": [
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#MacroEnum",
@@ -70,6 +129,7 @@
     },
     {
       "path": "src/test/java/dev/hylfrd/farmhelper/macro/MacroModeTest.java",
+      "line_count": 51,
       "classification": "INDEPENDENT_REIMPLEMENTATION",
       "upstream_anchors": [
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#MacroEnum",
@@ -82,6 +142,7 @@
     },
     {
       "path": "src/test/java/dev/hylfrd/farmhelper/macro/MacroSettingsTest.java",
+      "line_count": 70,
       "classification": "INDEPENDENT_REIMPLEMENTATION",
       "upstream_anchors": [
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/config/FarmHelperConfig.java#addRewarp",
