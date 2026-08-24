@@ -154,6 +154,20 @@
     "candidate_artifact_size_bytes": 890472,
     "branch": "codex/audit-right-shift-keybinding",
     "pull_request": "https://github.com/Hylfrd/FarmHelper/pull/14",
+    "publication_sha": "d32c5c83476cc3ddfdcacd4f121345996eee23c3",
+    "publication_tree": "ada137a5f0f4b0f6179fe4748d4dbc49c1204b7d",
+    "exact_head_ci": {
+      "head_sha": "d32c5c83476cc3ddfdcacd4f121345996eee23c3",
+      "push_run": 32788004207,
+      "pull_request_run": 32788008275,
+      "conclusion": "success",
+      "jobs": [
+        "Linux / test",
+        "Linux / build",
+        "Windows / test",
+        "Windows / build"
+      ]
+    },
     "java": "25.0.3",
     "gradle": "9.5.1",
     "gradle_user_home": "C:/Users/Apostrophe/AppData/Local/Temp/farmhelper-audit-012-gradle-repro",
@@ -171,11 +185,8 @@
       "The first worktree-local Gradle home bootstrap timed out after 124 seconds without a test result; successful gates then used the pre-provisioned isolated Gradle 9.5.1 home listed above.",
       "No user-owned Gradle cache was mutated."
     ],
-    "commands_pending": [
-      "Implementation/publication commit identity",
-      "Branch push and exact-head CI"
-    ],
-    "status": "LOCAL_GATES_PASSED",
-    "ci": "No CI result is pre-claimed here."
+    "commands_pending": [],
+    "status": "LOCAL_GATES_PASSED_AND_EXACT_HEAD_CI_PASSED",
+    "ci": "Exact-head CI for publication head d32c5c83476cc3ddfdcacd4f121345996eee23c3 passed in push run 32788004207 and pull_request run 32788008275."
   }
 }
