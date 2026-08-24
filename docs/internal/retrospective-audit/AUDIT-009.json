@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "slice_id": "AUDIT-009",
+  "baseline_sha": "40823c3a6182a3aadcee28720def91fd2a2eafed",
+  "baseline_tree": "da51fb8aec6c8e05791781d1013af4ae644c9862",
+  "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
+  "paths_sha256": "b28db57ee0a85f4ec06c98f3b5aaa1872af3387081f94ffc231a0d70711cf7bd",
+  "fixed_upstream": {
+    "commit": "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+    "tree": "dfbaaf9ce75f9adc625352396acaa9138a8b97f8",
+    "boundary": "The packaged-client verifier and its harness are downstream internal workflow files and are absent from the fixed upstream tree."
+  },
+  "entries": [
+    {
+      "path": "scripts/internal/verify-packaged-client.ps1",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [
+        "AUDIT-009-001"
+      ],
+      "disposition": "IMPLEMENTED_PENDING_HEAVY_VERIFICATION"
+    },
+    {
+      "path": "scripts/internal/test-packaged-client-harness.ps1",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [
+        "AUDIT-009-001"
+      ],
+      "disposition": "IMPLEMENTED_PENDING_HEAVY_VERIFICATION"
+    }
+  ],
+  "findings": [
+    {
+      "id": "AUDIT-009-001",
+      "path": "scripts/internal/verify-packaged-client.ps1",
+      "severity": "MEDIUM",
+      "summary": "Offline asset verification rescanned deep ancestors for every indexed object, making the first visible packaged-client scan unnecessarily slow.",
+      "upstream_behavior": "The fixed upstream commit predates these downstream packaged-client workflow scripts; no upstream verifier behavior is imported or changed by this remediation.",
+      "incompatibility": "The baseline verifier performed repeated Assert-PathUnder and Assert-NoReparsePathComponents walks inside the object loop. The canonical Player scan verified 4,750 assets, 453,637,622 bytes, and zero mismatches in about 594 seconds, with about 49 Get-Item guard calls per asset and about 232,750 total.",
+      "replacement": "Validate the derived objects root once, cache each existing or missing prefix directory once, probe each content-addressed leaf at most once, and stream the SHA-1 through .NET for the complete current run. Keep lexical root containment, direct reparse checks, missing/mismatch reporting, index and metadata identity, and logical indexed-object counts unchanged. No receipt is persisted across runs.",
+      "automated_evidence": [
+        "PowerShell AST parsing completed successfully for scripts/internal/verify-packaged-client.ps1.",
+        "PowerShell AST parsing completed successfully for scripts/internal/test-packaged-client-harness.ps1.",
+        "git diff --check completed successfully.",
+        "The harness retains missing and SHA-1 mismatch coverage, adds an asset-object-root junction escape case, and adds an opt-in disposable -RunAssetPerformanceFixture path that creates exactly 4,750 objects across all 256 prefixes without mutating the user-owned cache.",
+        "The opt-in 4,750-object wall-time measurement was not run in this resource-light pass because the worktree has no candidate JAR and the assignment requires heavy authorization before the full fixture/performance workflow.",
+        "Expected post-change logical guard counts for the 4,750-object fixture are objectsRoot=1, prefixDirectories=256, leaves=4750, sha1Objects=4750, total logical guards=5007; the after wall time remains pending the authorized run."
+      ],
+      "measurements": {
+        "before": {
+          "source": "Published canonical Player full-scan observation",
+          "object_count": 4750,
+          "bytes": 453637622,
+          "mismatches": 0,
+          "wall_seconds": 594,
+          "get_item_guard_calls_per_object_approx": 49,
+          "get_item_guard_calls_total_approx": 232750
+        },
+        "after": {
+          "source": "AUDIT-009 opt-in disposable fixture, designed but not executed in the resource-light pass",
+          "object_count": 4750,
+          "logical_guard_calls": {
+            "objectsRoot": 1,
+            "prefixDirectories": 256,
+            "leaves": 4750,
+            "total": 5007
+          },
+          "sha1_objects": 4750,
+          "wall_seconds": null,
+          "status": "PENDING_HEAVY_VERIFICATION"
+        }
+      },
+      "forbidden_boundaries": [
+        "No current Player task, GUI, input, relaunch, or process inspection was performed.",
+        "No user-owned Gradle cache was mutated.",
+        "No receipt cache was added.",
+        "No test.md, control, product-source, build, CI, or unrelated path was edited."
+      ],
+      "status": "IMPLEMENTED_PENDING_HEAVY_VERIFICATION"
+    }
+  ],
+  "verification": {
+    "resource_profile": "RESOURCE_LIGHT",
+    "pending_command": ".\\scripts\\internal\\test-packaged-client-harness.ps1 -RunAssetPerformanceFixture",
+    "candidate_sha": null,
+    "candidate_tree": null,
+    "branch": "codex/audit-009-asset-verifier-performance",
+    "commit": null,
+    "pull_request": null,
+    "checks": [
+      "PowerShell AST parse: passed",
+      "git diff --check: passed",
+      "4,750-object fixture: not run pending heavy authorization and candidate JAR availability"
+    ]
+  }
+}
