@@ -44,6 +44,8 @@ class GameStateFixtureTest {
         assertTrue(result.diagnostics().isEmpty());
         assertEquals(SemanticLocation.GARDEN, result.snapshot().location().get());
         assertEquals(0L, result.snapshot().economy().bits().get());
+        assertEquals(1_234L, result.snapshot().jacob().currentContest().get().collected().get());
+        assertEquals(JacobMedal.GOLD, result.snapshot().jacob().currentContest().get().medal().get());
         assertEquals(0, result.snapshot().garden().totalPests().get());
         assertEquals(0L, result.snapshot().garden().composterFuel().get());
         assertEquals(1_234, result.snapshot().garden().vacuumPests().get());
