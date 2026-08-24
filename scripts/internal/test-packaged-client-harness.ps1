@@ -614,3 +614,5 @@ exit /b %ERRORLEVEL%
         Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
     }
 }
+
+exit 0

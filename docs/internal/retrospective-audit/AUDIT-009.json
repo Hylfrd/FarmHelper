@@ -3,6 +3,10 @@
   "slice_id": "AUDIT-009",
   "baseline_sha": "40823c3a6182a3aadcee28720def91fd2a2eafed",
   "baseline_tree": "da51fb8aec6c8e05791781d1013af4ae644c9862",
+  "checkpoint_sha": "737516a42c63d6ce57b8e585c55ebe5b9afad8bf",
+  "checkpoint_tree": "e6af173e588c78b4cfc916281fc0fb1463212ef1",
+  "composition_base_sha": "97a7d5ce2d177ff909b881f8049c519157e8171b",
+  "composition_base_tree": "ed0f61ddb73c6191ebfb7877ad564b41ba0d5cf5",
   "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
   "paths_sha256": "b28db57ee0a85f4ec06c98f3b5aaa1872af3387081f94ffc231a0d70711cf7bd",
   "fixed_upstream": {
@@ -18,7 +22,7 @@
       "finding_ids": [
         "AUDIT-009-001"
       ],
-      "disposition": "IMPLEMENTED_PENDING_HEAVY_VERIFICATION"
+      "disposition": "RESOLVED"
     },
     {
       "path": "scripts/internal/test-packaged-client-harness.ps1",
@@ -27,7 +31,7 @@
       "finding_ids": [
         "AUDIT-009-001"
       ],
-      "disposition": "IMPLEMENTED_PENDING_HEAVY_VERIFICATION"
+      "disposition": "RESOLVED"
     }
   ],
   "findings": [
@@ -40,12 +44,15 @@
       "incompatibility": "The baseline verifier performed repeated Assert-PathUnder and Assert-NoReparsePathComponents walks inside the object loop. The canonical Player scan verified 4,750 assets, 453,637,622 bytes, and zero mismatches in about 594 seconds, with about 49 Get-Item guard calls per asset and about 232,750 total.",
       "replacement": "Validate the derived objects root once, cache each existing or missing prefix directory once, probe each content-addressed leaf at most once, and stream the SHA-1 through .NET for the complete current run. Keep lexical root containment, direct reparse checks, missing/mismatch reporting, index and metadata identity, and logical indexed-object counts unchanged. No receipt is persisted across runs.",
       "automated_evidence": [
-        "PowerShell AST parsing completed successfully for scripts/internal/verify-packaged-client.ps1.",
-        "PowerShell AST parsing completed successfully for scripts/internal/test-packaged-client-harness.ps1.",
-        "git diff --check completed successfully.",
-        "The harness retains missing and SHA-1 mismatch coverage, adds an asset-object-root junction escape case, and adds an opt-in disposable -RunAssetPerformanceFixture path that creates exactly 4,750 objects across all 256 prefixes without mutating the user-owned cache.",
-        "The opt-in 4,750-object wall-time measurement was not run in this resource-light pass because the worktree has no candidate JAR and the assignment requires heavy authorization before the full fixture/performance workflow.",
-        "Expected post-change logical guard counts for the 4,750-object fixture are objectsRoot=1, prefixDirectories=256, leaves=4750, sha1Objects=4750, total logical guards=5007; the after wall time remains pending the authorized run."
+        "The checkpoint was composed with current master 97a7d5ce2d177ff909b881f8049c519157e8171b (tree ed0f61ddb73c6191ebfb7877ad564b41ba0d5cf5); the final master-relative diff is limited to the two verifier scripts and this audit record.",
+        "PowerShell AST parsing completed successfully for both in-scope scripts after the final harness control-flow fix.",
+        "git diff --check completed successfully after the final source and audit updates.",
+        "The harness preserves full SHA-1 verification for every indexed object, lexical root containment, direct and ancestor reparse-point rejection, missing and mismatch reporting, metadata/index identity, path safety, exact logical object counts, and no persistent receipt cache.",
+        "The positive packaged-client preflight passed twice with assets=4750, prefixGuards=256, leafGuards=4750, and sha1Objects=4750; all six packaged-client negative cases and both Gradle hash-boundary negatives passed on both complete harness runs.",
+        "The isolated Gradle home was provisioned with Gradle 9.5.1 and Java 25.0.3. Because the copied user-level Loom asset pair was inconsistent, only the isolated asset metadata/index/objects subset was discarded and Gradle downloadAssets was run online; the user cache was not mutated.",
+        "Online isolated downloadAssets completed successfully in 185.7 seconds; the first offline receipt exited 0 without transfer output and the second exited 0 with downloadAssets UP-TO-DATE and 1 actionable task up-to-date.",
+        "The isolated offline check gate passed, including verifyDependencyProvenance. A clean rebuild followed by audit-packaged-jar.ps1 passed deterministic JAR comparison with 498 entries, the expected client metadata, and the candidate SHA-256 recorded below.",
+        "The first complete harness run exposed only an exit-status propagation defect: the final expected Gradle-negative child left LASTEXITCODE=1 after all assertions passed. The harness now exits 0 after cleanup; the two final complete runs both exited 0."
       ],
       "measurements": {
         "before": {
@@ -58,8 +65,10 @@
           "get_item_guard_calls_total_approx": 232750
         },
         "after": {
-          "source": "AUDIT-009 opt-in disposable fixture, designed but not executed in the resource-light pass",
+          "source": "AUDIT-009 opt-in disposable fixture, executed twice after isolated Gradle downloadAssets provisioning",
           "object_count": 4750,
+          "indexed_bytes": 455226335,
+          "mismatches": 0,
           "logical_guard_calls": {
             "objectsRoot": 1,
             "prefixDirectories": 256,
@@ -67,8 +76,20 @@
             "total": 5007
           },
           "sha1_objects": 4750,
-          "wall_seconds": null,
-          "status": "PENDING_HEAVY_VERIFICATION"
+          "wall_seconds": [
+            7.962,
+            9.258
+          ],
+          "scan_seconds": [
+            6.384,
+            7.932
+          ],
+          "harness_wall_seconds": [
+            57.348,
+            59.161
+          ],
+          "status": "VERIFIED_HEAVY",
+          "repeat_observation": "The second complete fixture run retained the exact object and logical-guard counts; it was not omitted as a warm-cache-only claim."
         }
       },
       "forbidden_boundaries": [
@@ -77,21 +98,49 @@
         "No receipt cache was added.",
         "No test.md, control, product-source, build, CI, or unrelated path was edited."
       ],
-      "status": "IMPLEMENTED_PENDING_HEAVY_VERIFICATION"
+      "status": "RESOLVED"
     }
   ],
   "verification": {
-    "resource_profile": "RESOURCE_LIGHT",
-    "pending_command": ".\\scripts\\internal\\test-packaged-client-harness.ps1 -RunAssetPerformanceFixture",
+    "resource_profile": "HEAVY",
+    "pending_command": null,
     "candidate_sha": null,
     "candidate_tree": null,
+    "candidate_artifact_sha256": "44F118019D8A3A188D1F503A4BE1AF5E0D742E93C021EA5F115026E4A1D67008",
+    "candidate_artifact_size": 883421,
     "branch": "codex/audit-009-asset-verifier-performance",
     "commit": null,
     "pull_request": null,
+    "commands": [
+      ".\\gradlew.bat --no-daemon --console=plain downloadAssets (isolated GRADLE_USER_HOME=.gradle/audit-009-user-home): passed in 185.7s",
+      ".\\gradlew.bat --offline --no-daemon --console=plain downloadAssets (isolated cache, receipt 1): passed, no transfer output",
+      ".\\gradlew.bat --offline --no-daemon --console=plain downloadAssets (isolated cache, receipt 2): passed, UP-TO-DATE, 1 actionable task up-to-date",
+      ".\\scripts\\internal\\test-packaged-client-harness.ps1 -RunAssetPerformanceFixture (isolated GRADLE_USER_HOME): passed twice, exit 0",
+      ".\\gradlew.bat --offline --no-daemon --console=plain check (isolated GRADLE_USER_HOME): passed, including verifyDependencyProvenance",
+      ".\\gradlew.bat --offline --no-daemon --console=plain clean jar (isolated GRADLE_USER_HOME): passed",
+      ".\\scripts\\internal\\audit-packaged-jar.ps1 -FirstArtifact <temporary first JAR>: passed, deterministic archive equality",
+      "PowerShell AST parse for both executable paths: passed",
+      "git diff --check: passed"
+    ],
+    "resource_observations": {
+      "gradle_user_home": ".gradle/audit-009-user-home",
+      "java": "BellSoft Liberica 25.0.3",
+      "gradle": "9.5.1",
+      "daemon_mode": "All Gradle commands used --no-daemon; Gradle reported and stopped its required single-use daemon.",
+      "initial_wrapper_bootstrap": "The first isolated wrapper download timed out at the configured 10 seconds and left only isolated .zip.lck/.part remnants; the extracted Gradle distribution was preserved and the exact generated remnants were removed after the owned process exited.",
+      "asset_provisioning": "The copied user-level asset metadata/index pair was inconsistent; the isolated metadata/index/objects subset was discarded and reprovisioned through Gradle downloadAssets.",
+      "oom": false,
+      "disk_saturation": false,
+      "repeated_resource_failure": false,
+      "user_cache_mutated": false,
+      "live_locks_or_daemon_state_copied": false
+    },
     "checks": [
       "PowerShell AST parse: passed",
       "git diff --check: passed",
-      "4,750-object fixture: not run pending heavy authorization and candidate JAR availability"
+      "4,750-object fixture: passed twice; both runs verified 4,750 SHA-1 objects and 5,007 logical guards",
+      "Packaged-client positive and six negative harness cases: passed",
+      "Gradle check and deterministic JAR audit: passed"
     ]
   }
 }
