@@ -13,13 +13,14 @@ import static dev.hylfrd.farmhelper.runtime.spatial.SpatialTestFixtures.EPOCH;
 import static dev.hylfrd.farmhelper.runtime.spatial.SpatialTestFixtures.EMPTY_FLUID;
 import static dev.hylfrd.farmhelper.runtime.spatial.SpatialTestFixtures.empty;
 import static dev.hylfrd.farmhelper.runtime.spatial.SpatialTestFixtures.full;
+import static dev.hylfrd.farmhelper.runtime.spatial.SpatialTestFixtures.knownEmptyCells;
 import static dev.hylfrd.farmhelper.runtime.spatial.SpatialTestFixtures.snapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SpatialQueriesTest {
-    private static final BoxSnapshot BLOCK_BOUNDS = new BoxSnapshot(0, 0, 0, 2, 2, 2);
+    private static final BoxSnapshot BLOCK_BOUNDS = new BoxSnapshot(-2, -3, -2, 4, 4, 4);
     private static final int GARDEN_VOID_OVER_BUDGET_Y =
             SpatialQueries.GARDEN_VOID_MIN_Y + SpatialCaptureRequest.MAX_BLOCKS;
 
@@ -56,14 +57,32 @@ class SpatialQueriesTest {
     }
 
     @Test
-    void exactBoundaryContactDoesNotCollideOrDemandTheAdjacentBlock() {
-        Map<BlockPosition, Observation<BlockStateSnapshot>> blocks = Map.of(
-                new BlockPosition(0, 0, 0), Observation.present(full()),
-                new BlockPosition(1, 0, 0), Observation.present(empty()));
-        SpatialSnapshot snapshot = snapshot(new BoxSnapshot(0, 0, 0, 2, 1, 1), blocks);
+    void exactBoundaryContactDoesNotCollideWhenTheOriginHaloIsKnown() {
+        Map<BlockPosition, Observation<BlockStateSnapshot>> blocks = knownEmptyCells(BLOCK_BOUNDS);
+        blocks.put(new BlockPosition(0, 0, 0), Observation.present(full()));
+        SpatialSnapshot snapshot = snapshot(BLOCK_BOUNDS, blocks);
 
         assertEquals(SpaceStatus.PASSABLE, SpatialQueries.clearance(snapshot, EPOCH,
                 new BoxSnapshot(1, 0.2, 0.2, 1.5, 0.8, 0.8)));
+    }
+
+    @Test
+    void protrudingNeighborShapeParticipatesInClearanceAndSupport() {
+        BlockPosition protrudingOrigin = new BlockPosition(0, 0, 0);
+        BlockStateSnapshot protruding = shaped(List.of(
+                new BoxSnapshot(1.5, 0, 0, 2, 1, 1)));
+        Map<BlockPosition, Observation<BlockStateSnapshot>> blocks = knownEmptyCells(BLOCK_BOUNDS);
+        blocks.put(protrudingOrigin, Observation.present(protruding));
+        SpatialSnapshot snapshot = snapshot(BLOCK_BOUNDS, blocks);
+
+        BoxSnapshot colliding = new BoxSnapshot(1.25, 0.25, 0.25, 1.75, 0.75, 0.75);
+        SpatialScanResult obstacles = SpatialQueries.nearbyObstacles(snapshot, EPOCH, colliding);
+        assertEquals(SpaceStatus.BLOCKED, obstacles.status());
+        assertEquals(List.of(protrudingOrigin), obstacles.blockedBlocks());
+        assertTrue(obstacles.inspectedBlocks().contains(protrudingOrigin));
+
+        BoxSnapshot supported = new BoxSnapshot(1.25, 1, 0.25, 1.75, 2.8, 0.75);
+        assertEquals(SpaceStatus.PASSABLE, SpatialQueries.support(snapshot, EPOCH, supported));
     }
 
     @Test
@@ -88,13 +107,14 @@ class SpatialQueriesTest {
         BlockPosition position = new BlockPosition(0, 0, 0);
         BlockStateSnapshot missingShape = new BlockStateSnapshot(
                 ResourceIdentifier.parse("minecraft:air"), Map.of(), EMPTY_FLUID, Observation.unknown());
-        SpatialSnapshot knownSnapshot = snapshot(BLOCK_BOUNDS,
-                Map.of(position, Observation.present(missingShape)));
+        Map<BlockPosition, Observation<BlockStateSnapshot>> known = knownEmptyCells(BLOCK_BOUNDS);
+        known.put(position, Observation.present(missingShape));
+        SpatialSnapshot knownSnapshot = snapshot(BLOCK_BOUNDS, known);
         BoxSnapshot query = new BoxSnapshot(0.2, 0.2, 0.2, 0.8, 0.8, 0.8);
 
         assertEquals(SpaceStatus.UNKNOWN, SpatialQueries.clearance(knownSnapshot, EPOCH + 1, query));
         assertEquals(SpaceStatus.UNKNOWN, SpatialQueries.clearance(knownSnapshot, EPOCH,
-                new BoxSnapshot(2, 0, 0, 2.5, 0.5, 0.5)));
+                new BoxSnapshot(4, 0, 0, 4.5, 0.5, 0.5)));
         assertEquals(SpaceStatus.UNKNOWN, SpatialQueries.clearance(knownSnapshot, EPOCH, query));
 
         ChunkPosition chunkPosition = position.chunk();
@@ -108,24 +128,26 @@ class SpatialQueriesTest {
     void nearbyObstacleScanReportsKnownBlocksWithoutErasingUnknownDominanceRules() {
         BlockPosition blocked = new BlockPosition(0, 0, 0);
         BlockPosition clear = new BlockPosition(1, 0, 0);
-        SpatialSnapshot snapshot = snapshot(new BoxSnapshot(0, 0, 0, 2, 1, 1), Map.of(
-                blocked, Observation.present(full()),
-                clear, Observation.present(empty())));
+        Map<BlockPosition, Observation<BlockStateSnapshot>> blocks = knownEmptyCells(BLOCK_BOUNDS);
+        blocks.put(blocked, Observation.present(full()));
+        blocks.put(clear, Observation.present(empty()));
+        SpatialSnapshot snapshot = snapshot(BLOCK_BOUNDS, blocks);
 
         SpatialScanResult result = SpatialQueries.nearbyObstacles(snapshot, EPOCH,
                 new BoxSnapshot(0, 0, 0, 2, 1, 1));
 
         assertEquals(SpaceStatus.BLOCKED, result.status());
         assertEquals(List.of(blocked), result.blockedBlocks());
-        assertEquals(2, result.inspectedBlocks().size());
+        assertEquals(48, result.inspectedBlocks().size());
     }
 
     @Test
-    void scanBudgetAllows8192CellsAndRejectsLargerCubesBeforeIteration() {
-        SpatialSnapshot boundarySnapshot = snapshot(new BoxSnapshot(0, 0, 0, 32, 16, 16), Map.of());
+    void collisionOriginBudgetAllows8192CellsAndRejectsLargerCubesBeforeIteration() {
+        SpatialSnapshot boundarySnapshot = snapshot(
+                new BoxSnapshot(-1, -2, -1, 31, 14, 15), Map.of());
         SpatialScanResult boundary = assertTimeoutPreemptively(Duration.ofSeconds(2),
                 () -> SpatialQueries.nearbyObstacles(boundarySnapshot, EPOCH,
-                        new BoxSnapshot(0, 0, 0, 32, 16, 16)));
+                        new BoxSnapshot(0, 0, 0, 30, 13, 14)));
         assertEquals(SpaceStatus.UNKNOWN, boundary.status());
         assertEquals(SpatialCaptureRequest.MAX_BLOCKS, boundary.inspectedBlocks().size());
 
@@ -157,23 +179,20 @@ class SpatialQueriesTest {
     @Test
     void walkabilityRequiresBothBodyClearanceAndKnownSupport() {
         BoxSnapshot body = new BoxSnapshot(0.2, 1, 0.2, 0.8, 2.8, 0.8);
-        Map<BlockPosition, Observation<BlockStateSnapshot>> walkable = new LinkedHashMap<>();
+        Map<BlockPosition, Observation<BlockStateSnapshot>> walkable = knownEmptyCells(BLOCK_BOUNDS);
         walkable.put(new BlockPosition(0, 0, 0), Observation.present(full()));
-        walkable.put(new BlockPosition(0, 1, 0), Observation.present(empty()));
-        walkable.put(new BlockPosition(0, 2, 0), Observation.present(empty()));
-        BoxSnapshot bounds = new BoxSnapshot(0, 0, 0, 1, 3, 1);
 
         assertEquals(SpaceStatus.PASSABLE,
-                SpatialQueries.walkability(snapshot(bounds, walkable), EPOCH, body));
+                SpatialQueries.walkability(snapshot(BLOCK_BOUNDS, walkable), EPOCH, body));
 
         walkable.put(new BlockPosition(0, 0, 0), Observation.present(empty()));
         assertEquals(SpaceStatus.BLOCKED,
-                SpatialQueries.walkability(snapshot(bounds, walkable), EPOCH, body));
+                SpatialQueries.walkability(snapshot(BLOCK_BOUNDS, walkable), EPOCH, body));
 
         walkable.put(new BlockPosition(0, 0, 0), Observation.present(full()));
         walkable.put(new BlockPosition(0, 1, 0), Observation.unknown());
         assertEquals(SpaceStatus.UNKNOWN,
-                SpatialQueries.walkability(snapshot(bounds, walkable), EPOCH, body));
+                SpatialQueries.walkability(snapshot(BLOCK_BOUNDS, walkable), EPOCH, body));
     }
 
     @Test
@@ -210,11 +229,10 @@ class SpatialQueriesTest {
 
     @Test
     void dropRequiresClearSweptVolumeAndKnownLandingSupport() {
-        BoxSnapshot bounds = new BoxSnapshot(0, 0, 0, 1, 6, 1);
+        BoxSnapshot bounds = new BoxSnapshot(-1, -1, -1, 2, 7, 2);
         BoxSnapshot start = new BoxSnapshot(0.2, 4, 0.2, 0.8, 5.8, 0.8);
         BoxSnapshot landing = new BoxSnapshot(0.2, 1, 0.2, 0.8, 2.8, 0.8);
-        Map<BlockPosition, Observation<BlockStateSnapshot>> blocks =
-                SpatialTestFixtures.column(0, 0, 0, 5, empty());
+        Map<BlockPosition, Observation<BlockStateSnapshot>> blocks = knownEmptyCells(bounds);
         blocks.put(new BlockPosition(0, 0, 0), Observation.present(full()));
 
         assertEquals(SpaceStatus.PASSABLE,
@@ -231,7 +249,7 @@ class SpatialQueriesTest {
 
     @Test
     void endRowStopsOnBlockedUnknownAndHardBudget() {
-        BoxSnapshot bounds = new BoxSnapshot(0, 0, 0, 1, 3, 4);
+        BoxSnapshot bounds = new BoxSnapshot(-1, -1, -1, 2, 4, 5);
         BoxSnapshot body = new BoxSnapshot(0.2, 1, 0.2, 0.8, 2.8, 0.8);
         RelativeFrame forwardZ = RelativeFrame.cardinal(0);
         Map<BlockPosition, Observation<BlockStateSnapshot>> lane = SpatialTestFixtures.walkableLane(0, 3);
@@ -256,7 +274,7 @@ class SpatialQueriesTest {
         assertEquals(3, exhausted.inspectedBlocks().size());
         assertTrue(exhausted.blockedBlocks().isEmpty());
 
-        BoxSnapshot longBounds = new BoxSnapshot(0, 0, 0, 1, 3, 180);
+        BoxSnapshot longBounds = new BoxSnapshot(-1, -1, -1, 2, 4, 181);
         Map<BlockPosition, Observation<BlockStateSnapshot>> longLane =
                 SpatialTestFixtures.walkableLane(0, 179);
         SpatialScanResult exhaustedAt179 = SpatialQueries.scanForwardUntilBlocked(
@@ -267,8 +285,9 @@ class SpatialQueriesTest {
     }
 
     private static SpaceStatus clearanceAt(BlockStateSnapshot state, BoxSnapshot query) {
-        return SpatialQueries.clearance(snapshot(BLOCK_BOUNDS,
-                Map.of(new BlockPosition(0, 0, 0), Observation.present(state))), EPOCH, query);
+        Map<BlockPosition, Observation<BlockStateSnapshot>> blocks = knownEmptyCells(BLOCK_BOUNDS);
+        blocks.put(new BlockPosition(0, 0, 0), Observation.present(state));
+        return SpatialQueries.clearance(snapshot(BLOCK_BOUNDS, blocks), EPOCH, query);
     }
 
     private static BlockStateSnapshot shaped(List<BoxSnapshot> boxes) {
