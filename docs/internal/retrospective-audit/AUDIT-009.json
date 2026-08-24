@@ -104,12 +104,12 @@
   "verification": {
     "resource_profile": "HEAVY",
     "pending_command": null,
-    "candidate_sha": null,
-    "candidate_tree": null,
+    "candidate_sha": "5f80be8f60675deb4d9cb3c0982aac5e7af848e9",
+    "candidate_tree": "af42204502deed05c4ca9f5bb1b1f801ca771502",
     "candidate_artifact_sha256": "44F118019D8A3A188D1F503A4BE1AF5E0D742E93C021EA5F115026E4A1D67008",
     "candidate_artifact_size": 883421,
     "branch": "codex/audit-009-asset-verifier-performance",
-    "commit": null,
+    "commit": "5f80be8f60675deb4d9cb3c0982aac5e7af848e9",
     "pull_request": null,
     "commands": [
       ".\\gradlew.bat --no-daemon --console=plain downloadAssets (isolated GRADLE_USER_HOME=.gradle/audit-009-user-home): passed in 185.7s",
