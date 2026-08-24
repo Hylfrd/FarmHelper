@@ -19,8 +19,8 @@ public record MacroRotationLeaseState(
         }
         Objects.requireNonNull(status, "status");
         terminalReason = Objects.requireNonNull(terminalReason, "terminalReason");
-        if (status == Status.IDLE && requestToken != 0L) {
-            throw new IllegalArgumentException("idle rotation lease must use token zero");
+        if (status == Status.IDLE && (requestToken != 0L || terminalReason.isPresent())) {
+            throw new IllegalArgumentException("idle rotation lease requires token zero and no reason");
         }
         if (status == Status.ACTIVE && (requestToken == 0L || terminalReason.isPresent())) {
             throw new IllegalArgumentException("active rotation lease requires a token only");
