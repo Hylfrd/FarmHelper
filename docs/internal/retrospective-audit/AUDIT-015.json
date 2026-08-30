@@ -88,14 +88,15 @@
       ".\\gradlew.bat --offline --no-daemon --console=plain clean build: BUILD SUCCESSFUL in 35s; 12 actionable tasks executed."
     ],
     "ci": {
-      "status": "PENDING",
+      "status": "SUCCESS",
       "pull_request_number": 16,
-      "pending_checks": 8,
+      "pending_checks": 0,
       "workflow_runs": [
-        33318283667,
-        33318294679
+        33318362660,
+        33318365017
       ],
-      "observed": "GitHub reported Linux/build, Linux/test, Windows/build, and Windows/test pending for both workflow runs when this report was prepared."
+      "verified_head": "3a9b2ce96ebdfbae2dfa8cd8775d2e70a029bdd5",
+      "observed": "GitHub reported Linux/build, Linux/test, Windows/build, and Windows/test passed for both workflow runs at the verified report-publication head."
     },
     "resource_observations": {
       "gradle_user_home": "C:\\Users\\Apostrophe\\.codex\\worktrees\\9eea\\farm-helper\\.gradle\\audit-015-user-home",
