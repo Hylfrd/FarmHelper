@@ -210,7 +210,7 @@
           "ClientScreenLifecycleAdapterTest.settingsBoundaryStopsBeforeSaveAndLeavesNoStalePauseState",
           "ClientScreenLifecycleAdapterTest.pauseScreenBoundaryStopsAndRemainsIdempotentAcrossClose",
           "ClientRuntimeLifecycleTest.terminalScreenOpenUsesTheDedicatedBoundaryReason",
-          "ClientCommandScreenCloseTest.expectedCloseOfReplacementChatDoesNotPreserveAClosedNonChatScreen"
+          "ClientCommandScreenCloseTest.nonCommandAndMismatchedScreenBoundariesStillCancelOwners"
         ],
         "asserted_state": "Non-chat inventory, pause, and settings boundaries stop the macro, clear SCREEN_OPEN, cancel inventory/task/rotation/input ownership, and permit settings save; the exact expected chat close preserves the running macro and its owned input.",
         "real_client_follow_up": "The production path uses the real Minecraft#setScreen boundary. Per the assignment boundary, Player-owned P0-13/P0-15 reruns remain a distinct follow-up after candidate publication; this Builder did not perform GUI, input, or Player actions."
@@ -246,12 +246,14 @@
       "report_bearing_checkpoint_blob": "5969af68a1788f966ca2b247b32056c9b2643a1d",
       "role": "The checkpoint is the separate audit-record publication commit for the executable implementation. This correction deliberately does not claim the future correction commit as its own publication identity."
     },
-    "exact_head_ci": {
+    "publication_checkpoint_ci": {
       "head_sha": "c0d9e3d808a612e18658e362e6ed8bfcb2b5bb11",
+      "tree": "2b9464c4d1b1d933d99116a48b72404fed3e8ead",
       "push_run": 32789407877,
       "pull_request_run": 32789446423,
       "conclusion": "success"
     },
+    "current_report_tip_evidence": "Current report-tip exact-SHA CI and Review are external GitHub/Reviewer evidence and are intentionally not self-recorded inside the content-addressed report commit.",
     "java": "25.0.3",
     "gradle": "9.5.1",
     "gradle_user_home": "C:/Users/Apostrophe/AppData/Local/Temp/farmhelper-audit-014-gradle",
@@ -268,6 +270,6 @@
     "commands_pending": [
       "Parent-owned real-client P0-13 inventory open/close and P0-15 Escape pause/return rerun against the published candidate"
     ],
-    "status": "LOCAL_GATES_PASSED_AND_EXACT_HEAD_CI_PASSED_PENDING_PARENT_REAL_CLIENT_RERUN"
+    "status": "LOCAL_GATES_PASSED_AND_PUBLICATION_CHECKPOINT_CI_PASSED_PENDING_PARENT_REAL_CLIENT_RERUN"
   }
 }
