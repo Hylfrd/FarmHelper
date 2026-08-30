@@ -83,6 +83,106 @@ function Set-LastWriteTimeUtcAndVerify {
     return $storedUtc
 }
 
+function Invoke-LastWriteTimeProbe {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [DateTime] $Original,
+
+        [Parameter(Mandatory = $true)]
+        [DateTime] $ProbeTimestamp,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Description,
+
+        [Parameter(Mandatory = $true)]
+        [scriptblock] $ProbeAction
+    )
+
+    $originalUtc = [DateTime]::SpecifyKind($Original, [DateTimeKind]::Utc)
+    $probeFailure = $null
+    $restorationFailures = [System.Collections.Generic.List[string]]::new()
+    try {
+        $storedProbeUtc = Set-LastWriteTimeUtcAndVerify `
+            -Path $Path `
+            -Expected $ProbeTimestamp
+        & $ProbeAction $storedProbeUtc | Out-Null
+    } catch {
+        $probeFailure = $_
+    } finally {
+        try {
+            $restoredUtc = Set-LastWriteTimeUtcAndVerify `
+                -Path $Path `
+                -Expected $originalUtc
+            if ($restoredUtc.Ticks -ne $originalUtc.Ticks) {
+                throw "$Description LastWriteTimeUtc restoration read-back mismatch."
+            }
+        } catch {
+            [void] $restorationFailures.Add($_.Exception.Message)
+        }
+    }
+
+    if ($restorationFailures.Count -gt 0) {
+        $restorationMessage = "$Description LastWriteTimeUtc restoration failed: " +
+            ($restorationFailures -join '; ')
+        if ($null -ne $probeFailure) {
+            throw "$($probeFailure.Exception.Message); $restorationMessage"
+        }
+        throw $restorationMessage
+    }
+    if ($null -ne $probeFailure) {
+        throw $probeFailure.Exception
+    }
+}
+
+function Assert-LastWriteTimeProbeFailureRestores {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [DateTime] $Original,
+
+        [Parameter(Mandatory = $true)]
+        [DateTime] $ProbeTimestamp,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Description
+    )
+
+    $failureObserved = $false
+    try {
+        Invoke-LastWriteTimeProbe `
+            -Path $Path `
+            -Original $Original `
+            -ProbeTimestamp $ProbeTimestamp `
+            -Description $Description `
+            -ProbeAction {
+                param($storedProbeUtc)
+                Assert-True `
+                    -Condition $false `
+                    -Message 'Intentional LastWriteTimeUtc probe assertion failure.'
+            } | Out-Null
+    } catch {
+        $failureObserved = $true
+        Assert-True `
+            -Condition ($_.Exception.Message -match 'Intentional LastWriteTimeUtc probe assertion failure') `
+            -Message "$Description failure-path probe failed for the wrong reason: $($_.Exception.Message)"
+    }
+    Assert-True `
+        -Condition $failureObserved `
+        -Message "$Description failure-path probe unexpectedly passed."
+
+    $restoredItem = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    $restoredUtc = [DateTime]::SpecifyKind([DateTime] $restoredItem.LastWriteTimeUtc, [DateTimeKind]::Utc)
+    $originalUtc = [DateTime]::SpecifyKind($Original, [DateTimeKind]::Utc)
+    Assert-True `
+        -Condition ($restoredUtc.Ticks -eq $originalUtc.Ticks) `
+        -Message "$Description LastWriteTimeUtc was not restored after the forced assertion failure."
+}
+
 function New-AssetFixture {
     param(
         [Parameter(Mandatory = $true)]
@@ -622,6 +722,12 @@ try {
 
     $timestampFilePath = Join-Path $destinationRoot 'bin\loom.bin'
     $timestampDirectoryPath = Join-Path $destinationRoot 'nested\deep'
+    $fileOriginalLastWriteTimeUtc = [DateTime]::SpecifyKind(
+        [DateTime] (Get-Item -LiteralPath $timestampFilePath -Force -ErrorAction Stop).LastWriteTimeUtc,
+        [DateTimeKind]::Utc)
+    $directoryOriginalLastWriteTimeUtc = [DateTime]::SpecifyKind(
+        [DateTime] (Get-Item -LiteralPath $timestampDirectoryPath -Force -ErrorAction Stop).LastWriteTimeUtc,
+        [DateTimeKind]::Utc)
     $snapshotBeforeLastWriteProbe = Get-SourceSnapshot -Root $destinationRoot
     $fileBeforeLastWriteProbe = Get-SnapshotEntry `
         -Snapshot $snapshotBeforeLastWriteProbe `
@@ -630,56 +736,94 @@ try {
         -Snapshot $snapshotBeforeLastWriteProbe `
         -Path 'nested\deep'
     $fileProbeTimestamp = [DateTime]::new(2001, 2, 3, 4, 5, 6, 0, [DateTimeKind]::Utc)
-    $storedFileProbeTimestamp = Set-LastWriteTimeUtcAndVerify `
+    Invoke-LastWriteTimeProbe `
         -Path $timestampFilePath `
-        -Expected $fileProbeTimestamp
-    $snapshotAfterFileLastWriteProbe = Get-SourceSnapshot -Root $destinationRoot
-    $fileAfterLastWriteProbe = Get-SnapshotEntry `
-        -Snapshot $snapshotAfterFileLastWriteProbe `
-        -Path 'bin\loom.bin'
-    Assert-SnapshotEntryChangedOnlyByLastWrite `
-        -Before $fileBeforeLastWriteProbe `
-        -After $fileAfterLastWriteProbe `
-        -Path 'bin\loom.bin'
+        -Original $fileOriginalLastWriteTimeUtc `
+        -ProbeTimestamp $fileProbeTimestamp `
+        -Description 'File' `
+        -ProbeAction {
+            param($storedFileProbeTimestamp)
+            $snapshotAfterFileLastWriteProbe = Get-SourceSnapshot -Root $destinationRoot
+            $fileAfterLastWriteProbe = Get-SnapshotEntry `
+                -Snapshot $snapshotAfterFileLastWriteProbe `
+                -Path 'bin\loom.bin'
+            Assert-SnapshotEntryChangedOnlyByLastWrite `
+                -Before $fileBeforeLastWriteProbe `
+                -After $fileAfterLastWriteProbe `
+                -Path 'bin\loom.bin'
+            Assert-True `
+                -Condition ((Get-SnapshotLastWriteTimeText -Entry $fileAfterLastWriteProbe) -eq (Get-StableUtcTimestamp -Value $storedFileProbeTimestamp)) `
+                -Message 'File snapshot did not serialize the verified UTC LastWriteTime value.'
+        }
+    $fileAfterLastWriteRestore = Get-Item -LiteralPath $timestampFilePath -Force -ErrorAction Stop
+    $fileAfterLastWriteRestoreUtc = [DateTime]::SpecifyKind(
+        [DateTime] $fileAfterLastWriteRestore.LastWriteTimeUtc,
+        [DateTimeKind]::Utc)
     Assert-True `
-        -Condition ((Get-SnapshotLastWriteTimeText -Entry $fileAfterLastWriteProbe) -eq (Get-StableUtcTimestamp -Value $storedFileProbeTimestamp)) `
-        -Message 'File snapshot did not serialize the verified UTC LastWriteTime value.'
-
-    $directoryProbeTimestamp = [DateTime]::new(2002, 3, 4, 5, 6, 7, 0, [DateTimeKind]::Utc)
-    $storedDirectoryProbeTimestamp = Set-LastWriteTimeUtcAndVerify `
-        -Path $timestampDirectoryPath `
-        -Expected $directoryProbeTimestamp
-    $snapshotAfterDirectoryLastWriteProbe = Get-SourceSnapshot -Root $destinationRoot
-    $directoryAfterLastWriteProbe = Get-SnapshotEntry `
-        -Snapshot $snapshotAfterDirectoryLastWriteProbe `
-        -Path 'nested\deep'
-    Assert-SnapshotEntryChangedOnlyByLastWrite `
-        -Before $directoryBeforeLastWriteProbe `
-        -After $directoryAfterLastWriteProbe `
-        -Path 'nested\deep'
-    Assert-True `
-        -Condition ((Get-SnapshotLastWriteTimeText -Entry $directoryAfterLastWriteProbe) -eq (Get-StableUtcTimestamp -Value $storedDirectoryProbeTimestamp)) `
-        -Message 'Directory snapshot did not serialize the verified UTC LastWriteTime value.'
+        -Condition ($fileAfterLastWriteRestoreUtc.Ticks -eq $fileOriginalLastWriteTimeUtc.Ticks) `
+        -Message 'File LastWriteTimeUtc was not restored before the idempotence rerun.'
 
     $lastWriteTimestampPattern = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{7}Z$'
-    $lastWriteSnapshotData = ConvertFrom-SnapshotJson -Snapshot $snapshotAfterDirectoryLastWriteProbe
-    $entriesMissingLastWrite = @($lastWriteSnapshotData.entries | Where-Object {
-        [string]::IsNullOrEmpty((Get-SnapshotLastWriteTimeText -Entry $_))
-    })
+    $directoryProbeTimestamp = [DateTime]::new(2002, 3, 4, 5, 6, 7, 0, [DateTimeKind]::Utc)
+    Invoke-LastWriteTimeProbe `
+        -Path $timestampDirectoryPath `
+        -Original $directoryOriginalLastWriteTimeUtc `
+        -ProbeTimestamp $directoryProbeTimestamp `
+        -Description 'Directory' `
+        -ProbeAction {
+            param($storedDirectoryProbeTimestamp)
+            $snapshotAfterDirectoryLastWriteProbe = Get-SourceSnapshot -Root $destinationRoot
+            $directoryAfterLastWriteProbe = Get-SnapshotEntry `
+                -Snapshot $snapshotAfterDirectoryLastWriteProbe `
+                -Path 'nested\deep'
+            Assert-SnapshotEntryChangedOnlyByLastWrite `
+                -Before $directoryBeforeLastWriteProbe `
+                -After $directoryAfterLastWriteProbe `
+                -Path 'nested\deep'
+            Assert-True `
+                -Condition ((Get-SnapshotLastWriteTimeText -Entry $directoryAfterLastWriteProbe) -eq (Get-StableUtcTimestamp -Value $storedDirectoryProbeTimestamp)) `
+                -Message 'Directory snapshot did not serialize the verified UTC LastWriteTime value.'
+            $lastWriteSnapshotData = ConvertFrom-SnapshotJson -Snapshot $snapshotAfterDirectoryLastWriteProbe
+            $entriesMissingLastWrite = @($lastWriteSnapshotData.entries | Where-Object {
+                [string]::IsNullOrEmpty((Get-SnapshotLastWriteTimeText -Entry $_))
+            })
+            Assert-True `
+                -Condition ($entriesMissingLastWrite.Count -eq 0) `
+                -Message 'Complete-tree snapshot omitted a deterministic LastWriteTimeUtc value.'
+            Assert-True `
+                -Condition (@($lastWriteSnapshotData.entries | Where-Object {
+                        (Get-SnapshotLastWriteTimeText -Entry $_) -notmatch $lastWriteTimestampPattern
+                    }).Count -eq 0) `
+                -Message 'Complete-tree snapshot LastWriteTimeUtc values were not stable UTC strings.'
+            Assert-True `
+                -Condition (@($lastWriteSnapshotData.entries | Where-Object {
+                        $_.PSObject.Properties.Name -contains 'lastAccessTimeUtc'
+                    }).Count -eq 0) `
+                -Message 'Complete-tree snapshot included excluded LastAccessTimeUtc state.'
+        }
+    $directoryAfterLastWriteRestore = Get-Item -LiteralPath $timestampDirectoryPath -Force -ErrorAction Stop
+    $directoryAfterLastWriteRestoreUtc = [DateTime]::SpecifyKind(
+        [DateTime] $directoryAfterLastWriteRestore.LastWriteTimeUtc,
+        [DateTimeKind]::Utc)
     Assert-True `
-        -Condition ($entriesMissingLastWrite.Count -eq 0) `
-        -Message 'Complete-tree snapshot omitted a deterministic LastWriteTimeUtc value.'
+        -Condition ($directoryAfterLastWriteRestoreUtc.Ticks -eq $directoryOriginalLastWriteTimeUtc.Ticks) `
+        -Message 'Directory LastWriteTimeUtc was not restored before the idempotence rerun.'
+
+    Assert-LastWriteTimeProbeFailureRestores `
+        -Path $timestampFilePath `
+        -Original $fileOriginalLastWriteTimeUtc `
+        -ProbeTimestamp ([DateTime]::new(2003, 4, 5, 6, 7, 8, 0, [DateTimeKind]::Utc)) `
+        -Description 'File'
+    Assert-LastWriteTimeProbeFailureRestores `
+        -Path $timestampDirectoryPath `
+        -Original $directoryOriginalLastWriteTimeUtc `
+        -ProbeTimestamp ([DateTime]::new(2004, 5, 6, 7, 8, 9, 0, [DateTimeKind]::Utc)) `
+        -Description 'Directory'
+    $snapshotAfterLastWriteRestoration = Get-SourceSnapshot -Root $destinationRoot
     Assert-True `
-        -Condition (@($lastWriteSnapshotData.entries | Where-Object {
-                (Get-SnapshotLastWriteTimeText -Entry $_) -notmatch $lastWriteTimestampPattern
-            }).Count -eq 0) `
-        -Message 'Complete-tree snapshot LastWriteTimeUtc values were not stable UTC strings.'
-    Assert-True `
-        -Condition (@($lastWriteSnapshotData.entries | Where-Object {
-                $_.PSObject.Properties.Name -contains 'lastAccessTimeUtc'
-            }).Count -eq 0) `
-        -Message 'Complete-tree snapshot included excluded LastAccessTimeUtc state.'
-    Write-Output 'TEST_OK tree snapshot detects file and directory LastWriteTimeUtc changes without content mutation and excludes LastAccessTimeUtc'
+        -Condition ($snapshotBeforeLastWriteProbe -eq $snapshotAfterLastWriteRestoration) `
+        -Message 'LastWriteTimeUtc probes changed the complete destination snapshot after restoration.'
+    Write-Output 'TEST_OK file and directory LastWriteTimeUtc restoration before rerun and after forced probe assertion failures'
     $script:passCount++
 
     $destinationSnapshotBeforeRerun = Get-SourceSnapshot -Root $destinationRoot
