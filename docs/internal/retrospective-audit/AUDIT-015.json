@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "slice_id": "AUDIT-015",
+  "baseline_sha": "f6273467710f596276183a808f34333d6bf3457e",
+  "baseline_tree": "d1d72d809024de69c5ceac740b7c0fa4b27f73b4",
+  "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
+  "paths_sha256": "2e3a6aaa024a3eeb8633090aa646336afaf04c867de6271208447890687e2ab8",
+  "fixed_upstream": {
+    "commit": "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+    "tree": "db97f4d23f60dfd5670662872ab68d9309779408",
+    "boundary": "The fixed upstream tree contains product behavior but not these downstream internal cache-preparation scripts. The helper is a necessary modern Player-readiness replacement rather than upstream product behavior; no upstream anchor applies to either owned script, so both entries record explicit empty anchor lists."
+  },
+  "scope": {
+    "path_count": 2,
+    "normalization": "Sorted UTF-8 relative paths joined by LF with no trailing LF.",
+    "implementation_paths": [
+      "scripts/internal/prepare-player-cache.ps1",
+      "scripts/internal/test-player-cache-preparation.ps1"
+    ],
+    "changed_paths": [
+      "scripts/internal/test-player-cache-preparation.ps1",
+      "docs/internal/retrospective-audit/AUDIT-015.json"
+    ]
+  },
+  "entries": [
+    {
+      "path": "scripts/internal/prepare-player-cache.ps1",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [],
+      "disposition": "NO_FINDING"
+    },
+    {
+      "path": "scripts/internal/test-player-cache-preparation.ps1",
+      "classification": "INDEPENDENT_REIMPLEMENTATION",
+      "upstream_anchors": [],
+      "finding_ids": [
+        "AUDIT-015-001"
+      ],
+      "disposition": "RESOLVED"
+    }
+  ],
+  "findings": [
+    {
+      "id": "AUDIT-015-001",
+      "path": "scripts/internal/test-player-cache-preparation.ps1",
+      "severity": "HIGH",
+      "summary": "The integrated AUDIT-011 causal LastWriteTimeUtc probes changed one destination file and one directory without restoring their original timestamps before the idempotence rerun.",
+      "upstream_behavior": "The fixed upstream commit has no cache-preparation or synthetic audit equivalent. This is downstream workflow behavior and is intentionally replaced for the modern Fabric Player-readiness boundary.",
+      "incompatibility_at_base": "At exact master base f6273467710f596276183a808f34333d6bf3457e, the file and directory probes wrote and read back the fixed 2001-02-03T04:05:06Z and 2002-03-04T05:06:07Z values, then proceeded directly to the rerun snapshot without restoring the originals. The base suite still exited 0 because that rerun snapshot was taken after the mutations, making the no-mutation comparison a false positive.",
+      "replacement": "Capture the original UTC values before each probe, run the existing snapshot assertions after the causal write, and restore the original value in an exception-safe finally path. Set-LastWriteTimeUtcAndVerify verifies each restoration read-back. Forced file and directory assertion failures exercise the same path, and a complete post-restoration snapshot must equal the pre-probe snapshot before idempotence is tested.",
+      "resolution_scope": "DOWNSTREAM_SYNTHETIC_AUDIT_HARNESS_ONLY",
+      "cross_item_dependencies": [],
+      "preserved_contract": [
+        "Complete snapshot retains path set, file/directory type, non-access attributes, reparse state, LastWriteTimeUtc, and file content hash/size.",
+        "LastAccessTimeUtc remains excluded and is never compared.",
+        "prepare-player-cache.ps1 is unchanged, retaining canonical/reparse/path escape checks, bounded owned-helper cleanup, official index/object size and SHA-1 checks, and live lock/daemon exclusion.",
+        "Existing synthetic negative cases and pinned fixture/index/object identities remain unchanged."
+      ],
+      "automated_evidence": [
+        "Exact-base reproduction before editing: pwsh.exe -NoLogo -NoProfile -File .\\scripts\\internal\\test-player-cache-preparation.ps1 exited 0 with PLAYER_CACHE_PREPARATION_TESTS_OK count=17, while a disposable timestamp trace recorded originalsRestoredBeforeRerun=false and causalProbeLeavesMutation=true after the two causal writes.",
+        "Candidate focused suite: pwsh.exe -NoLogo -NoProfile -File .\\scripts\\internal\\test-player-cache-preparation.ps1 exited 0 with PLAYER_CACHE_PREPARATION_TESTS_OK count=17, including verified file/directory restoration before rerun, forced assertion-failure restoration, and complete post-restoration snapshot equality.",
+        "Both executable paths parsed successfully through the PowerShell AST parser; git diff --check passed.",
+        "The candidate source implementation is 99b28eb56ee9459bfab81d109d2e53493b97783a with tree b0e6a8810ed3bde61511ddc33e47449a4918cca5; only the test harness changed in that implementation commit.",
+        "No product, Player, GUI, gameplay input, telemetry, updater, Discord, Proxy, DevAuth, OneConfig, Forge, or unrelated infrastructure path was changed."
+      ],
+      "status": "RESOLVED"
+    }
+  ],
+  "verification": {
+    "resource_profile": "HEAVY",
+    "pending_command": null,
+    "sha_model": "candidate_sha/candidate_tree identify the executable implementation commit; the audit report is a later publication commit on the same branch.",
+    "implementation_sha": "99b28eb56ee9459bfab81d109d2e53493b97783a",
+    "implementation_tree": "b0e6a8810ed3bde61511ddc33e47449a4918cca5",
+    "candidate_sha": "99b28eb56ee9459bfab81d109d2e53493b97783a",
+    "candidate_tree": "b0e6a8810ed3bde61511ddc33e47449a4918cca5",
+    "branch": "codex/audit-015-lastwrite-restoration",
+    "pull_request": "https://github.com/Hylfrd/FarmHelper/pull/16",
+    "commands": [
+      "Exact-base reproduction before editing: pwsh.exe -NoLogo -NoProfile -File .\\scripts\\internal\\test-player-cache-preparation.ps1; exit 0, false-positive timestamp trace recorded.",
+      "Candidate focused PowerShell synthetic suite run twice: exit 0; PLAYER_CACHE_PREPARATION_TESTS_OK count=17 on both runs.",
+      "PowerShell AST parse for scripts/internal/prepare-player-cache.ps1 and scripts/internal/test-player-cache-preparation.ps1: passed.",
+      "git diff --check: passed.",
+      ".\\gradlew.bat --no-daemon --console=plain test using worktree-local GRADLE_USER_HOME: BUILD SUCCESSFUL in 5m21s.",
+      ".\\gradlew.bat --offline --no-daemon --console=plain verifyDependencyProvenance: BUILD SUCCESSFUL in 11s; 3 runtime dependencies, 1 platform dependency, Loom 1.17.17.",
+      ".\\gradlew.bat --offline --no-daemon --console=plain check: BUILD SUCCESSFUL in 8s.",
+      ".\\gradlew.bat --offline --no-daemon --console=plain clean build: BUILD SUCCESSFUL in 35s; 12 actionable tasks executed."
+    ],
+    "ci": {
+      "status": "PENDING",
+      "pull_request_number": 16,
+      "pending_checks": 8,
+      "workflow_runs": [
+        33318283667,
+        33318294679
+      ],
+      "observed": "GitHub reported Linux/build, Linux/test, Windows/build, and Windows/test pending for both workflow runs when this report was prepared."
+    },
+    "resource_observations": {
+      "gradle_user_home": "C:\\Users\\Apostrophe\\.codex\\worktrees\\9eea\\farm-helper\\.gradle\\audit-015-user-home",
+      "java": "BellSoft Liberica 25.0.3",
+      "gradle": "9.5.1",
+      "daemon_mode": "All Gradle commands used --no-daemon; Gradle forked and stopped its required single-use daemon.",
+      "wrapper_bootstrap": "The first isolated wrapper download did not produce bytes and was terminated after its exact child process was verified; the existing extracted Gradle 9.5.1 distribution was copied into the isolated wrapper cache without copying locks or daemon state.",
+      "user_cache_mutated": false,
+      "copied_locks_or_daemon_state": false,
+      "oom": false,
+      "disk_saturation": false,
+      "repeated_resource_failure": false
+    },
+    "forbidden_boundaries": [
+      "No master push or history rewrite was performed.",
+      "No progress.md, control, test.md, product source, or unrelated path was edited.",
+      "No current Player task, GUI, gameplay input, or live-client interaction was performed."
+    ],
+    "blockers": []
+  }
+}
