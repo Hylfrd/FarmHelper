@@ -49,11 +49,11 @@ public final class ClientSnapshotCapture {
                 ? Observation.present(playerSnapshot(client.player))
                 : Observation.absent();
         Observation<ConnectionSnapshot> connection = connection(client, worldReady);
-        Observation<ScreenSnapshot> screen = screen(client.screen);
+        Observation<ScreenSnapshot> screen = captureScreen(client.screen);
         return new ClientSnapshot(player, world, connection, screen);
     }
 
-    private Observation<ScreenSnapshot> screen(Screen current) {
+    Observation<ScreenSnapshot> captureScreen(Screen current) {
         if (current == null) {
             observeScreenIdentity(null, null);
             return Observation.absent();

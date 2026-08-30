@@ -49,7 +49,7 @@ public final class ClientCommandScreenCloseGuard {
             clearExpectedClose();
         }
 
-        lifecycle.observeScreen(screen);
+        lifecycle.observeScreen(screen, screen.isPresent() && !chatScreen);
         if (screen.isPresent() && chatScreen && currentScreen != null) {
             observedChatScreen = currentScreen;
             observedChatScreenIdentity = screen.get().identity();

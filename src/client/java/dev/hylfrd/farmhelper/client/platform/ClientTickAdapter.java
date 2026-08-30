@@ -30,7 +30,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.network.chat.Component;
 
 import java.util.Objects;
@@ -46,6 +45,7 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
     private final ClientGameTextSource gameText;
     private final ClientTickPipeline pipeline;
     private final ClientLifecycleSequencer clientLifecycle;
+    private final ClientScreenLifecycleAdapter screenLifecycle;
     private final ClientCommandScreenCloseGuard commandScreenClose;
 
     ClientTickAdapter(
@@ -54,25 +54,30 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
             ClientSnapshotCapture snapshots,
             ClientGameTextSource gameText,
             ClientTickPipeline pipeline,
+            ClientScreenLifecycleAdapter screenLifecycle,
             ClientCommandScreenCloseGuard commandScreenClose) {
         this.client = Objects.requireNonNull(client, "client");
         this.runtime = Objects.requireNonNull(runtime, "runtime");
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
         this.gameText = Objects.requireNonNull(gameText, "gameText");
         this.pipeline = Objects.requireNonNull(pipeline, "pipeline");
+        this.screenLifecycle = Objects.requireNonNull(screenLifecycle, "screenLifecycle");
         this.commandScreenClose = Objects.requireNonNull(commandScreenClose, "commandScreenClose");
         clientLifecycle = new ClientLifecycleSequencer(runtime, gameText, commandScreenClose::clear);
     }
 
-    public static void register(
+    public static ClientScreenLifecycleAdapter register(
             FarmHelperClientRuntime runtime,
             ClientCommandScreenCloseGuard commandScreenClose
     ) {
         Minecraft client = Minecraft.getInstance();
+        ClientSnapshotCapture snapshots = new ClientSnapshotCapture();
+        ClientScreenLifecycleAdapter screenLifecycle = new ClientScreenLifecycleAdapter(
+                runtime, commandScreenClose, snapshots);
         ClientTickAdapter adapter = new ClientTickAdapter(
-                client, runtime, new ClientSnapshotCapture(),
+                client, runtime, snapshots,
                 new MinecraftGameTextSnapshotSource(client), new ClientTickPipeline(),
-                commandScreenClose);
+                screenLifecycle, commandScreenClose);
 
         ClientTickEvents.END_CLIENT_TICK.register(ignored -> adapter.tick());
         ClientLevelEvents.AFTER_CLIENT_LEVEL_CHANGE.register(
@@ -88,6 +93,7 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(
                 ignored -> adapter.dispatch(adapter.clientLifecycle::clientStopping));
+        return screenLifecycle;
     }
 
     /** Runs the fixed vanilla system-packet boundary used by the GAME callback. */
@@ -196,11 +202,8 @@ public final class ClientTickAdapter implements ClientTickPipeline.Actions {
 
     @Override
     public void observeSnapshotLifecycle(ClientSnapshot snapshot) {
-        runtime.observeMacroScreen(snapshot.screen());
+        screenLifecycle.observeSnapshot(snapshot, client.screen);
         clientLifecycle.observeConnection(snapshot.connection());
-        commandScreenClose.observeScreen(
-                snapshot.screen(), client.screen, client.screen instanceof ChatScreen,
-                runtime.lifecycle(), runtime.ownershipGeneration());
     }
 
     @Override

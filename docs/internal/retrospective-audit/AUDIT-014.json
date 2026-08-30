@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "slice_id": "AUDIT-014",
+  "classification": "PRODUCT_FAIL/REMEDIATED",
+  "product_change": "TERMINAL_SCREEN_BOUNDARY_CLEANUP",
+  "baseline_sha": "06d291c1f92ce59c96454fced06d2a6250e150c4",
+  "baseline_tree": "b6a7219c3a673788b21d9463499a5d26b828f230",
+  "baseline_ci": {
+    "run": 32781530334,
+    "conclusion": "success"
+  },
+  "scope_manifest_sha256": "dee51e602834a18e9db858c1a90c9d437c828adba36ead360ff41fa6ec3fc904",
+  "scope_paths_sha256": "d2065503d6b1f96cd7d392c712d7e52532680f7713ebd1715c1d1c31a696e176",
+  "scope_paths_digest_algorithm": "SHA-256 of UTF-8 sorted repository-relative paths joined by LF with a final LF",
+  "scope_paths": [
+    "docs/internal/retrospective-audit/AUDIT-014.json",
+    "src/client/java/dev/hylfrd/farmhelper/client/FarmHelperClient.java",
+    "src/client/java/dev/hylfrd/farmhelper/client/platform/ClientCommandScreenCloseGuard.java",
+    "src/client/java/dev/hylfrd/farmhelper/client/platform/ClientScreenLifecycleAdapter.java",
+    "src/client/java/dev/hylfrd/farmhelper/client/platform/ClientSnapshotCapture.java",
+    "src/client/java/dev/hylfrd/farmhelper/client/platform/ClientTickAdapter.java",
+    "src/client/java/dev/hylfrd/farmhelper/client/platform/mixin/MinecraftSetScreenMixin.java",
+    "src/client/java/dev/hylfrd/farmhelper/client/runtime/FarmHelperClientRuntime.java",
+    "src/client/resources/farmhelper.client.mixins.json",
+    "src/main/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientCancellationReason.java",
+    "src/main/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientRuntimeLifecycle.java",
+    "src/test/java/dev/hylfrd/farmhelper/client/platform/ClientScreenLifecycleAdapterTest.java",
+    "src/test/java/dev/hylfrd/farmhelper/client/ui/command/ClientCommandScreenCloseTest.java",
+    "src/test/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientRuntimeLifecycleTest.java"
+  ],
+  "fixed_upstream": {
+    "commit": "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a",
+    "tree": "dfbaaf9ce75f9adc625352396acaa9138a8b97f8",
+    "relevant_behavior": "The fixed upstream pauses the active macro while a client screen is present, stops movement in its client tick guard, and resumes through the explicit MacroHandler lifecycle boundary. The modern 26.1.2 client has no equivalent downstream screen event adapter in the fixed upstream.",
+    "anchors": [
+      "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#pauseMacro",
+      "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#resumeMacro",
+      "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick",
+      "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/mixin/gui/MixinGuiContainer.java#drawScreen_after"
+    ]
+  },
+  "modern_client_boundary": {
+    "minecraft": "26.1.2",
+    "fabric_loader": "0.19.3",
+    "fabric_api": "0.153.0+26.1.2",
+    "loom": "1.17.17",
+    "vanilla_method": "Minecraft#setScreen(Lnet/minecraft/client/gui/screens/Screen;)V",
+    "injection_point": "TAIL",
+    "resolved_jar": ".gradle/loom-cache/minecraftMaven/net/minecraft/minecraft-clientOnly-043a8b3edf/26.1.2/minecraft-clientOnly-043a8b3edf-26.1.2.jar",
+    "replacement": "MinecraftSetScreenMixin forwards the authoritative post-mutation setScreen boundary to a shared ClientScreenLifecycleAdapter. The adapter shares ClientSnapshotCapture identity state with the tick fallback, emits SCREEN_OPEN for non-chat present-screen transitions, and leaves only the exact command-armed chat close exempt. SCREEN_OPEN terminal fanout stops macro, desync, inventory, navigation, rotation, and managed input ownership; settings save is therefore allowed only after the macro is stopped."
+  },
+  "entries": [
+    {
+      "path": "src/client/java/dev/hylfrd/farmhelper/client/FarmHelperClient.java",
+      "classification": "INDEPENDENT_CLIENT_ADAPTER",
+      "upstream_anchors": [],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "7979513F6D0ED525038BCF8D45AD3D8A9183E1F99DF68EC7F68A3776F5D407C5",
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/client/java/dev/hylfrd/farmhelper/client/platform/ClientCommandScreenCloseGuard.java",
+      "classification": "INDEPENDENT_CLIENT_ADAPTER",
+      "upstream_anchors": [],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "CC7E1C3DBABD0B02C50BA69D0B0A4AEBC460DE60594B28311C57DE42149EF2BC",
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/client/java/dev/hylfrd/farmhelper/client/platform/ClientScreenLifecycleAdapter.java",
+      "classification": "INDEPENDENT_CLIENT_ADAPTER",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#pauseMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#resumeMacro"
+      ],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "78B365B692E752F6C18703B14C7A5179951EBF8879F3B6BA583808926AD7DDF8",
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/client/java/dev/hylfrd/farmhelper/client/platform/ClientSnapshotCapture.java",
+      "classification": "INDEPENDENT_CLIENT_ADAPTER",
+      "upstream_anchors": [],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "200E5354E5438F78CB19ABB357678EE4DEFCB4BF32E460C35BC8BF941A95DDFB",
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/client/java/dev/hylfrd/farmhelper/client/platform/ClientTickAdapter.java",
+      "classification": "INDEPENDENT_CLIENT_ADAPTER",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick"
+      ],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "BFC4FAFD5BAE4A4AEB4C8C0C07894B8ECF649E93483F2C36B83AF6E8F3724D3C",
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/client/java/dev/hylfrd/farmhelper/client/platform/mixin/MinecraftSetScreenMixin.java",
+      "classification": "MODERN_BOUNDARY_REPLACEMENT",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/mixin/gui/MixinGuiContainer.java#drawScreen_after"
+      ],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "8557BADEA68B1705551C257514B55668C95688E27A44754C822E9A84F49E7DC1",
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/client/java/dev/hylfrd/farmhelper/client/runtime/FarmHelperClientRuntime.java",
+      "classification": "INDEPENDENT_RUNTIME_FANOUT",
+      "upstream_anchors": [
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#pauseMacro",
+        "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#resumeMacro"
+      ],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "3BF5AC5A30F431324BDC36EDBDBD70F4E2B7B4EE350959931BD8F1252CFF9EF4",
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/client/resources/farmhelper.client.mixins.json",
+      "classification": "MODERN_BOUNDARY_REGISTRATION",
+      "upstream_anchors": [],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "3480500A9D64F3E26E5435F88FADF9CEF38E2FB1BAA7C4793A109B9A036BEFAF",
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientCancellationReason.java",
+      "classification": "INDEPENDENT_RUNTIME_BOUNDARY",
+      "upstream_anchors": [],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "6FD57268B9B22A17F4523DB7B0B337EBC6603B7C18A446279398EF2723FCC458",
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/main/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientRuntimeLifecycle.java",
+      "classification": "INDEPENDENT_RUNTIME_BOUNDARY",
+      "upstream_anchors": [],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "06CF08D1071A0A8745B3D516E1083C969D242D35E2B02D9A3083A92E4E32430F",
+      "disposition": "RESOLVED"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/client/platform/ClientScreenLifecycleAdapterTest.java",
+      "classification": "AUDIT_TEST_SEAM",
+      "upstream_anchors": [],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "AB8C5CD2C540097E62450578F74BB427AE69FF46C0D5A79FF27E10FD0961F55D",
+      "disposition": "ADDED_AUDIT_EVIDENCE"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/client/ui/command/ClientCommandScreenCloseTest.java",
+      "classification": "AUDIT_TEST_SEAM",
+      "upstream_anchors": [],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "0FD930944BD2E25C072364BA1E9C1451651D1F56AD26A5F7A3035B324268CA7F",
+      "disposition": "UPDATED_AUDIT_EVIDENCE"
+    },
+    {
+      "path": "src/test/java/dev/hylfrd/farmhelper/runtime/lifecycle/ClientRuntimeLifecycleTest.java",
+      "classification": "AUDIT_TEST_SEAM",
+      "upstream_anchors": [],
+      "finding_ids": ["AUDIT-014-001"],
+      "file_sha256": "954057E526162DE6BB3BB5AF00CF72D1EE5DD289286EB2DDBE27C012D461923F",
+      "disposition": "ADDED_AUDIT_EVIDENCE"
+    }
+  ],
+  "findings": [
+    {
+      "id": "AUDIT-014-001",
+      "path": "src/client/java/dev/hylfrd/farmhelper/client/platform/mixin/MinecraftSetScreenMixin.java",
+      "severity": "P0-13/P0-15",
+      "summary": "A real non-chat Minecraft#setScreen transition did not reach a terminal client ownership boundary, leaving the SCREEN_OPEN macro lease stale after inventory and Escape pause flows.",
+      "upstream_behavior": "Fixed upstream keeps the macro out of its active tick path while a screen is present and exposes explicit pause/resume lifecycle operations. Its GUI container draw hook is a screen-adjacent integration point, not a modern Minecraft 26.1.2 setScreen lifecycle boundary.",
+      "incompatibility": "The current-master client observed screen state from the normal tick path and routed screen identity changes through SCREEN_CHANGED. The runtime deliberately preserves macro state for SCREEN_CHANGED, so the authoritative setScreen transition did not revoke terminal ownership. The parent R4 captures then showed no active rotation and no held input while enabled=true, state=paused, and pauses=[SCREEN_OPEN].",
+      "replacement": "Inject at the exact mapped Minecraft#setScreen(Screen) TAIL, forward the post-mutation client-thread state through one shared adapter, and retain the tick snapshot as a deduplicated fallback. Emit SCREEN_OPEN for every non-chat present-screen boundary, map it to terminal stop and ownership cleanup, and preserve only the exact command-armed chat close as a lease-preserving transition. Repeated identities and repeated closes remain idempotent.",
+      "parent_failure_evidence": {
+        "p0_15_escape_pause_return": {
+          "milestone": "1cfb12ed1493614ea8dc2aa44925cd48852f654e",
+          "base_sha": "06d291c1f92ce59c96454fced06d2a6250e150c4",
+          "base_tree": "b6a7219c3a673788b21d9463499a5d26b828f230",
+          "sequence": "enabled macro -> real Escape pause opens -> return to gameplay",
+          "screen_behavior": "Pause screen opened and gameplay returned normally",
+          "rotation_active": false,
+          "held_input": [],
+          "enabled": true,
+          "state": "paused",
+          "pauses": ["SCREEN_OPEN"],
+          "classification": "PRODUCT_FAIL"
+        },
+        "p0_13_inventory_open_close": {
+          "milestone": "1cfb12ed1493614ea8dc2aa44925cd48852f654e",
+          "base_sha": "06d291c1f92ce59c96454fced06d2a6250e150c4",
+          "base_tree": "b6a7219c3a673788b21d9463499a5d26b828f230",
+          "sequence": "enabled macro -> real inventory screen opens -> inventory closes",
+          "screen_behavior": "Inventory opened and closed normally with no ghost UI",
+          "rotation_active": false,
+          "held_input": [],
+          "enabled": true,
+          "state": "paused",
+          "pauses": ["SCREEN_OPEN"],
+          "classification": "PRODUCT_FAIL"
+        }
+      },
+      "target_evidence": {
+        "boundary_wiring": "MinecraftSetScreenMixin targets setScreen(Lnet/minecraft/client/gui/screens/Screen;)V at TAIL and is registered in farmhelper.client.mixins.json; the mapped descriptor was verified against the resolved 26.1.2 client jar.",
+        "focused_tests": [
+          "ClientScreenLifecycleAdapterTest.nonChatSetScreenBoundaryStopsMacroAndDrainsTransientOwners",
+          "ClientScreenLifecycleAdapterTest.expectedChatCommandCloseRemovesOnlyTheScreenPauseLease",
+          "ClientScreenLifecycleAdapterTest.settingsBoundaryStopsBeforeSaveAndLeavesNoStalePauseState",
+          "ClientScreenLifecycleAdapterTest.pauseScreenBoundaryStopsAndRemainsIdempotentAcrossClose",
+          "ClientRuntimeLifecycleTest.terminalScreenOpenUsesTheDedicatedBoundaryReason",
+          "ClientCommandScreenCloseTest.nonCommandAndMismatchedScreenBoundariesStillCancelOwners"
+        ],
+        "asserted_state": "Non-chat inventory, pause, and settings boundaries stop the macro, clear SCREEN_OPEN, cancel inventory/task/rotation/input ownership, and permit settings save; the exact expected chat close preserves the running macro and its owned input.",
+        "real_client_follow_up": "The production path uses the real Minecraft#setScreen boundary. Per the assignment boundary, Player-owned P0-13/P0-15 reruns remain a distinct follow-up after candidate publication; this Builder did not perform GUI, input, or Player actions."
+      },
+      "forbidden_boundaries": [
+        "No AUDIT-012 key dispatch path was changed.",
+        "No AUDIT-013 config-save production path was changed; only the affected post-screen precondition is asserted through the lifecycle adapter test.",
+        "No Player, control, input, progress, test.md, or unrelated lifecycle-core path was edited.",
+        "No user-owned Gradle cache was used for verification; the Gradle home was isolated under the task temp directory."
+      ],
+      "status": "RESOLVED_PENDING_PARENT_REAL_CLIENT_RERUN"
+    }
+  ],
+  "verification": {
+    "resource_profile": "STANDARD_CLIENT_BOUNDARY",
+    "sha_model": "candidate_sha/candidate_tree and implementation_sha/implementation_tree identify the executable implementation commit; publication_sha/publication_tree identify the separate audit-record publication commit. The publication fields point to the pre-existing report-bearing checkpoint because this follow-up report repair cannot truthfully self-reference its own future commit.",
+    "implementation_sha": "673111f463d4fe3ebb360b271e14945f1c1d9d1e",
+    "implementation_tree": "bcc9e692243edabad27c9d6b149398a0975f9c40",
+    "candidate_sha": "673111f463d4fe3ebb360b271e14945f1c1d9d1e",
+    "candidate_tree": "bcc9e692243edabad27c9d6b149398a0975f9c40",
+    "candidate_artifact": "build/libs/FarmHelper-26.1.2.jar",
+    "candidate_artifact_sha256": "0719FDB2AEDF54B74331C3F449B01707092D88053B8DF6394891DA3D96F8C821",
+    "candidate_artifact_size_bytes": 893721,
+    "candidate_artifact_entries": 500,
+    "deterministic_archive_audit": "DETERMINISTIC_JAR_OK",
+    "branch": "codex/audit-screen-pause-lifecycle",
+    "pull_request": "https://github.com/Hylfrd/FarmHelper/pull/15",
+    "publication_sha": "c0d9e3d808a612e18658e362e6ed8bfcb2b5bb11",
+    "publication_tree": "2b9464c4d1b1d933d99116a48b72404fed3e8ead",
+    "publication_evidence": {
+      "report_bearing_checkpoint_sha": "c0d9e3d808a612e18658e362e6ed8bfcb2b5bb11",
+      "report_bearing_checkpoint_tree": "2b9464c4d1b1d933d99116a48b72404fed3e8ead",
+      "report_bearing_checkpoint_blob": "5969af68a1788f966ca2b247b32056c9b2643a1d",
+      "role": "The checkpoint is the separate audit-record publication commit for the executable implementation. This correction deliberately does not claim the future correction commit as its own publication identity."
+    },
+    "publication_checkpoint_ci": {
+      "head_sha": "c0d9e3d808a612e18658e362e6ed8bfcb2b5bb11",
+      "tree": "2b9464c4d1b1d933d99116a48b72404fed3e8ead",
+      "push_run": 32789407877,
+      "pull_request_run": 32789446423,
+      "conclusion": "success"
+    },
+    "current_report_tip_evidence": "Current report-tip exact-SHA CI and Review are external GitHub/Reviewer evidence and are intentionally not self-recorded inside the content-addressed report commit.",
+    "java": "25.0.3",
+    "gradle": "9.5.1",
+    "gradle_user_home": "C:/Users/Apostrophe/AppData/Local/Temp/farmhelper-audit-014-gradle",
+    "daemon_mode": "Gradle commands used --no-daemon; each required build used a single-use daemon that was stopped by Gradle.",
+    "scope_file_hashes": "The 13 implementation/test hashes are SHA-256s of the exact Git blob bytes from implementation tree bcc9e692243edabad27c9d6b149398a0975f9c40; the report itself is included in scope_paths and excluded from its own entry hash to avoid recursive identity. The report-bearing publication checkpoint is c0d9e3d808a612e18658e362e6ed8bfcb2b5bb11/tree 2b9464c4d1b1d933d99116a48b72404fed3e8ead; this repair does not self-reference its future commit.",
+    "commands_completed": [
+      ".\\gradlew.bat --no-daemon --console=plain compileJava compileClientJava test --rerun-tasks with the three focused lifecycle classes: PASS; 17 tests, 0 failures, 0 errors, 0 skipped",
+      ".\\gradlew.bat --no-daemon --console=plain test --rerun-tasks: PASS; 687 tests, 0 failures, 0 errors, 0 skipped",
+      ".\\gradlew.bat --no-daemon --console=plain check validateAccessWidener --rerun-tasks: PASS; validateAccessWidener NO-SOURCE; dependency provenance verified 3 runtime dependencies, 1 platform dependency, Loom 1.17.17",
+      ".\\gradlew.bat --no-daemon --console=plain clean build --rerun-tasks (run 1): PASS; dependency provenance and access-widener gates passed",
+      ".\\gradlew.bat --no-daemon --console=plain clean build --rerun-tasks (run 2): PASS; dependency provenance and access-widener gates passed",
+      "scripts/internal/audit-packaged-jar.ps1 -FirstArtifact <isolated task-temp artifact>: PASS; DETERMINISTIC_JAR_OK, 893721 bytes, SHA-256 0719FDB2AEDF54B74331C3F449B01707092D88053B8DF6394891DA3D96F8C821, 500 entries"
+    ],
+    "commands_pending": [
+      "Parent-owned real-client P0-13 inventory open/close and P0-15 Escape pause/return rerun against the published candidate"
+    ],
+    "status": "LOCAL_GATES_PASSED_AND_PUBLICATION_CHECKPOINT_CI_PASSED_PENDING_PARENT_REAL_CLIENT_RERUN"
+  }
+}

@@ -603,6 +603,7 @@ public final class FarmHelperClientRuntime {
         }
         MacroTerminalReason terminal = switch (reason) {
             case MANUAL_STOP -> MacroTerminalReason.MANUAL_STOP;
+            case SCREEN_OPEN -> MacroTerminalReason.MANUAL_STOP;
             case WORLD_LOAD, WORLD_UNLOAD -> disconnectLatched
                     ? MacroTerminalReason.DISCONNECT
                     : MacroTerminalReason.WORLD_CHANGE;
@@ -617,6 +618,7 @@ public final class FarmHelperClientRuntime {
 
     private void cancelDesync(ClientCancellationReason reason) {
         switch (reason) {
+            case SCREEN_OPEN -> desyncChecker.stop();
             case SCREEN_CHANGED -> desyncChecker.pause();
             case WORLD_LOAD, WORLD_UNLOAD -> desyncChecker.worldChanged(lifecycle.worldEpoch());
             case DISCONNECT, CONNECTION_UNAVAILABLE -> desyncChecker.connectionLost();
@@ -627,6 +629,7 @@ public final class FarmHelperClientRuntime {
     private void cancelNavigation(ClientCancellationReason reason) {
         NavigationCancellationReason terminal = switch (reason) {
             case MANUAL_STOP -> NavigationCancellationReason.STOPPED;
+            case SCREEN_OPEN -> NavigationCancellationReason.SCREEN_CHANGED;
             case SCREEN_CHANGED -> NavigationCancellationReason.SCREEN_CHANGED;
             case WORLD_LOAD, WORLD_UNLOAD -> disconnectLatched
                     ? NavigationCancellationReason.DISCONNECTED
@@ -640,7 +643,8 @@ public final class FarmHelperClientRuntime {
     }
 
     private void resetServerHeartbeat(ClientCancellationReason reason) {
-        if (reason == ClientCancellationReason.SCREEN_CHANGED) {
+        if (reason == ClientCancellationReason.SCREEN_OPEN
+                || reason == ClientCancellationReason.SCREEN_CHANGED) {
             return;
         }
         serverHeartbeatJoined = false;
@@ -670,6 +674,7 @@ public final class FarmHelperClientRuntime {
     private static InventoryCancelReason inventoryReason(ClientCancellationReason reason) {
         return switch (reason) {
             case MANUAL_STOP -> InventoryCancelReason.REQUESTED;
+            case SCREEN_OPEN -> InventoryCancelReason.SCREEN_OPEN;
             case SCREEN_CHANGED -> InventoryCancelReason.SCREEN_CHANGED;
             case WORLD_LOAD, WORLD_UNLOAD -> InventoryCancelReason.WORLD_CHANGED;
             case DISCONNECT, CONNECTION_UNAVAILABLE -> InventoryCancelReason.DISCONNECTED;
@@ -681,6 +686,7 @@ public final class FarmHelperClientRuntime {
     private static RotationCancelReason rotationReason(ClientCancellationReason reason) {
         return switch (reason) {
             case MANUAL_STOP -> RotationCancelReason.STOPPED;
+            case SCREEN_OPEN -> RotationCancelReason.SCREEN_CHANGED;
             case SCREEN_CHANGED -> RotationCancelReason.SCREEN_CHANGED;
             case WORLD_LOAD, WORLD_UNLOAD -> RotationCancelReason.WORLD_CHANGED;
             case DISCONNECT, CONNECTION_UNAVAILABLE -> RotationCancelReason.DISCONNECTED;
@@ -692,6 +698,7 @@ public final class FarmHelperClientRuntime {
     private static ReleaseReason inputReason(ClientCancellationReason reason) {
         return switch (reason) {
             case MANUAL_STOP -> ReleaseReason.STOP;
+            case SCREEN_OPEN -> ReleaseReason.SCREEN;
             case SCREEN_CHANGED -> ReleaseReason.SCREEN;
             case WORLD_LOAD, WORLD_UNLOAD -> ReleaseReason.WORLD_CHANGE;
             case DISCONNECT, CONNECTION_UNAVAILABLE -> ReleaseReason.DISCONNECT;
