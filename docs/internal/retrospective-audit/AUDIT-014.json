@@ -176,7 +176,7 @@
       "replacement": "Inject at the exact mapped Minecraft#setScreen(Screen) TAIL, forward the post-mutation client-thread state through one shared adapter, and retain the tick snapshot as a deduplicated fallback. Emit SCREEN_OPEN for every non-chat present-screen boundary, map it to terminal stop and ownership cleanup, and preserve only the exact command-armed chat close as a lease-preserving transition. Repeated identities and repeated closes remain idempotent.",
       "parent_failure_evidence": {
         "p0_15_escape_pause_return": {
-          "milestone": "1cfb12ed1493614ea8dc2aa44925cd48852f654c",
+          "milestone": "1cfb12ed1493614ea8dc2aa44925cd48852f654e",
           "base_sha": "06d291c1f92ce59c96454fced06d2a6250e150c4",
           "base_tree": "b6a7219c3a673788b21d9463499a5d26b828f230",
           "sequence": "enabled macro -> real Escape pause opens -> return to gameplay",
@@ -189,7 +189,7 @@
           "classification": "PRODUCT_FAIL"
         },
         "p0_13_inventory_open_close": {
-          "milestone": "1cfb12ed1493614ea8dc2aa44925cd48852f654c",
+          "milestone": "1cfb12ed1493614ea8dc2aa44925cd48852f654e",
           "base_sha": "06d291c1f92ce59c96454fced06d2a6250e150c4",
           "base_tree": "b6a7219c3a673788b21d9463499a5d26b828f230",
           "sequence": "enabled macro -> real inventory screen opens -> inventory closes",
