@@ -55,7 +55,7 @@
       "classification": "INDEPENDENT_CLIENT_ADAPTER",
       "upstream_anchors": [],
       "finding_ids": ["AUDIT-014-001"],
-      "file_sha256": "44DD3C1C1D01D67DF0F89A564FCD05A237950A87D22C7C55A3D2A66E3BE7AED8",
+      "file_sha256": "7979513F6D0ED525038BCF8D45AD3D8A9183E1F99DF68EC7F68A3776F5D407C5",
       "disposition": "RESOLVED"
     },
     {
@@ -63,7 +63,7 @@
       "classification": "INDEPENDENT_CLIENT_ADAPTER",
       "upstream_anchors": [],
       "finding_ids": ["AUDIT-014-001"],
-      "file_sha256": "E487C70210F9A4B24ED8AB498BD827BAA9B104EEE2D842F9B4C5EF0F1A996A1B",
+      "file_sha256": "CC7E1C3DBABD0B02C50BA69D0B0A4AEBC460DE60594B28311C57DE42149EF2BC",
       "disposition": "RESOLVED"
     },
     {
@@ -82,7 +82,7 @@
       "classification": "INDEPENDENT_CLIENT_ADAPTER",
       "upstream_anchors": [],
       "finding_ids": ["AUDIT-014-001"],
-      "file_sha256": "A1AB23A904D6B2EE249BD68662A036EB65E720ADC87485AFBB5E2ACA6D5F887C",
+      "file_sha256": "200E5354E5438F78CB19ABB357678EE4DEFCB4BF32E460C35BC8BF941A95DDFB",
       "disposition": "RESOLVED"
     },
     {
@@ -92,7 +92,7 @@
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#onTick"
       ],
       "finding_ids": ["AUDIT-014-001"],
-      "file_sha256": "CA42B913DDF857759D835CC702A7EB579F17FFA86226BA51CF67DCDDB48072A6",
+      "file_sha256": "BFC4FAFD5BAE4A4AEB4C8C0C07894B8ECF649E93483F2C36B83AF6E8F3724D3C",
       "disposition": "RESOLVED"
     },
     {
@@ -113,7 +113,7 @@
         "eacb323fbde3eff94d4f2ee7baacb059d84b8e3a:src/main/java/com/jelly/farmhelperv2/handler/MacroHandler.java#resumeMacro"
       ],
       "finding_ids": ["AUDIT-014-001"],
-      "file_sha256": "109E5B533B123CE69D85766F3D9E9EB420051A483C3C93AD7812CAF5E2AC7C48",
+      "file_sha256": "3BF5AC5A30F431324BDC36EDBDBD70F4E2B7B4EE350959931BD8F1252CFF9EF4",
       "disposition": "RESOLVED"
     },
     {
@@ -121,7 +121,7 @@
       "classification": "MODERN_BOUNDARY_REGISTRATION",
       "upstream_anchors": [],
       "finding_ids": ["AUDIT-014-001"],
-      "file_sha256": "6C0AD167C31CA1E23068C190CE7BEB3CCDF5864A1FD0AB99154793A6ACD6D00C",
+      "file_sha256": "3480500A9D64F3E26E5435F88FADF9CEF38E2FB1BAA7C4793A109B9A036BEFAF",
       "disposition": "RESOLVED"
     },
     {
@@ -129,7 +129,7 @@
       "classification": "INDEPENDENT_RUNTIME_BOUNDARY",
       "upstream_anchors": [],
       "finding_ids": ["AUDIT-014-001"],
-      "file_sha256": "47D2E68CC5C240EFE66D345741E58B9487C4094F6FE42199F601EA97BBCEBB6E",
+      "file_sha256": "6FD57268B9B22A17F4523DB7B0B337EBC6603B7C18A446279398EF2723FCC458",
       "disposition": "RESOLVED"
     },
     {
@@ -137,7 +137,7 @@
       "classification": "INDEPENDENT_RUNTIME_BOUNDARY",
       "upstream_anchors": [],
       "finding_ids": ["AUDIT-014-001"],
-      "file_sha256": "2BB71B0060FC5C8999A78A82C6EDAAB1C2F93E33C1B64516EB17D218CF36341E",
+      "file_sha256": "06CF08D1071A0A8745B3D516E1083C969D242D35E2B02D9A3083A92E4E32430F",
       "disposition": "RESOLVED"
     },
     {
@@ -153,7 +153,7 @@
       "classification": "AUDIT_TEST_SEAM",
       "upstream_anchors": [],
       "finding_ids": ["AUDIT-014-001"],
-      "file_sha256": "D403D2D0E0FBD214831A0CED272BDBF4AE8D99883975FFAD57485009B35DF022",
+      "file_sha256": "0FD930944BD2E25C072364BA1E9C1451651D1F56AD26A5F7A3035B324268CA7F",
       "disposition": "UPDATED_AUDIT_EVIDENCE"
     },
     {
@@ -161,7 +161,7 @@
       "classification": "AUDIT_TEST_SEAM",
       "upstream_anchors": [],
       "finding_ids": ["AUDIT-014-001"],
-      "file_sha256": "201241A857D63A0A3B040A91F6F78C0A09A75749A3DB3AAF574AD787EBCEDF7D",
+      "file_sha256": "954057E526162DE6BB3BB5AF00CF72D1EE5DD289286EB2DDBE27C012D461923F",
       "disposition": "ADDED_AUDIT_EVIDENCE"
     }
   ],
@@ -226,6 +226,7 @@
   ],
   "verification": {
     "resource_profile": "STANDARD_CLIENT_BOUNDARY",
+    "sha_model": "candidate_sha/candidate_tree and implementation_sha/implementation_tree identify the executable implementation commit; publication_sha/publication_tree identify the separate audit-record publication commit. The publication fields point to the pre-existing report-bearing checkpoint because this follow-up report repair cannot truthfully self-reference its own future commit.",
     "implementation_sha": "673111f463d4fe3ebb360b271e14945f1c1d9d1e",
     "implementation_tree": "bcc9e692243edabad27c9d6b149398a0975f9c40",
     "candidate_sha": "673111f463d4fe3ebb360b271e14945f1c1d9d1e",
@@ -236,14 +237,26 @@
     "candidate_artifact_entries": 500,
     "deterministic_archive_audit": "DETERMINISTIC_JAR_OK",
     "branch": "codex/audit-screen-pause-lifecycle",
-    "pull_request": null,
-    "publication_sha": null,
-    "publication_tree": null,
+    "pull_request": "https://github.com/Hylfrd/FarmHelper/pull/15",
+    "publication_sha": "c0d9e3d808a612e18658e362e6ed8bfcb2b5bb11",
+    "publication_tree": "2b9464c4d1b1d933d99116a48b72404fed3e8ead",
+    "publication_evidence": {
+      "report_bearing_checkpoint_sha": "c0d9e3d808a612e18658e362e6ed8bfcb2b5bb11",
+      "report_bearing_checkpoint_tree": "2b9464c4d1b1d933d99116a48b72404fed3e8ead",
+      "report_bearing_checkpoint_blob": "5969af68a1788f966ca2b247b32056c9b2643a1d",
+      "role": "The checkpoint is the separate audit-record publication commit for the executable implementation. This correction deliberately does not claim the future correction commit as its own publication identity."
+    },
+    "exact_head_ci": {
+      "head_sha": "c0d9e3d808a612e18658e362e6ed8bfcb2b5bb11",
+      "push_run": 32789407877,
+      "pull_request_run": 32789446423,
+      "conclusion": "success"
+    },
     "java": "25.0.3",
     "gradle": "9.5.1",
     "gradle_user_home": "C:/Users/Apostrophe/AppData/Local/Temp/farmhelper-audit-014-gradle",
     "daemon_mode": "Gradle commands used --no-daemon; each required build used a single-use daemon that was stopped by Gradle.",
-    "scope_file_hashes": "The 13 implementation/test hashes are recorded in entries; the report itself is included in scope_paths and excluded from its own entry hash to avoid recursive identity.",
+    "scope_file_hashes": "The 13 implementation/test hashes are SHA-256s of the exact Git blob bytes from implementation tree bcc9e692243edabad27c9d6b149398a0975f9c40; the report itself is included in scope_paths and excluded from its own entry hash to avoid recursive identity. The report-bearing publication checkpoint is c0d9e3d808a612e18658e362e6ed8bfcb2b5bb11/tree 2b9464c4d1b1d933d99116a48b72404fed3e8ead; this repair does not self-reference its future commit.",
     "commands_completed": [
       ".\\gradlew.bat --no-daemon --console=plain compileJava compileClientJava test --rerun-tasks with the three focused lifecycle classes: PASS; 17 tests, 0 failures, 0 errors, 0 skipped",
       ".\\gradlew.bat --no-daemon --console=plain test --rerun-tasks: PASS; 687 tests, 0 failures, 0 errors, 0 skipped",
@@ -255,6 +268,6 @@
     "commands_pending": [
       "Parent-owned real-client P0-13 inventory open/close and P0-15 Escape pause/return rerun against the published candidate"
     ],
-    "status": "LOCAL_GATES_PASSED_PENDING_PUBLICATION"
+    "status": "LOCAL_GATES_PASSED_AND_EXACT_HEAD_CI_PASSED_PENDING_PARENT_REAL_CLIENT_RERUN"
   }
 }
